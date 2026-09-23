@@ -348,12 +348,13 @@ README's Intl section.
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
 | 5. DateTimeFormat | not started |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
-| 6b. DisplayNames, DurationFormat | not started |
+| 6b. DisplayNames | **done** - 34/34 |
+| 6c. DurationFormat | not started |
 | 7. Collator | not started |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 4,650 of 7,949 cases, all at 100%.**
+**Corpus coverage so far: 4,684 of 7,949 cases, all at 100%.**
 
 | Service | Cases | Matching |
 |---|---|---|
@@ -361,6 +362,7 @@ README's Intl section.
 | PluralRules | 300 | 300 |
 | RelativeTimeFormat | 1,260 | 1,260 |
 | ListFormat | 120 | 120 |
+| DisplayNames | 34 | 34 |
 
 Switched over in go-quickjs: *none yet.* Three services are now at parity, so
 the first switch-over is due.

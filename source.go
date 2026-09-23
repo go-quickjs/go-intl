@@ -45,6 +45,9 @@ const (
 	MarkerUnits Marker = "units"
 	// MarkerRelativeTime is one locale's relative-time wordings.
 	MarkerRelativeTime Marker = "reltime"
+	// MarkerNames is one locale's display names. It is much the largest of
+	// these, and a program that never asks for one never reads it.
+	MarkerNames Marker = "names"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

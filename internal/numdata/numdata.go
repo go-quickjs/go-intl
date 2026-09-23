@@ -28,6 +28,10 @@ type Currency struct {
 	// itself is written.
 	Symbol string
 	Narrow string
+	// DisplayName is what the currency is called on its own, "US Dollar",
+	// which is not the same as any of the counted wordings: those go beside an
+	// amount and this one does not.
+	DisplayName string
 	// Names are the spelled-out names, one per plural category: a dollar and
 	// two dollars are not the same word, and in Polish there are four.
 	Names []CountedText
@@ -174,6 +178,7 @@ func Encode(l *Locale) []byte {
 		w.String(c.Code)
 		w.String(c.Symbol)
 		w.String(c.Narrow)
+		w.String(c.DisplayName)
 		w.Uint(len(c.Names))
 		for _, n := range c.Names {
 			w.String(n.Count)
@@ -225,6 +230,7 @@ func Decode(b []byte) (*Locale, error) {
 			c.Code = r.String()
 			c.Symbol = r.String()
 			c.Narrow = r.String()
+			c.DisplayName = r.String()
 			names := r.Uint()
 			if names < 0 || names > r.Left() {
 				break

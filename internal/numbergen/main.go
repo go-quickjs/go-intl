@@ -309,6 +309,7 @@ func readCurrencies(main, name string) ([]numdata.Currency, error) {
 			Narrow: fields["symbol-alt-narrow"],
 		}
 		c.Code = code
+		c.DisplayName = fields["displayName"]
 		// A currency whose symbol is its code carries no information: the
 		// formatter writes the code when it finds nothing.
 		if c.Symbol == code {
@@ -322,7 +323,7 @@ func readCurrencies(main, name string) ([]numdata.Currency, error) {
 			c.Names = append(c.Names, numdata.CountedText{Count: count, Text: text})
 		}
 		sort.Slice(c.Names, func(i, j int) bool { return c.Names[i].Count < c.Names[j].Count })
-		if c.Symbol == "" && c.Narrow == "" && len(c.Names) == 0 {
+		if c.Symbol == "" && c.Narrow == "" && c.DisplayName == "" && len(c.Names) == 0 {
 			continue
 		}
 		out = append(out, c)
