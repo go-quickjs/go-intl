@@ -172,6 +172,39 @@ is clean self-contained JSON, which is why this service goes first.
 **This stage is the architecture proof.** If the layering does not hold here it
 will not hold anywhere, and it is cheap to change now.
 
+**Met, at 2,640 of 2,640 - 100% of the corpus's non-compact NumberFormat
+cases.** The first run was 96.67%, and every one of the 88 failures was the
+same missing rule, CLDR's currency spacing.
+
+Data for **766 locales**, everything CLDR ships, 3.4 MB in all and about a
+kilobyte each. Because a locale is its own file behind `Source`, a caller who
+needs one reads a kilobyte rather than the lot. That is the fourteen-megabyte
+problem answered in practice rather than in principle.
+
+Three things the corpus settled that guesswork would have got wrong:
+
+- **Rounding is half away from zero**, not Go's half to even. `strconv` gives
+  "0" for 0.5 and "1234" for 1234.5 where ECMA-402 wants "1" and "1235", so the
+  rounding is written out rather than left to the standard library.
+- **Which decimal a float stands for.** ECMA-402 describes rounding the exact
+  binary value; ICU rounds the shortest decimal that reads back as the same
+  float. They differ for values like 0.615. This follows ICU, because ICU is
+  what the corpus holds it to.
+- **Currency spacing is a rule, not a special case.** "USD1.00" needs a space
+  and "$1.00" does not, and CLDR says which by matching character classes. The
+  set expressions are stored and compiled, not hardcoded - and the compiler
+  refuses an expression it does not understand rather than quietly matching
+  nothing, which would misplace spaces in some locales and nowhere else.
+
+Not yet, and each says so rather than formatting something plausible: compact
+notation and currency names both need plural rules, and scientific and
+engineering notation are unwritten.
+
+### 3b. Compact notation
+
+Left out of stage 3 because `compactDisplay: "long"` picks its pattern by the
+plural category of the amount. It is 330 corpus cases and lands with stage 4.
+
 ### 4. PluralRules and ListFormat
 
 Small, data-clean, and the two services ICU4X's own ECMA-402 layer bothered to
@@ -227,7 +260,8 @@ README's Intl section.
 | 0. Bootstrap | **done** — module, pins resolved, corpus parsed |
 | 1. Locale | **done** - types, parser, canonicalization, fallback |
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
-| 3. NumberFormat | not started |
+| 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
+| 3b. Compact notation | waits on stage 4 (plural rules) |
 | 4. PluralRules, ListFormat | not started |
 | 5. DateTimeFormat | not started |
 | 6. RelativeTime, DisplayNames, Duration | not started |

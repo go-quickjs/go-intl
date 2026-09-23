@@ -32,6 +32,11 @@ const (
 	// MarkerParentLocales is CLDR's parent-locale table, which redirects a
 	// fallback that truncation would send somewhere wrong.
 	MarkerParentLocales Marker = "parentlocales"
+	// MarkerNumbers is one locale's number symbols and patterns.
+	MarkerNumbers Marker = "numbers"
+	// MarkerCurrencyDigits is how many decimals each currency is written
+	// with, which does not vary by locale.
+	MarkerCurrencyDigits Marker = "currencydigits"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

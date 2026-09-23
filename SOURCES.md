@@ -42,7 +42,14 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.0.0.tgz
 
 | Package | Version | sha256 | Used by |
 |---|---|---|---|
-| `cldr-core` | 48.0.0 | `3b739a175e47e50905050a34612584fd5590c9352b11f36e3498eacff1c9aa94` | `internal/localegen` |
+| `cldr-core` | 48.0.0 | `3b739a175e47e50905050a34612584fd5590c9352b11f36e3498eacff1c9aa94` | `internal/localegen`, `internal/numbergen` |
+| `cldr-numbers-full` | 48.0.0 | `d3d12515b0f6f7c4b5f82586b52b16164a0cffbf4d45a9f2bd894380a96b1cb3` | `internal/numbergen` |
+
+**What is vendored and what is not.** A supplemental file of a few tens of
+kilobytes is vendored beside the generator that reads it, so that generator
+runs with nothing to fetch. A per-locale package is not: `cldr-numbers-full` is
+37 MB unpacked, so `numbergen` takes the path to an unpacked copy and this file
+is what pins which copy.
 
 Other URLs:
 
