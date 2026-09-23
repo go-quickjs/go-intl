@@ -44,6 +44,10 @@ This is what makes "no regression" a process guarantee rather than a hope:
    - **it implements every option `internal/icu` implements**, checked against
      the service's test262 intl402 files rather than against the corpus.
 4. If a switch regresses anything, it does not land. The old path stays.
+5. **No switch-over happens until every service is implemented and the
+   maintainer has said to go ahead.** Meeting the gates makes a service
+   *eligible*, not scheduled. Do not wire go-quickjs to go-intl, add a
+   `replace` directive, or touch `internal/icu` before that word is given.
 
 **Corpus parity is necessary and nowhere near sufficient**, and the second
 condition above exists because the first alone was wrong. The corpus has 2,970
@@ -343,17 +347,19 @@ README's Intl section.
 | 3c. Rest of the surface | **done** except `selectRange` |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
 | 5. DateTimeFormat | not started |
-| 6. RelativeTime, DisplayNames, Duration | not started |
+| 6. RelativeTimeFormat | **done** - 1,260/1,260 |
+| 6b. DisplayNames, DurationFormat | not started |
 | 7. Collator | not started |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 3,390 of 7,949 cases, all at 100%.**
+**Corpus coverage so far: 4,650 of 7,949 cases, all at 100%.**
 
 | Service | Cases | Matching |
 |---|---|---|
 | NumberFormat | 2,970 | 2,970 |
 | PluralRules | 300 | 300 |
+| RelativeTimeFormat | 1,260 | 1,260 |
 | ListFormat | 120 | 120 |
 
 Switched over in go-quickjs: *none yet.* Three services are now at parity, so

@@ -1,0 +1,22 @@
+i fjori år		neste årone
+om {0} årother
+om {0} åronefor {0} år sidenotherfor {0} år sideni fjori år		neste årone
+om {0} årother
+om {0} åronefor {0} år sidenotherfor {0} år sideni fjori år		neste årone+{0} årother+{0} årone-{0} årother-{0} årforrige kvartaldette kvartalet	neste kvartaloneom {0} kvartalotherom {0} kvartaleronefor {0} kvartal sidenotherfor {0} kvartaler sidenforrige kv.	dette kv.		neste kv.one
+om {0} kv.other
+om {0} kv.onefor {0} kv. sidenotherfor {0} kv. sidenforrige kv.	dette kv.		neste kv.one+{0} kv.other+{0} kv.one-{0} kv.other-{0} kv.forrige måneddenne måneden	neste månedoneom {0} månedotherom {0} månederonefor {0} måned sidenotherfor {0} måneder sidenforrige md.	denne md.		neste md.one
+om {0} md.other
+om {0} md.onefor {0} md. sidenotherfor {0} md. sidenforrige md.	denne md.		neste md.one+{0} md.other+{0} md.one-{0} md.other-{0} md.forrige uke
+denne uken		neste ukeone
+om {0} ukeotherom {0} ukeronefor {0} uke sidenotherfor {0} uker sidenforrige uke
+denne uken		neste ukeone	om {0} u.other	om {0} u.onefor {0} u. sidenotherfor {0} u. sidenforrige uke
+denne uken		neste ukeone	om {0} u.other	om {0} u.onefor {0} u. sidenotherfor {0} u. siden
+i forgårsi gåri dag	i morgen
+i overmorgenoneom {0} døgnotherom {0} døgnonefor {0} døgn sidenotherfor {0} døgn siden
+i forgårsi gåri dag	i morgen
+i overmorgenone	om {0} d.other	om {0} d.onefor {0} d. sidenotherfor {0} d. siden-2 d.i gåri dag	i morgen
++2 d.one+{0} d.other+{0} d.one-{0} d.other-{0} d.denne timenoneom {0} timeotherom {0} timeronefor {0} time sidenotherfor {0} timer sidendenne timenoneom {0} totherom {0} tonefor {0} t sidenotherfor {0} t sidendenne timenone+{0} tother+{0} tone-{0} tother-{0} tdette minuttetoneom {0} minuttotherom {0} minutteronefor {0} minutt sidenotherfor {0} minutter sidendette minuttetone
+om {0} minother
+om {0} minonefor {0} min sidenotherfor {0} min sidendette minuttetone+{0} minother+{0} minone-{0} minother-{0} minnåoneom {0} sekundotherom {0} sekunderonefor {0} sekund sidenotherfor {0} sekunder sidennåone
+om {0} sekother
+om {0} sekonefor {0} sek sidenotherfor {0} sek sidennåone+{0} sother+{0} sone-{0} sother-{0} s

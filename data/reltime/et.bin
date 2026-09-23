@@ -1,0 +1,23 @@
+eelmine aastakäesolev aasta	järgmine aastaone{0} aasta pärastother{0} aasta pärastone{0} aasta eestother{0} aasta eest	eelmine akäesolev a	järgmine aone{0} a pärastother{0} a pärastone
+{0} a eestother
+{0} a eesteelm. asee a		järgm. aone{0} a pärastother{0} a pärastone
+{0} a eestother
+{0} a eesteelmine kvartalkäesolev kvartal	järgmine kvartalone{0} kvartali pärastother{0} kvartali pärastone{0} kvartali eestother{0} kvartali eest
+eelmine kvkäesolev kv	järgmine kvone{0} kv pärastother{0} kv pärastone{0} kv eestother{0} kv eest
+eelmine kvkäesolev kv	järgmine kvone{0} kv pärastother{0} kv pärastone{0} kv eestother{0} kv eesteelmine kuukäesolev kuu	järgmine kuuone{0} kuu pärastother{0} kuu pärastone{0} kuu eestother{0} kuu eest	eelm. kuusee kuu	järgm. kuuone{0} kuu pärastother{0} kuu pärastone{0} kuu eestother{0} kuu eesteelm. ksee k		järgm. kone{0} k pärastother{0} k pärastone
+{0} k eestother
+{0} k eesteelmine nädalkäesolev nädal	järgmine nädalone{0} nädala pärastother{0} nädala pärastone{0} nädala eestother{0} nädala eest
+eelm. nädsee näd	järgm. nädone{0} näd pärastother{0} näd pärastone{0} näd eestother{0} näd eesteelm. nsee n		järgm. none{0} näd pärastother{0} näd pärastone{0} näd eestother{0} näd eestüleeileeiletäna	homme
+	ülehommeone{0} päeva pärastother{0} päeva pärastone{0} päeva eestother{0} päeva eestüleeileeiletäna	homme
+	ülehommeone{0} p pärastother{0} p pärastone
+{0} p eestother
+{0} p eestüleeileeiletäna	homme
+	ülehommeone{0} p pärastother{0} p pärastone
+{0} p eestother
+{0} p eestpraegusel tunnilone{0} tunni pärastother{0} tunni pärastone{0} tunni eestother{0} tunni eestpraegusel tunnilone{0} t pärastother{0} t pärastone
+{0} t eestother
+{0} t eestpraegusel tunnilone{0} t pärastother{0} t pärastone
+{0} t eestother
+{0} t eestpraegusel minutilone{0} minuti pärastother{0} minuti pärastone{0} minuti eestother{0} minuti eestpraegusel minutilone{0} min pärastother{0} min pärastone{0} min eestother{0} min eestpraegusel minutilone{0} min pärastother{0} min pärastone{0} min eestother{0} min eestnüüdone{0} sekundi pärastother{0} sekundi pärastone{0} sekundi eestother{0} sekundi eestnüüdone{0} sek pärastother{0} sek pärastone{0} sek eestother{0} sek eestnüüdone{0} s pärastother{0} s pärastone
+{0} s eestother
+{0} s eest

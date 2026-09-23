@@ -43,6 +43,8 @@ const (
 	MarkerLists Marker = "lists"
 	// MarkerUnits is one locale's measurement patterns.
 	MarkerUnits Marker = "units"
+	// MarkerRelativeTime is one locale's relative-time wordings.
+	MarkerRelativeTime Marker = "reltime"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It
