@@ -39,9 +39,25 @@ This is what makes "no regression" a process guarantee rather than a hope:
    serving every service while go-intl is built beside it.
 2. go-intl develops against the golden corpus on its own. It is free to be
    incomplete or behind; nothing depends on it yet.
-3. A service switches over in go-quickjs only when its slice of the corpus is
-   **at or above** what `internal/icu` scores, and all four gates hold.
+3. A service switches over in go-quickjs only when **both** hold:
+   - its slice of the corpus is at or above what `internal/icu` scores, and
+   - **it implements every option `internal/icu` implements**, checked against
+     the service's test262 intl402 files rather than against the corpus.
 4. If a switch regresses anything, it does not land. The old path stays.
+
+**Corpus parity is necessary and nowhere near sufficient**, and the second
+condition above exists because the first alone was wrong. The corpus has 2,970
+NumberFormat cases in **thirteen** option combinations; test262 has 249
+NumberFormat files and exercises `unit` style, scientific and engineering
+notation, significant digits, nine rounding modes, rounding increments,
+`trailingZeroDisplay`, accounting currency sign and currency names - none of
+which the corpus touches and all of which go-quickjs passes today. A gate that
+looked only at corpus output would have approved a switch that broke several
+hundred conformance tests.
+
+The lesson generalizes: **the corpus measures whether the output is right, not
+whether the surface is complete.** Both have to be gated, and only one of them
+is what the corpus is for.
 
 Expect go-intl's own numbers to dip while a service is being built from CLDR
 rather than from scraped answers - divergences that are invisible today, because
@@ -237,6 +253,36 @@ The corpus caught the last 28 cases as one rule: compact notation groups only
 when the leading group has two digits of its own, which ECMA-402 calls "min2",
 so ja writes "1235万" rather than "1,235万".
 
+### 3c. The rest of NumberFormat's surface
+
+The corpus does not reach these and test262 does, so they block the switch-over
+rather than the corpus gate:
+
+- ~~significant digits and `roundingPriority`~~ **done**
+- ~~`roundingMode`, all nine~~ **done**
+- ~~`roundingIncrement` and `trailingZeroDisplay`~~ **done**
+- ~~`currencySign: "accounting"`~~ **done**
+- `notation: "scientific"` and `"engineering"`.
+- `style: "unit"` with the unit identifiers and their patterns, which needs
+  `cldr-units-full`.
+- `currencyDisplay: "name"`, which needs plural rules and the currency display
+  names.
+
+`PluralRules` needs the same digit options, since ECMA-402 gives it the whole
+set, plus `selectRange`.
+
+The rounding was rewritten to do its work on the digits rather than on the
+float. Scaling a float by a power of ten to round it introduces error of its
+own, and that error lands exactly on the ties the mode exists to decide.
+
+Every expectation in the rounding tests was checked against node rather than
+against a reading of the specification, and all of them agreed first time:
+nine rounding modes, significant digits, both priorities, `trailingZeroDisplay`,
+`roundingIncrement` and the accounting sign.
+
+*Gate:* every option `internal/icu` accepts is accepted here, and the corpus
+stays at 2,970/2,970. **Corpus held; the surface is not complete yet.**
+
 ### 5. DateTimeFormat (multi-session)
 
 The large one. Calendars and calendrical arithmetic, patterns, then skeleton
@@ -286,6 +332,7 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
+| 3c. Rest of the surface | rounding done; scientific, unit, currency names left |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
 | 5. DateTimeFormat | not started |
 | 6. RelativeTime, DisplayNames, Duration | not started |

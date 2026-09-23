@@ -96,48 +96,8 @@ func compactFor(patterns []numdata.CompactPattern, exponent int, count string) (
 	return form, true
 }
 
-// significantDigits rounds a number to at most n significant digits, giving
-// the integer and fraction parts. It is the other half of "more precision".
-func significantDigits(v float64, n int) (integer, fraction string) {
-	if v == 0 || n <= 0 {
-		return "0", ""
-	}
-	// The place to round at is n digits after the first significant one.
-	e := int(math.Floor(math.Log10(v)))
-	places := n - 1 - e
-	if places < 0 {
-		// Rounding above the decimal point: round at the right place and then
-		// put the zeros back, so 123456 to two digits is 120000 rather than 12.
-		scale := math.Pow(10, float64(-places))
-		integer, fraction = digitsOf(v/scale, 0)
-		if integer != "0" {
-			integer += strings.Repeat("0", -places)
-		}
-		return integer, ""
-	}
-	return digitsOf(v, places)
-}
-
-// morePrecision picks between rounding to a fixed number of decimals and
-// rounding to a number of significant digits, keeping whichever holds more.
-//
-// The two are compared by where they round: the one that rounds at the smaller
-// place keeps more, so that is the one used.
-func morePrecision(v float64, maxFrac, maxSignificant int) (integer, fraction string) {
-	if v == 0 {
-		return digitsOf(v, maxFrac)
-	}
-	e := int(math.Floor(math.Log10(v)))
-	fixedAt := -maxFrac
-	significantAt := e - maxSignificant + 1
-	if significantAt < fixedAt {
-		return significantDigits(v, maxSignificant)
-	}
-	return digitsOf(v, maxFrac)
-}
-
 // compactParts writes a number in compact notation.
-func (f *NumberFormat) compactParts(magnitude float64) []Part {
+func (f *NumberFormat) compactParts(magnitude float64, negative bool) []Part {
 	patterns := f.data.CompactShort
 	if f.opts.CompactDisplay == CompactLong {
 		patterns = f.data.CompactLong
@@ -155,7 +115,7 @@ func (f *NumberFormat) compactParts(magnitude float64) []Part {
 			divided := magnitude / first.divisor
 			category := string(PluralOther)
 			if f.plurals != nil {
-				integer, fraction := morePrecision(divided, 0, 2)
+				integer, fraction := f.roundDigits(divided, negative)
 				o := operandsFor(integer, fraction, first.exponent)
 				category = string(f.plurals.selectOperands(&o))
 			}
@@ -167,19 +127,12 @@ func (f *NumberFormat) compactParts(magnitude float64) []Part {
 		}
 	}
 
+	// The digit counts are settled once, when the formatter is built, so a
+	// compact number rounds the same way as any other: by whichever counting
+	// the options chose, which for a compact number with nothing asked for is
+	// two significant digits or no decimals, whichever keeps more.
 	value := magnitude / form.divisor
-	var integer, fraction string
-	if f.opts.MaximumFractionDigits != nil || f.opts.MinimumFractionDigits != nil {
-		// A caller who asked for decimals gets those rather than the default
-		// two significant digits.
-		integer, fraction = digitsOf(value, f.maxFrac)
-		fraction = trimTrailingZeros(fraction, f.minFrac)
-		for len(fraction) < f.minFrac {
-			fraction += "0"
-		}
-	} else {
-		integer, fraction = morePrecision(value, 0, 2)
-	}
+	integer, fraction := f.roundDigits(value, negative)
 	integer = padInteger(integer, max(f.minInt, 1))
 
 	var parts []Part
