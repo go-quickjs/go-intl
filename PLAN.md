@@ -118,11 +118,24 @@ dropping a service's coverage.
 ### 1. Locale
 
 `Language`, `Script`, `Region`, `Variant` as fixed-size comparable types.
-Parser, canonicalization, likely-subtags, and the fallback chain. No data
-dependency beyond likely-subtags, so it can land standalone. ICU4X's
-`locale_fallback` is ~1,000 lines and worth following closely.
+Parser, canonicalization, and the fallback chain.
 
-*Gate:* a locale corpus - parse, canonicalize, fallback - passes.
+*Gate:* parse, canonicalize and fallback tests pass, and every locale the
+corpus uses parses to itself. **Met.**
+
+The split that matters, taken from ICU4X: **`Locale` is what was asked for,
+`DataLocale` is what a table is stored under.** `de-CH-u-ca-buddhist` loads
+`de-CH` and then formats with a Buddhist calendar - the extension chooses
+behavior, not a table. Conflating the two is how a locale ends up meaning "the
+record loaded for a locale", which is what it means in the package this
+replaces. `DataLocale` holds no slices, so it is comparable and works as a map
+key, which is the point of the fixed-size subtags.
+
+**Deferred to stage 2, because both need data, not code:** CLDR's
+`parentLocales` (so `zh-Hant` does not fall back through `zh`) and likely
+subtags (so `zh-TW` and `zh-Hant-TW` look in one place). Until then the chain
+is truncation inheritance as UTS #35 defines it on the identifier alone, which
+is right for the common shapes and wrong only where CLDR says so.
 
 ### 2. Provider seam and datagen skeleton
 
@@ -195,7 +208,7 @@ README's Intl section.
 | Stage | State |
 |---|---|
 | 0. Bootstrap | **done** — module, pins resolved, corpus parsed |
-| 1. Locale | not started |
+| 1. Locale | **done** - types, parser, canonicalization, fallback |
 | 2. Provider and datagen | not started |
 | 3. NumberFormat | not started |
 | 4. PluralRules, ListFormat | not started |
