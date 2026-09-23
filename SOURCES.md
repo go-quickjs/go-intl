@@ -29,24 +29,52 @@ authority.
 | CLDR (`cldr-json`) | 48.0 | numbers, dates, units, names, plurals, zones | yes, from node |
 | Unicode (UCD) | 17.0 | properties, normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
-| `icuexportdata` | ICU 78.x export tag | UCA, collation tailorings, normalizer | **not yet** |
-| Break dictionaries | ICU `release-78.3` | Chinese, Japanese, Thai, Khmer, Lao, Burmese | yes |
+| `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings, normalizer, properties, case, dictionaries | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
-URLs follow the patterns ICU4X uses:
+URLs:
 
 - `https://github.com/unicode-org/cldr-json/releases/download/{tag}/cldr-{tag}-json-full.zip`
-- `https://github.com/unicode-org/icu/releases` — the `icu4x/{date}/{major}.x` artifacts
+- `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4x-icuexportdata-78.3.zip`
+  — sha256 `eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60`, 5.6 MB
 - `https://github.com/unicode-org/lstm_word_segmentation/releases`
 
-## Open
+## The 78.3 export
 
-**The `icuexportdata` tag for ICU 78.x is unverified.** ICU4X pins a 79.x
-export; whether a matching 78.x artifact is published needs checking against the
-releases page. If none exists, the choice is between generating collation data
-from CLDR's collation XML plus `allkeys_CLDR.txt` directly, or accepting a 79.x
-export against a 78.3 oracle and recording which differences that explains.
-Settle this in stage 0, before stage 7 depends on it.
+ICU publishes most `icuexportdata` artifacts under `icu4x/{date}/{major}.x`
+tags, and **there is no 78.x among them** — they run 71, 72, 73, 75, 76, 77, 79.
+Looking only there would have concluded the anchor could not be matched.
+
+It is attached to the ICU release itself instead: `release-78.3` carries
+`icu4x-icuexportdata-78.3.zip`. So the export is available at exactly the
+version that produced the golden corpus, and no compromise between anchor and
+export is needed.
+
+Contents, 931 entries:
+
+| Directory | Holds |
+|---|---|
+| `collation/` | 342 files each under `implicithan/` and `unihan/` |
+| `norm/` | `nfd`, `nfkd`, `compositions`, `decompositionex`, `uts46d`, in `fast/` and `small/` |
+| `uprops/` | 108 property files, in `fast/` and `small/` |
+| `ucase/` | case mapping, in `fast/` and `small/` |
+| `segmenter/dictionary/` | `cjdict`, `thaidict`, `khmerdict`, `laodict`, `burmesedict` |
+
+The tailorings go-quickjs carries are all present: `zh_pinyin`, `zh_stroke`,
+`zh_unihan`, `ja_standard`, `ja_unihan`, `ko_standard`, `ko_search`,
+`de_phonebook`, `es_traditional`, plus `root_standard`, `root_emoji`,
+`root_eor` and `root_search`.
+
+**One pinned 5.6 MB artifact replaces three separate ad-hoc inputs**: the
+node-scraped collation data, the Perl-derived normalizer tables, and the break
+dictionaries currently vendored as loose `.txt` copies from the ICU source tree.
+
+Two choices it forces, both to settle in stage 2:
+
+- **`fast` or `small`** for norm, uprops and ucase — ICU4X's table-size against
+  lookup-speed tradeoff.
+- **`implicithan` or `unihan`** for how Han characters order. ICU's default is
+  implicit computation, with `zh_unihan` and `ja_unihan` offered separately.
 
 **tzdb is 2026b in ICU 78.3, but go-quickjs bundles 2026c.** Its
 `internal/icu/timezones.go` calls the bundle "the same version used by the
@@ -67,6 +95,10 @@ This is not cosmetic for go-intl: **UCA requires NFD**, so the Collator sits
 directly on this table. Every character added or recomposed between Unicode 13
 and 17 is a latent sorting divergence that would surface late, inside the
 hardest stage. Replace the normalizer's data source before stage 7 starts.
+
+The replacement is already in hand: `norm/` in the 78.3 export carries `nfd`,
+`nfkd`, `compositions` and `decompositionex` at the anchor's Unicode 17.0. So
+this is a datagen task in stage 2, not research.
 
 **Vendored `windowsZones.json` was taken from `cldr-json` `main`, not a tagged
 release.** Its content self-reports CLDR 48, which is correct for the anchor,

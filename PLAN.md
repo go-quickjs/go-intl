@@ -79,15 +79,14 @@ go-quickjs), `AGENTS.md`, this file, `DESIGN.md`, [SOURCES.md](SOURCES.md).
 Import the golden corpus as a Go test fixture and write the replay harness that
 will run it once an API exists.
 
-Two de-risking checks belong here rather than in the stage that needs them,
-because both can change a later stage's shape and both are cheap now:
+Two de-risking checks belonged here rather than in the stage that needs them.
+**Both are now answered** — see SOURCES.md:
 
-- **Does an `icuexportdata` artifact exist for ICU 78.x?** ICU4X pins a 79.x
-  export. If no 78.x artifact is published, stage 7 either generates collation
-  from CLDR's collation XML plus `allkeys_CLDR.txt`, or accepts a 79.x export
-  against a 78.3 oracle with the resulting differences recorded.
-- **Does it carry the tailorings we need** — in particular the CJK collations
-  `internal/icu` carries via `cjkgen`?
+- An `icuexportdata` artifact for ICU 78.3 exists. It is not under the
+  `icu4x/{date}/{major}.x` tags, which skip 78 entirely; it is attached to the
+  `release-78.3` ICU release. Exact alignment with the anchor, no compromise.
+- It carries every tailoring `internal/icu` has, and also supplies the
+  normalizer and the break dictionaries.
 
 *Gate:* `go test ./...` runs, the corpus is parsed and counted, and SOURCES.md
 has no unverified pins left.
