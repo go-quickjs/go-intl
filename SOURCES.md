@@ -32,12 +32,38 @@ authority.
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings, normalizer, properties, case, dictionaries | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
-URLs:
+CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
+the release page offers. `cldr-core` is 205 KB and carries all of the
+supplemental data, so a generator takes only the package it reads:
+
+```sh
+curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.0.0.tgz
+```
+
+| Package | Version | sha256 | Used by |
+|---|---|---|---|
+| `cldr-core` | 48.0.0 | `3b739a175e47e50905050a34612584fd5590c9352b11f36e3498eacff1c9aa94` | `internal/localegen` |
+
+Other URLs:
 
 - `https://github.com/unicode-org/cldr-json/releases/download/{tag}/cldr-{tag}-json-full.zip`
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4x-icuexportdata-78.3.zip`
   — sha256 `eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60`, 5.6 MB
 - `https://github.com/unicode-org/lstm_word_segmentation/releases`
+
+## Which CLDR 48
+
+CLDR ships 48.0.0, 48.1.0 and 48.2.x. Node reports ICU 78.3's CLDR as "48.0",
+so that is the pin. The distinction has not mattered yet: 48.0.0 and 48.2.0
+carry **identical** likely subtags, 7,788 entries with no differences between
+them. If it ever does matter the corpus decides, since the corpus is the ground
+truth and the version string is only a label.
+
+One thing that looks like a contradiction and is not: CLDR 48 reports
+`_unicodeVersion: "16.0.0"` while ICU 78.3 reports Unicode 17.0. Those describe
+different things — CLDR's is the Unicode release its own data was built
+against, ICU's is the Unicode release ICU integrated. The authority for
+character properties is `uprops` in the 78.3 export, not CLDR's metadata.
 
 ## The 78.3 export
 

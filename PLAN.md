@@ -144,6 +144,23 @@ that reads `cldr-json` and writes the Model encoding. This is the highest-
 leverage stage in the project: it is what makes the library reusable.
 
 *Gate:* round-trip test - datagen writes, `Source` reads, the bytes agree.
+**Met.**
+
+`Source` hands back bytes, not decoded values, so a source can be a directory,
+an archive or a cache without knowing what any of it means. One reader,
+`NewFS`, serves both the embedded tables and any `io/fs`, which is what makes
+"the data can be replaced" a real claim rather than a documented intention -
+there is a test that builds a fallbacker over a made-up `fstest.MapFS`.
+
+A table is records of two data locales, sorted, binary-searched where it lies
+with nothing decoded until something is looked up. The generator marshals
+through the same `DataLocale` codec the reader uses, so the two cannot drift,
+and its output is byte-identical across runs.
+
+This also closed stage 1's deferrals. `Fallbacker.Chain` follows CLDR's parents
+- `zh-Hant` to the root rather than through `zh`, `en-AU` through `en-001`,
+`es-AR` through `es-419` - and `Maximize` and `Minimize` implement UTS #35's
+likely subtags.
 
 ### 3. NumberFormat
 
@@ -209,7 +226,7 @@ README's Intl section.
 |---|---|
 | 0. Bootstrap | **done** — module, pins resolved, corpus parsed |
 | 1. Locale | **done** - types, parser, canonicalization, fallback |
-| 2. Provider and datagen | not started |
+| 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | not started |
 | 4. PluralRules, ListFormat | not started |
 | 5. DateTimeFormat | not started |

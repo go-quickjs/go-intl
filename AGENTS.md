@@ -48,6 +48,18 @@ go run ./internal/<name>gen > "$generated" && mv "$generated" <target>.go
 gofmt -w <target>.go
 ```
 
+A generator that writes binary tables does its own replacing, and builds every
+table before writing any of them, so a failure partway leaves a matched set on
+disk rather than one new file beside one old one:
+
+```sh
+go run ./internal/localegen     # writes data/likelysubtags.bin, data/parentlocales.bin
+```
+
+Generator output is reproducible: running one twice gives byte-identical files.
+A generator that sorts a map without fixing the order is broken even when its
+tests pass.
+
 Upstream versions are pinned. Changing one is its own commit, with the gate
 re-measured, never folded into a behavior change.
 

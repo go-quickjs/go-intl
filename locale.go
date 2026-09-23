@@ -283,3 +283,38 @@ func (d DataLocale) String() string {
 // IsRoot reports whether the data locale names no language, script or region,
 // which is the root the fallback chain ends at.
 func (d DataLocale) IsRoot() bool { return d == DataLocale{} }
+
+// DataLocaleSize is how many bytes a data locale takes when written out: its
+// three subtags, each in its own fixed-width field.
+//
+// Generated tables are records of this size laid end to end and sorted, so a
+// lookup is a binary search over the bytes with nothing decoded on the way.
+// The generator and the reader share this one definition rather than each
+// spelling the layout out, so the two cannot drift.
+const DataLocaleSize = len(Language{}) + len(Script{}) + len(Region{})
+
+// MarshalBinary writes the data locale as DataLocaleSize bytes.
+func (d DataLocale) MarshalBinary() ([]byte, error) {
+	return d.AppendBinary(make([]byte, 0, DataLocaleSize))
+}
+
+// AppendBinary appends the data locale to b.
+func (d DataLocale) AppendBinary(b []byte) ([]byte, error) {
+	b = append(b, d.Language[:]...)
+	b = append(b, d.Script[:]...)
+	b = append(b, d.Region[:]...)
+	return b, nil
+}
+
+// UnmarshalBinary reads a data locale written by AppendBinary.
+func (d *DataLocale) UnmarshalBinary(b []byte) error {
+	if len(b) != DataLocaleSize {
+		return fmt.Errorf("a data locale is %d bytes, not %d", DataLocaleSize, len(b))
+	}
+	var out DataLocale
+	n := copy(out.Language[:], b)
+	n += copy(out.Script[:], b[n:])
+	copy(out.Region[:], b[n:])
+	*d = out
+	return nil
+}
