@@ -65,13 +65,13 @@ type numbersFile struct {
 	} `json:"main"`
 }
 
+// currenciesFile reads a locale's currency names. The spelled-out names carry
+// their plural category in the key -- "displayName-count-one" -- so they come
+// out of a loose map rather than being named here.
 type currenciesFile struct {
 	Main map[string]struct {
 		Numbers struct {
-			Currencies map[string]struct {
-				Symbol       string `json:"symbol"`
-				SymbolNarrow string `json:"symbol-alt-narrow"`
-			} `json:"currencies"`
+			Currencies map[string]map[string]string `json:"currencies"`
 		} `json:"numbers"`
 	} `json:"main"`
 }
@@ -226,6 +226,30 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 		SurroundingMatch string `json:"surroundingMatch"`
 		InsertBetween    string `json:"insertBetween"`
 	}
+	// currencyFormats holds nested objects beside its patterns -- the spacing
+	// rules, the compact forms -- so the values are read one at a time rather
+	// than as a map of strings.
+	var currencyPatterns map[string]json.RawMessage
+	if err := unmarshalKey(entry.Numbers, "currencyFormats-numberSystem-"+system,
+		&currencyPatterns); err != nil {
+		return nil, err
+	}
+	for key, raw := range currencyPatterns {
+		count, ok := strings.CutPrefix(key, "unitPattern-count-")
+		if !ok {
+			continue
+		}
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil || text == "" {
+			continue
+		}
+		out.UnitPatterns = append(out.UnitPatterns,
+			numdata.CountedText{Count: count, Text: text})
+	}
+	sort.Slice(out.UnitPatterns, func(i, j int) bool {
+		return out.UnitPatterns[i].Count < out.UnitPatterns[j].Count
+	})
+
 	var currency struct {
 		Standard        string `json:"standard"`
 		Accounting      string `json:"accounting"`
@@ -278,18 +302,30 @@ func readCurrencies(main, name string) ([]numdata.Currency, error) {
 		return nil, nil
 	}
 	out := make([]numdata.Currency, 0, len(entry.Numbers.Currencies))
-	for code, c := range entry.Numbers.Currencies {
+	for code, fields := range entry.Numbers.Currencies {
+		c := numdata.Currency{
+			Code:   fields["symbol"],
+			Symbol: fields["symbol"],
+			Narrow: fields["symbol-alt-narrow"],
+		}
+		c.Code = code
 		// A currency whose symbol is its code carries no information: the
 		// formatter writes the code when it finds nothing.
 		if c.Symbol == code {
 			c.Symbol = ""
 		}
-		if c.Symbol == "" && c.SymbolNarrow == "" {
+		for key, text := range fields {
+			count, ok := strings.CutPrefix(key, "displayName-count-")
+			if !ok || text == "" {
+				continue
+			}
+			c.Names = append(c.Names, numdata.CountedText{Count: count, Text: text})
+		}
+		sort.Slice(c.Names, func(i, j int) bool { return c.Names[i].Count < c.Names[j].Count })
+		if c.Symbol == "" && c.Narrow == "" && len(c.Names) == 0 {
 			continue
 		}
-		out = append(out, numdata.Currency{
-			Code: code, Symbol: c.Symbol, Narrow: c.SymbolNarrow,
-		})
+		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
 	return out, nil

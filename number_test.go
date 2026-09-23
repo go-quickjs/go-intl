@@ -165,15 +165,15 @@ func TestFormatterIsSafeToShare(t *testing.T) {
 	}
 }
 
-// What is not implemented says so, rather than formatting something plausible
-// and wrong.
+// What is refused says so, rather than formatting something plausible and
+// wrong. This test has now caught three options arriving -- compact notation,
+// scientific notation and currency names -- which is what it is for.
 func TestUnimplementedOptionsAreRefused(t *testing.T) {
 	loc, err := intl.ParseLocale("en")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, opts := range []intl.NumberFormatOptions{
-		{Style: intl.StyleCurrency, Currency: "USD", CurrencyDisplay: intl.CurrencyName},
 		{Style: intl.StyleCurrency},
 		// A rounding increment needs a fixed number of decimals.
 		{RoundingIncrement: 5, MaximumFractionDigits: intl.Digits(2)},

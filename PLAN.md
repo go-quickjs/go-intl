@@ -265,8 +265,7 @@ rather than the corpus gate:
 - ~~`notation: "scientific"` and `"engineering"`~~ **done**
 - `style: "unit"` with the unit identifiers and their patterns, which needs
   `cldr-units-full`.
-- `currencyDisplay: "name"`, which needs plural rules and the currency display
-  names.
+- ~~`currencyDisplay: "name"`~~ **done**
 
 - ~~the digit options `PluralRules` is also given~~ **done**; `selectRange` is
   still missing.
@@ -332,7 +331,7 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
-| 3c. Rest of the surface | rounding, notation, plural digits done; unit and currency names left |
+| 3c. Rest of the surface | only unit style and selectRange left |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
 | 5. DateTimeFormat | not started |
 | 6. RelativeTime, DisplayNames, Duration | not started |

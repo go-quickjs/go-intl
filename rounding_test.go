@@ -231,3 +231,30 @@ func TestPluralRulesDigitOptions(t *testing.T) {
 		}
 	}
 }
+
+// A spelled-out currency name is chosen by the plural category of the amount
+// *as written*, not of its value. Money is written with two decimals, so one
+// dollar is "1.00" and English calls that "dollars". The expectations are
+// node's.
+func TestCurrencyDisplayName(t *testing.T) {
+	for _, c := range []struct {
+		loc, cur string
+		v        float64
+		want     string
+	}{
+		{"en", "USD", 1, "1.00 US dollars"},
+		{"en", "USD", 2.5, "2.50 US dollars"},
+		{"de", "EUR", 1, "1,00 Euro"},
+		// The yen takes no decimals, so five of them really is "5".
+		{"en", "JPY", 5, "5 Japanese yen"},
+		{"pl", "USD", 5, "5,00 dolara amerykańskiego"},
+	} {
+		f := newFormat(t, c.loc, intl.NumberFormatOptions{
+			Style: intl.StyleCurrency, Currency: c.cur,
+			CurrencyDisplay: intl.CurrencyName,
+		})
+		if got := f.Format(c.v); got != c.want {
+			t.Errorf("%s %s %v = %q, want %q", c.loc, c.cur, c.v, got, c.want)
+		}
+	}
+}

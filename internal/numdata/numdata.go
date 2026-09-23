@@ -28,6 +28,30 @@ type Currency struct {
 	// itself is written.
 	Symbol string
 	Narrow string
+	// Names are the spelled-out names, one per plural category: a dollar and
+	// two dollars are not the same word, and in Polish there are four.
+	Names []CountedText
+}
+
+// A CountedText is a wording and the plural category it belongs to.
+type CountedText struct {
+	Count string
+	Text  string
+}
+
+// Name returns the spelled-out name for a plural category, falling back to
+// "other" as CLDR's own lookup does.
+func (c Currency) Name(count string) string {
+	var other string
+	for _, n := range c.Names {
+		if n.Count == count {
+			return n.Text
+		}
+		if n.Count == "other" {
+			other = n.Text
+		}
+	}
+	return other
 }
 
 // Symbols are the marks a locale writes numbers with.
@@ -102,6 +126,10 @@ type Locale struct {
 	CompactShort []CompactPattern
 	CompactLong  []CompactPattern
 
+	// UnitPatterns join an amount to a spelled-out currency name, "{0} {1}",
+	// one per plural category.
+	UnitPatterns []CountedText
+
 	// Currencies is sorted by code.
 	Currencies []Currency
 }
@@ -136,11 +164,21 @@ func Encode(l *Locale) []byte {
 			w.String(c.Pattern)
 		}
 	}
+	w.Uint(len(l.UnitPatterns))
+	for _, u := range l.UnitPatterns {
+		w.String(u.Count)
+		w.String(u.Text)
+	}
 	w.Uint(len(l.Currencies))
 	for _, c := range l.Currencies {
 		w.String(c.Code)
 		w.String(c.Symbol)
 		w.String(c.Narrow)
+		w.Uint(len(c.Names))
+		for _, n := range c.Names {
+			w.String(n.Count)
+			w.String(n.Text)
+		}
 	}
 	return w.Bytes()
 }
@@ -173,12 +211,31 @@ func Decode(b []byte) (*Locale, error) {
 	}
 
 	if n := r.Uint(); n >= 0 && n <= r.Left() {
+		l.UnitPatterns = make([]CountedText, 0, n)
+		for i := 0; i < n; i++ {
+			count := r.String()
+			text := r.String()
+			l.UnitPatterns = append(l.UnitPatterns, CountedText{count, text})
+		}
+	}
+	if n := r.Uint(); n >= 0 && n <= r.Left() {
 		l.Currencies = make([]Currency, 0, n)
 		for i := 0; i < n; i++ {
-			code := r.String()
-			symbol := r.String()
-			narrow := r.String()
-			l.Currencies = append(l.Currencies, Currency{code, symbol, narrow})
+			var c Currency
+			c.Code = r.String()
+			c.Symbol = r.String()
+			c.Narrow = r.String()
+			names := r.Uint()
+			if names < 0 || names > r.Left() {
+				break
+			}
+			c.Names = make([]CountedText, 0, names)
+			for j := 0; j < names; j++ {
+				count := r.String()
+				text := r.String()
+				c.Names = append(c.Names, CountedText{count, text})
+			}
+			l.Currencies = append(l.Currencies, c)
 		}
 	}
 	if err := r.Err(); err != nil {

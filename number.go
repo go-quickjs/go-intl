@@ -165,9 +165,6 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 	default:
 		return nil, fmt.Errorf("intl: %d is not a notation", opts.Notation)
 	}
-	if opts.CurrencyDisplay == CurrencyName {
-		return nil, fmt.Errorf("intl: currency names need plural rules, which are not implemented yet")
-	}
 	if opts.Style == StyleCurrency && opts.Currency == "" {
 		return nil, fmt.Errorf("intl: a currency style needs a currency")
 	}
@@ -183,7 +180,13 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 		f.pattern, err = parsePattern(data.PercentPattern)
 	case StyleCurrency:
 		p := data.CurrencyPattern
-		if opts.CurrencySign == CurrencySignAccounting && data.AccountingPattern != "" {
+		switch {
+		case opts.CurrencyDisplay == CurrencyName:
+			// A spelled-out name is not an affix on the number: the amount is
+			// written plainly and then joined to the name by a pattern of its
+			// own, which is why the currency pattern is not used here.
+			p = data.DecimalPattern
+		case opts.CurrencySign == CurrencySignAccounting && data.AccountingPattern != "":
 			p = data.AccountingPattern
 		}
 		f.pattern, err = parsePattern(p)
@@ -211,9 +214,11 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 		}
 	}
 
-	if opts.Notation == NotationCompact {
-		// The compact patterns are chosen by the plural category of the
-		// divided amount, so a compact formatter carries the rules.
+	if opts.Notation == NotationCompact ||
+		(opts.Style == StyleCurrency && opts.CurrencyDisplay == CurrencyName) {
+		// Both the compact patterns and the spelled-out currency names are
+		// chosen by the plural category of the amount, so the formatter
+		// carries the rules.
 		if f.plurals, err = NewPluralRulesFrom(src, loc, PluralRulesOptions{}); err != nil {
 			return nil, err
 		}
@@ -414,7 +419,68 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 	}
 
 	parts = append(parts, f.affixParts(suffix)...)
+	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName {
+		return f.joinCurrencyName(parts, magnitude)
+	}
 	return f.spaceCurrency(parts)
+}
+
+// joinCurrencyName puts the amount and the spelled-out name together, by the
+// locale's unit pattern and the plural category of the amount.
+func (f *NumberFormat) joinCurrencyName(parts []Part, magnitude float64) []Part {
+	count := string(PluralOther)
+	if f.plurals != nil {
+		// The category comes from the digits this formatter writes, not from
+		// the value: money is written with two decimals, so one dollar is
+		// "1.00" and English calls that "dollars" rather than "dollar".
+		integer, fraction := f.round(magnitude, false)
+		o := operandsFor(padInteger(integer, f.minInt), fraction, 0)
+		count = string(f.plurals.selectOperands(&o))
+	}
+
+	name := strings.ToUpper(f.opts.Currency)
+	if c, ok := f.data.Currency(name); ok {
+		if text := c.Name(count); text != "" {
+			name = text
+		}
+	}
+	pattern := "{0} {1}"
+	var other string
+	for _, u := range f.data.UnitPatterns {
+		if u.Count == count {
+			other = u.Text
+			break
+		}
+		if u.Count == "other" {
+			other = u.Text
+		}
+	}
+	if other != "" {
+		pattern = other
+	}
+
+	var out []Part
+	rest := pattern
+	for {
+		at := strings.IndexByte(rest, '{')
+		if at < 0 || at+2 >= len(rest) || rest[at+2] != '}' {
+			break
+		}
+		if at > 0 {
+			out = append(out, Part{PartLiteral, rest[:at]})
+		}
+		switch rest[at+1] {
+		case '0':
+			out = append(out, parts...)
+		case '1':
+			out = append(out, Part{PartCurrency, name})
+		}
+		rest = rest[at+3:]
+	}
+	if rest != "" {
+		out = append(out, Part{PartLiteral, rest})
+	}
+	return out
 }
 
 // spaceCurrency puts CLDR's space between the currency and the number where
