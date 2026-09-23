@@ -89,7 +89,31 @@ Two de-risking checks belonged here rather than in the stage that needs them.
   normalizer and the break dictionaries.
 
 *Gate:* `go test ./...` runs, the corpus is parsed and counted, and SOURCES.md
-has no unverified pins left.
+has no unverified pins left. **Met.**
+
+What the corpus turned out to be, which is design input for every later stage:
+all 7,949 cases are written in **fifteen** expression shapes, and because the
+generator spells every value with `JSON.stringify`, every literal inside them is
+JSON. So `internal/corpus` takes a line apart into a service, a locale, an
+option bag and arguments without needing a JavaScript engine.
+
+The coverage is lopsided and worth knowing before choosing what to build:
+
+| Service | Cases |
+|---|---|
+| NumberFormat | 2,970 |
+| Collator | 1,805 |
+| RelativeTimeFormat | 1,260 |
+| DateTimeFormat | 1,230 |
+| PluralRules | 300 |
+| Segmenter | 140 |
+| ListFormat | 120 |
+| DisplayNames | 34 |
+| legacy `toLocale*` | 90 |
+
+The counts are asserted, so a corpus regenerated against a different ICU, or one
+that grows a shape the parser cannot read, fails here rather than quietly
+dropping a service's coverage.
 
 ### 1. Locale
 
@@ -170,7 +194,7 @@ README's Intl section.
 
 | Stage | State |
 |---|---|
-| 0. Bootstrap | not started |
+| 0. Bootstrap | **done** — module, pins resolved, corpus parsed |
 | 1. Locale | not started |
 | 2. Provider and datagen | not started |
 | 3. NumberFormat | not started |
