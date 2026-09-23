@@ -45,6 +45,7 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.0.0.tgz
 | `cldr-core` | 48.0.0 | `3b739a175e47e50905050a34612584fd5590c9352b11f36e3498eacff1c9aa94` | `internal/localegen`, `internal/numbergen` |
 | `cldr-numbers-full` | 48.0.0 | `d3d12515b0f6f7c4b5f82586b52b16164a0cffbf4d45a9f2bd894380a96b1cb3` | `internal/numbergen` |
 | `cldr-misc-full` | 48.0.0 | `c72d7aef0022206f0c65bbad9fb3d5524078c89066febb397d94cca9e2983176` | `internal/listgen` |
+| `cldr-units-full` | 48.0.0 | `702cec5d8caa9c1c323188eab426262003f45d1a58fc7ad073be4c7128ee8137` | `internal/unitgen` |
 
 **What is vendored and what is not.** A supplemental file of a few tens of
 kilobytes is vendored beside the generator that reads it, so that generator

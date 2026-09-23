@@ -263,8 +263,7 @@ rather than the corpus gate:
 - ~~`roundingIncrement` and `trailingZeroDisplay`~~ **done**
 - ~~`currencySign: "accounting"`~~ **done**
 - ~~`notation: "scientific"` and `"engineering"`~~ **done**
-- `style: "unit"` with the unit identifiers and their patterns, which needs
-  `cldr-units-full`.
+- ~~`style: "unit"`~~ **done**
 - ~~`currencyDisplay: "name"`~~ **done**
 
 - ~~the digit options `PluralRules` is also given~~ **done**; `selectRange` is
@@ -279,8 +278,18 @@ against a reading of the specification, and all of them agreed first time:
 nine rounding modes, significant digits, both priorities, `trailingZeroDisplay`,
 `roundingIncrement` and the accounting sign.
 
+Only the 45 units ECMA-402 sanctions are carried. CLDR has 268, and the list
+exists because every language has a name for each of the 45.
+
+Five pairs -- kilometre per hour among them -- have a wording of their own
+rather than one composed from the parts, and ICU prefers it. English composes
+to the same string either way, so testing one locale would have passed while
+the rule was wrong; Chinese is where it shows, composing to "987公里/小时"
+where ICU answers "987 km/h".
+
 *Gate:* every option `internal/icu` accepts is accepted here, and the corpus
-stays at 2,970/2,970. **Corpus held; the surface is not complete yet.**
+stays at 2,970/2,970. **Met**, apart from `PluralRules.selectRange`, which
+`internal/icu` does not implement either.
 
 ### 5. DateTimeFormat (multi-session)
 
@@ -331,7 +340,7 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
-| 3c. Rest of the surface | only unit style and selectRange left |
+| 3c. Rest of the surface | **done** except `selectRange` |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
 | 5. DateTimeFormat | not started |
 | 6. RelativeTime, DisplayNames, Duration | not started |

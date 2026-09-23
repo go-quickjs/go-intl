@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/numdata"
+	"github.com/go-quickjs/go-intl/internal/unitdata"
 )
 
 // Intl.NumberFormat.
@@ -24,6 +25,8 @@ const (
 	StyleDecimal Style = iota
 	StylePercent
 	StyleCurrency
+	// StyleUnit writes a measurement: "16 litres", "987 km/h".
+	StyleUnit
 )
 
 // CurrencyDisplay is how the currency is named.
@@ -101,7 +104,11 @@ func Digits(n int) *int { return &n }
 // NumberFormatOptions mirrors the option bag of Intl.NumberFormat. Its zero
 // value is ECMA-402's default in every field.
 type NumberFormatOptions struct {
-	Style           Style
+	Style Style
+	// Unit is the measurement, for StyleUnit: "meter", or one over another,
+	// "kilometer-per-hour".
+	Unit            string
+	UnitDisplay     UnitDisplay
 	Currency        string
 	CurrencyDisplay CurrencyDisplay
 	Notation        Notation
@@ -151,6 +158,8 @@ type NumberFormat struct {
 	beforeCurrency *spacingRule
 	afterCurrency  *spacingRule
 	plurals        *PluralRules
+	units          *unitdata.Locale
+	unitWidth      int
 }
 
 // NewNumberFormat builds a formatter from the data built into the package.
@@ -167,6 +176,10 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 	}
 	if opts.Style == StyleCurrency && opts.Currency == "" {
 		return nil, fmt.Errorf("intl: a currency style needs a currency")
+	}
+	if opts.Style == StyleUnit && !HasUnit(opts.Unit) {
+		return nil, fmt.Errorf("intl: %q is not a unit a number may be written in",
+			opts.Unit)
 	}
 
 	data, err := loadNumbers(src, loc)
@@ -214,7 +227,21 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 		}
 	}
 
-	if opts.Notation == NotationCompact ||
+	if opts.Style == StyleUnit {
+		if f.units, err = loadUnits(src, loc); err != nil {
+			return nil, err
+		}
+		switch opts.UnitDisplay {
+		case UnitShort:
+			f.unitWidth = unitdata.Short
+		case UnitNarrow:
+			f.unitWidth = unitdata.Narrow
+		default:
+			f.unitWidth = unitdata.Long
+		}
+	}
+
+	if opts.Notation == NotationCompact || opts.Style == StyleUnit ||
 		(opts.Style == StyleCurrency && opts.CurrencyDisplay == CurrencyName) {
 		// Both the compact patterns and the spelled-out currency names are
 		// chosen by the plural category of the amount, so the formatter
@@ -421,6 +448,9 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 	parts = append(parts, f.affixParts(suffix)...)
 	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName {
 		return f.joinCurrencyName(parts, magnitude)
+	}
+	if f.opts.Style == StyleUnit {
+		return f.applyUnit(parts, magnitude)
 	}
 	return f.spaceCurrency(parts)
 }
