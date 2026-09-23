@@ -173,10 +173,10 @@ func TestUnimplementedOptionsAreRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, opts := range []intl.NumberFormatOptions{
-		{Notation: intl.NotationScientific},
-		{Notation: intl.NotationEngineering},
 		{Style: intl.StyleCurrency, Currency: "USD", CurrencyDisplay: intl.CurrencyName},
 		{Style: intl.StyleCurrency},
+		// A rounding increment needs a fixed number of decimals.
+		{RoundingIncrement: 5, MaximumFractionDigits: intl.Digits(2)},
 	} {
 		if _, err := intl.NewNumberFormat(loc, opts); err == nil {
 			t.Errorf("%+v was accepted", opts)

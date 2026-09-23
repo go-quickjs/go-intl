@@ -45,12 +45,19 @@ const (
 type PluralRulesOptions struct {
 	Type PluralType
 
-	// MinimumIntegerDigits is at least one; zero means the default.
-	MinimumIntegerDigits int
-	// MinimumFractionDigits and MaximumFractionDigits are pointers because
-	// zero is a setting a caller may mean.
-	MinimumFractionDigits *int
-	MaximumFractionDigits *int
+	// ECMA-402 gives PluralRules the whole set of digit options a
+	// NumberFormat has, because which form a number takes depends on how it
+	// would be written and these decide that.
+	MinimumIntegerDigits     int
+	MinimumFractionDigits    *int
+	MaximumFractionDigits    *int
+	MinimumSignificantDigits *int
+	MaximumSignificantDigits *int
+	RoundingPriority         RoundingPriority
+	RoundingMode             RoundingMode
+	RoundingIncrement        int
+	TrailingZeroDisplay      TrailingZeroDisplay
+	Notation                 Notation
 }
 
 // A PluralRules chooses the plural form for a number in one locale. It never
@@ -59,9 +66,7 @@ type PluralRules struct {
 	locale Locale
 	opts   PluralRulesOptions
 	rules  []compiledRule
-
-	minInt           int
-	minFrac, maxFrac int
+	digitPlan
 }
 
 type compiledRule struct {
@@ -94,22 +99,23 @@ func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*Plura
 		p.rules = append(p.rules, compiledRule{PluralCategory(r.Category), parsed})
 	}
 
-	p.minInt = opts.MinimumIntegerDigits
-	if p.minInt <= 0 {
-		p.minInt = 1
+	plan, err := digitRequest{
+		minInt:         opts.MinimumIntegerDigits,
+		minFrac:        opts.MinimumFractionDigits,
+		maxFrac:        opts.MaximumFractionDigits,
+		minSig:         opts.MinimumSignificantDigits,
+		maxSig:         opts.MaximumSignificantDigits,
+		priority:       opts.RoundingPriority,
+		mode:           opts.RoundingMode,
+		increment:      opts.RoundingIncrement,
+		trailingZero:   opts.TrailingZeroDisplay,
+		compact:        opts.Notation == NotationCompact,
+		maxFracDefault: 3,
+	}.resolve()
+	if err != nil {
+		return nil, err
 	}
-	p.minFrac = 0
-	if opts.MinimumFractionDigits != nil {
-		p.minFrac = *opts.MinimumFractionDigits
-	}
-	p.maxFrac = max(p.minFrac, 3)
-	if opts.MaximumFractionDigits != nil {
-		p.maxFrac = *opts.MaximumFractionDigits
-	}
-	if p.minFrac > p.maxFrac {
-		return nil, fmt.Errorf("intl: at least %d decimals but at most %d",
-			p.minFrac, p.maxFrac)
-	}
+	p.digitPlan = plan
 	return p, nil
 }
 
@@ -152,11 +158,7 @@ func (p *PluralRules) selectWith(v float64, exponent int) PluralCategory {
 	if v < 0 {
 		v = -v
 	}
-	integer, fraction := digitsOf(v, p.maxFrac)
-	fraction = trimTrailingZeros(fraction, p.minFrac)
-	for len(fraction) < p.minFrac {
-		fraction += "0"
-	}
+	integer, fraction := p.round(v, false)
 	integer = padInteger(integer, p.minInt)
 
 	o := operandsFor(integer, fraction, exponent)

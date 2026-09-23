@@ -115,7 +115,7 @@ func (f *NumberFormat) compactParts(magnitude float64, negative bool) []Part {
 			divided := magnitude / first.divisor
 			category := string(PluralOther)
 			if f.plurals != nil {
-				integer, fraction := f.roundDigits(divided, negative)
+				integer, fraction := f.round(divided, negative)
 				o := operandsFor(integer, fraction, first.exponent)
 				category = string(f.plurals.selectOperands(&o))
 			}
@@ -132,7 +132,7 @@ func (f *NumberFormat) compactParts(magnitude float64, negative bool) []Part {
 	// the options chose, which for a compact number with nothing asked for is
 	// two significant digits or no decimals, whichever keeps more.
 	value := magnitude / form.divisor
-	integer, fraction := f.roundDigits(value, negative)
+	integer, fraction := f.round(value, negative)
 	integer = padInteger(integer, max(f.minInt, 1))
 
 	var parts []Part

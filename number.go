@@ -142,18 +142,15 @@ type NumberFormat struct {
 	pattern *pattern
 	opts    NumberFormatOptions
 
-	minInt           int
-	minFrac, maxFrac int
-	minSig, maxSig   int
-	rounding         roundingKind
-	currencyText     string
-	grouping         bool
-	decimalSep       string
-	groupSep         string
-	minGrouping      int
-	beforeCurrency   *spacingRule
-	afterCurrency    *spacingRule
-	plurals          *PluralRules
+	digitPlan
+	currencyText   string
+	grouping       bool
+	decimalSep     string
+	groupSep       string
+	minGrouping    int
+	beforeCurrency *spacingRule
+	afterCurrency  *spacingRule
+	plurals        *PluralRules
 }
 
 // NewNumberFormat builds a formatter from the data built into the package.
@@ -164,9 +161,9 @@ func NewNumberFormat(loc Locale, opts NumberFormatOptions) (*NumberFormat, error
 // NewNumberFormatFrom builds a formatter from a source of the caller's own.
 func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*NumberFormat, error) {
 	switch opts.Notation {
-	case NotationStandard, NotationCompact:
+	case NotationStandard, NotationCompact, NotationScientific, NotationEngineering:
 	default:
-		return nil, fmt.Errorf("intl: scientific and engineering notation are not implemented yet")
+		return nil, fmt.Errorf("intl: %d is not a notation", opts.Notation)
 	}
 	if opts.CurrencyDisplay == CurrencyName {
 		return nil, fmt.Errorf("intl: currency names need plural rules, which are not implemented yet")
@@ -266,14 +263,7 @@ func loadNumbers(src Source, loc Locale) (*numdata.Locale, error) {
 	return nil, fmt.Errorf("intl: no number data for %s: %w", loc, ErrNotFound)
 }
 
-// resolveDigits settles how many digits are written, by ECMA-402's rules
-// rather than the pattern's. The pattern decides the layout; the option bag
-// and the style decide the counts.
-//
-// There are two ways of counting and they can both be given. Which wins is
-// ECMA-402's SetNumberFormatDigitOptions: significant digits alone, decimals
-// alone, or -- when both are given with a priority -- whichever of the two
-// keeps more or less.
+// resolveDigits builds the digit plan from the option bag and the style.
 func (f *NumberFormat) resolveDigits(src Source) error {
 	minFracDefault, maxFracDefault := 0, 3
 	switch f.opts.Style {
@@ -286,67 +276,24 @@ func (f *NumberFormat) resolveDigits(src Source) error {
 		}
 		minFracDefault, maxFracDefault = d, d
 	}
-
-	f.minInt = f.opts.MinimumIntegerDigits
-	if f.minInt <= 0 {
-		f.minInt = 1
+	plan, err := digitRequest{
+		minInt:         f.opts.MinimumIntegerDigits,
+		minFrac:        f.opts.MinimumFractionDigits,
+		maxFrac:        f.opts.MaximumFractionDigits,
+		minSig:         f.opts.MinimumSignificantDigits,
+		maxSig:         f.opts.MaximumSignificantDigits,
+		priority:       f.opts.RoundingPriority,
+		mode:           f.opts.RoundingMode,
+		increment:      f.opts.RoundingIncrement,
+		trailingZero:   f.opts.TrailingZeroDisplay,
+		compact:        f.opts.Notation == NotationCompact,
+		minFracDefault: minFracDefault,
+		maxFracDefault: maxFracDefault,
+	}.resolve()
+	if err != nil {
+		return err
 	}
-
-	hasFrac := f.opts.MinimumFractionDigits != nil || f.opts.MaximumFractionDigits != nil
-	hasSig := f.opts.MinimumSignificantDigits != nil || f.opts.MaximumSignificantDigits != nil
-
-	f.minFrac = minFracDefault
-	if f.opts.MinimumFractionDigits != nil {
-		f.minFrac = *f.opts.MinimumFractionDigits
-	}
-	f.maxFrac = max(f.minFrac, maxFracDefault)
-	if f.opts.MaximumFractionDigits != nil {
-		f.maxFrac = *f.opts.MaximumFractionDigits
-	}
-	if f.minFrac > f.maxFrac {
-		return fmt.Errorf("intl: at least %d decimals but at most %d",
-			f.minFrac, f.maxFrac)
-	}
-
-	f.minSig, f.maxSig = 1, 21
-	if f.opts.MinimumSignificantDigits != nil {
-		f.minSig = *f.opts.MinimumSignificantDigits
-	}
-	if f.opts.MaximumSignificantDigits != nil {
-		f.maxSig = *f.opts.MaximumSignificantDigits
-	}
-	if hasSig && f.minSig > f.maxSig {
-		return fmt.Errorf("intl: at least %d significant digits but at most %d",
-			f.minSig, f.maxSig)
-	}
-
-	switch {
-	case f.opts.RoundingPriority == MorePrecision:
-		f.rounding = roundMorePrecision
-	case f.opts.RoundingPriority == LessPrecision:
-		f.rounding = roundLessPrecision
-	case hasSig:
-		// Significant digits win over decimals when both are given without a
-		// priority, which is what ECMA-402 calls auto.
-		f.rounding = roundSignificantDigits
-	case hasFrac:
-		f.rounding = roundFractionDigits
-	case f.opts.Notation == NotationCompact:
-		// A compact number with nothing asked for keeps two significant
-		// digits or no decimals, whichever holds more.
-		f.minSig, f.maxSig = 1, 2
-		f.minFrac, f.maxFrac = 0, 0
-		f.rounding = roundMorePrecision
-	default:
-		f.rounding = roundFractionDigits
-	}
-
-	if f.opts.RoundingIncrement > 1 {
-		if f.rounding != roundFractionDigits || f.minFrac != f.maxFrac {
-			return fmt.Errorf("intl: a rounding increment needs the same " +
-				"smallest and largest number of decimals and no significant digits")
-		}
-	}
+	f.digitPlan = plan
 	return nil
 }
 
@@ -393,6 +340,10 @@ const (
 	PartLiteral     PartKind = "literal"
 	PartNaN         PartKind = "nan"
 	PartInfinity    PartKind = "infinity"
+	// The pieces of a scientific or engineering exponent.
+	PartExponentSeparator PartKind = "exponentSeparator"
+	PartExponentMinusSign PartKind = "exponentMinusSign"
+	PartExponentInteger   PartKind = "exponentInteger"
 )
 
 // A Part is one piece of a formatted number.
@@ -456,6 +407,8 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 		add(PartInfinity, f.data.Symbols.Infinity)
 	case f.opts.Notation == NotationCompact:
 		parts = append(parts, f.compactParts(magnitude, negative)...)
+	case f.opts.Notation == NotationScientific, f.opts.Notation == NotationEngineering:
+		parts = append(parts, f.scientificParts(magnitude, negative)...)
 	default:
 		parts = append(parts, f.numberParts(magnitude, negative)...)
 	}
@@ -556,7 +509,7 @@ func (f *NumberFormat) signFor(v float64, negative bool) (signPart, bool) {
 
 // numberParts writes the digits themselves.
 func (f *NumberFormat) numberParts(magnitude float64, negative bool) []Part {
-	integer, fraction := f.roundDigits(magnitude, negative)
+	integer, fraction := f.round(magnitude, negative)
 	integer = padInteger(integer, f.minInt)
 
 	parts := f.groupedInteger(integer)
@@ -567,87 +520,6 @@ func (f *NumberFormat) numberParts(magnitude float64, negative bool) []Part {
 	}
 	return parts
 }
-
-// roundDigits cuts a number down to the digits that will be written, by
-// whichever of the two ways of counting the options settled on, and then pads
-// or trims the decimals to what was asked for.
-func (f *NumberFormat) roundDigits(magnitude float64, negative bool) (string, string) {
-	mode := f.opts.RoundingMode
-	var integer, fraction string
-	switch f.rounding {
-	case roundSignificantDigits:
-		integer, fraction = roundSignificant(magnitude, f.maxSig, negative, mode)
-	case roundMorePrecision, roundLessPrecision:
-		// The two ways are compared by where each would round: the smaller
-		// place keeps more. Which of the two is wanted is the priority.
-		sig := significantPlace(magnitude, f.maxSig)
-		frac := -f.maxFrac
-		useSig := sig < frac
-		if f.rounding == roundLessPrecision {
-			useSig = sig > frac
-		}
-		if useSig {
-			integer, fraction = roundSignificant(magnitude, f.maxSig, negative, mode)
-		} else {
-			integer, fraction = roundAt(magnitude, f.maxFrac, negative, mode)
-		}
-	default:
-		integer, fraction = roundAt(magnitude, f.maxFrac, negative, mode)
-		if f.opts.RoundingIncrement > 1 {
-			integer, fraction = roundToIncrement(integer, fraction, f.maxFrac,
-				f.opts.RoundingIncrement, negative, mode)
-		}
-	}
-	return f.padFraction(integer, fraction)
-}
-
-// padFraction trims the decimals that were not asked for and writes the ones
-// that were.
-func (f *NumberFormat) padFraction(integer, fraction string) (string, string) {
-	minFrac := f.minFrac
-	if f.rounding == roundSignificantDigits || f.rounding == roundMorePrecision ||
-		f.rounding == roundLessPrecision {
-		// Significant digits set their own minimum: enough decimals to make up
-		// the smallest count, and no more.
-		minFrac = 0
-		if strings.Trim(integer, "0") == "" && strings.Trim(fraction, "0") == "" {
-			// Zero counts as one significant digit of its own, so it takes
-			// decimals only when more than one was asked for.
-			minFrac = f.minSig - 1
-		} else if digits := len(strings.TrimLeft(integer, "0")); digits < f.minSig {
-			if integer == "0" || digits == 0 {
-				// A number below one counts its significant digits from the
-				// first that is not a zero, wherever that falls.
-				lead := len(fraction) - len(strings.TrimLeft(fraction, "0"))
-				minFrac = lead + f.minSig
-			} else {
-				minFrac = f.minSig - digits
-			}
-		}
-		if minFrac > len(fraction) {
-			minFrac = min(minFrac, f.maxSig+len(fraction))
-		}
-	}
-	fraction = trimTrailingZeros(fraction, minFrac)
-	for len(fraction) < minFrac {
-		fraction += "0"
-	}
-	if f.opts.TrailingZeroDisplay == TrailingZeroStripIfInteger &&
-		strings.Trim(fraction, "0") == "" {
-		fraction = ""
-	}
-	return integer, fraction
-}
-
-// roundingKind is which way of counting digits decides the rounding.
-type roundingKind int
-
-const (
-	roundFractionDigits roundingKind = iota
-	roundSignificantDigits
-	roundMorePrecision
-	roundLessPrecision
-)
 
 // groupedInteger writes the integer digits with the locale's separators put
 // where the pattern says.

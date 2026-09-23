@@ -152,3 +152,82 @@ func TestAccountingCurrencySign(t *testing.T) {
 		t.Errorf("accounting positive = %q, want %q", got, want)
 	}
 }
+
+// Scientific puts one digit before the point; engineering restricts the
+// exponent to multiples of three, so the mantissa takes one, two or three.
+// Both sets of expectations are node's.
+func TestScientificAndEngineering(t *testing.T) {
+	vals := []float64{0, 1, -1, 0.5, 42, 1234.5, 1234567.891, 0.000256, 123456789012}
+	cases := []struct {
+		notation intl.Notation
+		name     string
+		want     []string
+	}{
+		{intl.NotationScientific, "scientific", []string{
+			"0E0", "1E0", "-1E0", "5E-1", "4.2E1", "1.235E3", "1.235E6",
+			"2.56E-4", "1.235E11"}},
+		{intl.NotationEngineering, "engineering", []string{
+			"0E0", "1E0", "-1E0", "500E-3", "42E0", "1.235E3", "1.235E6",
+			"256E-6", "123.457E9"}},
+	}
+	for _, c := range cases {
+		f := newFormat(t, "en", intl.NumberFormatOptions{Notation: c.notation})
+		for i, v := range vals {
+			if got := f.Format(v); got != c.want[i] {
+				t.Errorf("%s of %v = %q, want %q", c.name, v, got, c.want[i])
+			}
+		}
+	}
+}
+
+// The exponent is its own set of pieces, so a caller can style it apart from
+// the number.
+func TestScientificParts(t *testing.T) {
+	f := newFormat(t, "en", intl.NumberFormatOptions{Notation: intl.NotationScientific})
+	want := []intl.Part{
+		{Kind: intl.PartInteger, Value: "1"},
+		{Kind: intl.PartDecimal, Value: "."},
+		{Kind: intl.PartFraction, Value: "235"},
+		{Kind: intl.PartExponentSeparator, Value: "E"},
+		{Kind: intl.PartExponentInteger, Value: "3"},
+	}
+	got := f.FormatToParts(1234.5)
+	if len(got) != len(want) {
+		t.Fatalf("got %d parts, want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("part %d is %v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+// ECMA-402 gives PluralRules the same digit options, because they decide how
+// the number would be written and that is what decides the form.
+func TestPluralRulesDigitOptions(t *testing.T) {
+	loc, err := intl.ParseLocale("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		opts intl.PluralRulesOptions
+		in   float64
+		want intl.PluralCategory
+	}{
+		{intl.PluralRulesOptions{}, 1, intl.PluralOne},
+		// Two significant digits write 1 as "1.0", which is not "one".
+		{intl.PluralRulesOptions{
+			MinimumSignificantDigits: intl.Digits(2),
+			MaximumSignificantDigits: intl.Digits(2),
+		}, 1, intl.PluralOther},
+		{intl.PluralRulesOptions{MinimumFractionDigits: intl.Digits(1)}, 1, intl.PluralOther},
+	} {
+		p, err := intl.NewPluralRules(loc, c.opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := p.Select(c.in); got != c.want {
+			t.Errorf("%+v Select(%v) = %q, want %q", c.opts, c.in, got, c.want)
+		}
+	}
+}
