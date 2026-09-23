@@ -86,7 +86,13 @@ Four upstream inputs, matching what ICU4X's `provider/source` takes:
 `icuexportdata` is produced by ICU4C tooling, so this does not fully escape
 ICU4C - but it is a versioned, tagged, declarative export of *rules and tables*,
 not a scrape of a running engine's formatted output. That distinction is the
-whole point. Pin every source's version and record it in the generated header.
+whole point.
+
+Every source is pinned, and the pins are anchored to **ICU 78.3** - the ICU that
+produced the golden corpus, hence CLDR 48.0 and Unicode 17.0. Generating from a
+release the oracle was not built with turns upstream drift into corpus
+differences that look like bugs. [SOURCES.md](SOURCES.md) is the record; each
+generated file repeats its own source's version in its header.
 
 ICU4C keeps one further role: **test oracle**. `golden.mjs` stays; `extract.mjs`
 goes.

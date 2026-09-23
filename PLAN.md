@@ -59,6 +59,14 @@ tables.** Wrapping would be faster to a green test and would quietly shape the
 new API around data that is a record of answers - the exact contamination this
 project exists to remove. The strangler contract removes the reason to hurry.
 
+## Version anchor
+
+go-intl targets **ICU 78.3** - CLDR 48.0, Unicode 17.0 - because that is what
+produced the golden corpus. Generating from a newer CLDR than the oracle was
+built with turns upstream drift into corpus differences that look like bugs.
+Both move together or neither moves. [SOURCES.md](SOURCES.md) holds every pin,
+what is still unverified, and the defects go-intl inherits.
+
 ## Stages
 
 Each stage is one shippable increment with a gate. Stages 5 and 6 are more than
@@ -67,11 +75,22 @@ one session; the rest are roughly one each.
 ### 0. Bootstrap
 
 Repo, `go.mod` (module `github.com/go-quickjs/go-intl`, Go 1.24 to match
-go-quickjs), `AGENTS.md`, this file, `DESIGN.md`. Import the golden corpus as a
-Go test fixture and write the replay harness that will run it once an API
-exists. Record the pinned upstream versions.
+go-quickjs), `AGENTS.md`, this file, `DESIGN.md`, [SOURCES.md](SOURCES.md).
+Import the golden corpus as a Go test fixture and write the replay harness that
+will run it once an API exists.
 
-*Gate:* `go test ./...` runs and the corpus is parsed and counted.
+Two de-risking checks belong here rather than in the stage that needs them,
+because both can change a later stage's shape and both are cheap now:
+
+- **Does an `icuexportdata` artifact exist for ICU 78.x?** ICU4X pins a 79.x
+  export. If no 78.x artifact is published, stage 7 either generates collation
+  from CLDR's collation XML plus `allkeys_CLDR.txt`, or accepts a 79.x export
+  against a 78.3 oracle with the resulting differences recorded.
+- **Does it carry the tailorings we need** — in particular the CJK collations
+  `internal/icu` carries via `cjkgen`?
+
+*Gate:* `go test ./...` runs, the corpus is parsed and counted, and SOURCES.md
+has no unverified pins left.
 
 ### 1. Locale
 
@@ -127,6 +146,13 @@ one that justifies the split-data design: it is most of the 14 MB.
 
 Needs `icuexportdata` for UCA and tailorings, plus normalization. Where ICU4X
 did its hardest work.
+
+**Prerequisite, and it is not optional:** replace the normalizer's data source
+first. go-quickjs's tables are Unicode 13.0.0, taken from whatever UCD the
+system's Perl shipped, while the anchor is 17.0. UCA runs on NFD, so the
+Collator sits directly on that table and every character changed between those
+versions is a sorting divergence waiting to surface in the hardest stage. See
+SOURCES.md.
 
 *Gate:* collation order across the corpus's locales, including the CJK
 tailorings `internal/icu` carries.
