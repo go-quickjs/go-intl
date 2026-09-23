@@ -74,6 +74,16 @@ const (
 	NotationEngineering
 )
 
+// CompactDisplay is how a compact magnitude is written.
+type CompactDisplay int
+
+const (
+	// CompactShort writes "1.2K", and is the default.
+	CompactShort CompactDisplay = iota
+	// CompactLong writes "1.2 thousand".
+	CompactLong
+)
+
 // Digits returns a pointer to n, for the option fields where zero is a setting
 // a caller may mean and so cannot also stand for "not given".
 func Digits(n int) *int { return &n }
@@ -85,6 +95,7 @@ type NumberFormatOptions struct {
 	Currency        string
 	CurrencyDisplay CurrencyDisplay
 	Notation        Notation
+	CompactDisplay  CompactDisplay
 	SignDisplay     SignDisplay
 	UseGrouping     Grouping
 
@@ -112,8 +123,10 @@ type NumberFormat struct {
 	grouping         bool
 	decimalSep       string
 	groupSep         string
+	minGrouping      int
 	beforeCurrency   *spacingRule
 	afterCurrency    *spacingRule
+	plurals          *PluralRules
 }
 
 // NewNumberFormat builds a formatter from the data built into the package.
@@ -123,8 +136,10 @@ func NewNumberFormat(loc Locale, opts NumberFormatOptions) (*NumberFormat, error
 
 // NewNumberFormatFrom builds a formatter from a source of the caller's own.
 func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*NumberFormat, error) {
-	if opts.Notation != NotationStandard {
-		return nil, fmt.Errorf("intl: only standard notation is implemented so far")
+	switch opts.Notation {
+	case NotationStandard, NotationCompact:
+	default:
+		return nil, fmt.Errorf("intl: scientific and engineering notation are not implemented yet")
 	}
 	if opts.CurrencyDisplay == CurrencyName {
 		return nil, fmt.Errorf("intl: currency names need plural rules, which are not implemented yet")
@@ -168,7 +183,25 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 		}
 	}
 
+	if opts.Notation == NotationCompact {
+		// The compact patterns are chosen by the plural category of the
+		// divided amount, so a compact formatter carries the rules.
+		if f.plurals, err = NewPluralRulesFrom(src, loc, PluralRulesOptions{}); err != nil {
+			return nil, err
+		}
+	}
+
 	f.grouping = opts.UseGrouping != GroupingNever && f.pattern.primaryGroup > 0
+	f.minGrouping = data.MinimumGroupingDigits
+	switch {
+	case opts.UseGrouping == GroupingAlways:
+		f.minGrouping = 1
+	case opts.Notation == NotationCompact && opts.UseGrouping == GroupingAuto:
+		// ECMA-402 groups a compact number only when the leading group has two
+		// digits of its own, so 1235 thousand is "1235" and not "1,235". It
+		// calls that "min2".
+		f.minGrouping = max(2, f.minGrouping)
+	}
 	f.decimalSep, f.groupSep = data.Symbols.Decimal, data.Symbols.Group
 	if opts.Style == StyleCurrency {
 		if data.Symbols.CurrencyDecimal != "" {
@@ -341,6 +374,8 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 		add(PartNaN, f.data.Symbols.NaN)
 	case math.IsInf(v, 0):
 		add(PartInfinity, f.data.Symbols.Infinity)
+	case f.opts.Notation == NotationCompact:
+		parts = append(parts, f.compactParts(magnitude)...)
 	default:
 		parts = append(parts, f.numberParts(magnitude)...)
 	}
@@ -448,29 +483,31 @@ func (f *NumberFormat) numberParts(magnitude float64) []Part {
 	}
 	integer = padInteger(integer, f.minInt)
 
-	var parts []Part
-	var at []int
-	if f.grouping {
-		minGrouping := f.data.MinimumGroupingDigits
-		if f.opts.UseGrouping == GroupingAlways {
-			minGrouping = 1
-		}
-		at = groupPositions(len(integer), f.pattern.primaryGroup,
-			f.pattern.secondaryGroup, minGrouping)
-	}
-	last := 0
-	for _, pos := range at {
-		parts = append(parts, Part{PartInteger, f.digits(integer[last:pos])})
-		parts = append(parts, Part{PartGroup, f.groupSep})
-		last = pos
-	}
-	parts = append(parts, Part{PartInteger, f.digits(integer[last:])})
+	parts := f.groupedInteger(integer)
 
 	if fraction != "" {
 		parts = append(parts, Part{PartDecimal, f.decimalSep})
 		parts = append(parts, Part{PartFraction, f.digits(fraction)})
 	}
 	return parts
+}
+
+// groupedInteger writes the integer digits with the locale's separators put
+// where the pattern says.
+func (f *NumberFormat) groupedInteger(integer string) []Part {
+	var at []int
+	if f.grouping {
+		at = groupPositions(len(integer), f.pattern.primaryGroup,
+			f.pattern.secondaryGroup, f.minGrouping)
+	}
+	var parts []Part
+	last := 0
+	for _, pos := range at {
+		parts = append(parts, Part{PartInteger, f.digits(integer[last:pos])})
+		parts = append(parts, Part{PartGroup, f.groupSep})
+		last = pos
+	}
+	return append(parts, Part{PartInteger, f.digits(integer[last:])})
 }
 
 func (f *NumberFormat) digits(s string) string {

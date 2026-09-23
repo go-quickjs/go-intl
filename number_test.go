@@ -173,7 +173,8 @@ func TestUnimplementedOptionsAreRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, opts := range []intl.NumberFormatOptions{
-		{Notation: intl.NotationCompact},
+		{Notation: intl.NotationScientific},
+		{Notation: intl.NotationEngineering},
 		{Style: intl.StyleCurrency, Currency: "USD", CurrencyDisplay: intl.CurrencyName},
 		{Style: intl.StyleCurrency},
 	} {
@@ -196,5 +197,43 @@ func TestNumberFormatFromAnotherSource(t *testing.T) {
 	}
 	if got, want := f.Format(1234.5), "1.234,5"; got != want {
 		t.Errorf("de gives %q, want %q", got, want)
+	}
+}
+
+// Compact notation picks its wording by the plural category of the divided
+// amount, which is why it arrived with the plural rules rather than with the
+// rest of NumberFormat.
+func TestCompactNotation(t *testing.T) {
+	short := newFormat(t, "en", intl.NumberFormatOptions{Notation: intl.NotationCompact})
+	long := newFormat(t, "en", intl.NumberFormatOptions{
+		Notation: intl.NotationCompact, CompactDisplay: intl.CompactLong,
+	})
+	for _, c := range []struct {
+		in          float64
+		short, long string
+	}{
+		{42, "42", "42"},
+		{1234.5, "1.2K", "1.2 thousand"},
+		{12345678, "12M", "12 million"},
+		// Two significant digits would give 120B; no decimals gives 123B, and
+		// ECMA-402 keeps whichever holds more.
+		{123456789012, "123B", "123 billion"},
+		{0.256, "0.26", "0.26"},
+	} {
+		if got := short.Format(c.in); got != c.short {
+			t.Errorf("compact %v = %q, want %q", c.in, got, c.short)
+		}
+		if got := long.Format(c.in); got != c.long {
+			t.Errorf("compact long %v = %q, want %q", c.in, got, c.long)
+		}
+	}
+}
+
+// A compact number is grouped only when the leading group has two digits of
+// its own, which ECMA-402 calls min2.
+func TestCompactGroupingNeedsTwoDigits(t *testing.T) {
+	f := newFormat(t, "ja", intl.NumberFormatOptions{Notation: intl.NotationCompact})
+	if got, want := f.Format(12345678), "1235万"; got != want {
+		t.Errorf("ja compact = %q, want %q", got, want)
 	}
 }

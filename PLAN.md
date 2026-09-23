@@ -200,18 +200,42 @@ Not yet, and each says so rather than formatting something plausible: compact
 notation and currency names both need plural rules, and scientific and
 engineering notation are unwritten.
 
-### 3b. Compact notation
-
-Left out of stage 3 because `compactDisplay: "long"` picks its pattern by the
-plural category of the amount. It is 330 corpus cases and lands with stage 4.
-
 ### 4. PluralRules and ListFormat
 
 Small, data-clean, and the two services ICU4X's own ECMA-402 layer bothered to
 bind. Confirms the shape repeats.
 
 *Gate:* their corpus slices; first go-quickjs switch-over for all three services
-so far.
+so far. **Corpus met: PluralRules 300/300, ListFormat 120/120.**
+
+Plural rules are a rule language, small but real: a condition over UTS #35's
+operands, parsed when the rules are built rather than when a number is
+selected. What is stored is CLDR's condition text. Which category a number
+falls in is an answer, and no table holds one.
+
+The operands come from the number **as it would be written**, not from its
+value: 1 and 1.0 are the same quantity and different plurals, because one has a
+written decimal. That is why selecting formats first.
+
+One thing the corpus caught: the modulus keeps the fraction. UTS #35 has
+`1.5 mod 10` as 1.5, not 1, which is what makes the English ordinal rule
+`n % 10 = 1` hold for 1 and 21 but not for 1.5. Truncating first made 1.5 an
+ordinal "one", which is not a thing.
+
+### 3b. Compact notation
+
+**Done, and NumberFormat is now 2,970/2,970 - the whole service.**
+
+Two things made it more than dividing and appending a letter. The pattern is
+chosen by the plural category of the *divided* amount, which is why it waited
+on this stage. And the rounding is ECMA-402's "more precision", a choice
+between two roundings rather than a mode: a compact number is rounded both to
+no decimals and to two significant digits, and whichever keeps more wins, so
+1.2345 thousand is "1.2K" but 123.456 billion is "123B".
+
+The corpus caught the last 28 cases as one rule: compact notation groups only
+when the leading group has two digits of its own, which ECMA-402 calls "min2",
+so ja writes "1235万" rather than "1,235万".
 
 ### 5. DateTimeFormat (multi-session)
 
@@ -261,15 +285,24 @@ README's Intl section.
 | 1. Locale | **done** - types, parser, canonicalization, fallback |
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
-| 3b. Compact notation | waits on stage 4 (plural rules) |
-| 4. PluralRules, ListFormat | not started |
+| 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
+| 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
 | 5. DateTimeFormat | not started |
 | 6. RelativeTime, DisplayNames, Duration | not started |
 | 7. Collator | not started |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-Switched over in go-quickjs: *none yet.*
+**Corpus coverage so far: 3,390 of 7,949 cases, all at 100%.**
+
+| Service | Cases | Matching |
+|---|---|---|
+| NumberFormat | 2,970 | 2,970 |
+| PluralRules | 300 | 300 |
+| ListFormat | 120 | 120 |
+
+Switched over in go-quickjs: *none yet.* Three services are now at parity, so
+the first switch-over is due.
 
 ## Resuming cold
 

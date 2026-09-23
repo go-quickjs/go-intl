@@ -14,9 +14,7 @@ import (
 // The corpus is what ICU answered. This runs the NumberFormat part of it
 // through go-intl and counts what agrees.
 //
-// Notation "compact" is left out: its long form picks a pattern by the plural
-// category of the amount, so it waits on plural rules in stage 4. Everything
-// else in the corpus is in.
+// Every NumberFormat case in the corpus is in.
 func TestNumberFormatMatchesICU(t *testing.T) {
 	f, err := corpus.Load(filepath.FromSlash("testdata/intl_golden.txt"))
 	if err != nil {
@@ -27,9 +25,6 @@ func TestNumberFormatMatchesICU(t *testing.T) {
 	var differences []string
 	for _, c := range f.Cases {
 		if c.Service != "NumberFormat" || c.Method != "format" {
-			continue
-		}
-		if _, ok := c.Options["notation"]; ok {
 			continue
 		}
 		opts, err := numberOptions(c.Options)
@@ -131,6 +126,24 @@ func numberOptions(in map[string]any) (intl.NumberFormatOptions, error) {
 		case "useGrouping":
 			if on, ok := value.(bool); ok && !on {
 				out.UseGrouping = intl.GroupingNever
+			}
+		case "notation":
+			switch value {
+			case "standard":
+				out.Notation = intl.NotationStandard
+			case "compact":
+				out.Notation = intl.NotationCompact
+			default:
+				return out, fmt.Errorf("notation %v", value)
+			}
+		case "compactDisplay":
+			switch value {
+			case "short":
+				out.CompactDisplay = intl.CompactShort
+			case "long":
+				out.CompactDisplay = intl.CompactLong
+			default:
+				return out, fmt.Errorf("compactDisplay %v", value)
 			}
 		case "minimumIntegerDigits":
 			out.MinimumIntegerDigits = int(value.(float64))

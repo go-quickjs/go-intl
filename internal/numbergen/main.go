@@ -213,7 +213,12 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 		CurrencyDecimal: symbols.CurrencyDecimal, CurrencyGroup: symbols.CurrencyGroup,
 	}
 
-	var decimal, percent struct {
+	var decimal struct {
+		Standard string                       `json:"standard"`
+		Short    map[string]map[string]string `json:"short"`
+		Long     map[string]map[string]string `json:"long"`
+	}
+	var percent struct {
 		Standard string `json:"standard"`
 	}
 	type spacing struct {
@@ -246,6 +251,9 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 	if out.DecimalPattern == "" || out.Symbols.Decimal == "" {
 		return nil, fmt.Errorf("no decimal pattern or separator")
 	}
+
+	out.CompactShort = compactPatterns(decimal.Short["decimalFormat"])
+	out.CompactLong = compactPatterns(decimal.Long["decimalFormat"])
 
 	if out.Currencies, err = readCurrencies(main, name); err != nil {
 		return nil, err
@@ -332,4 +340,36 @@ func currencyDigitsTable() ([]byte, error) {
 		fmt.Fprintf(&b, "%s:%s\n", code, digits)
 	}
 	return []byte(b.String()), nil
+}
+
+// compactPatterns reads the compact forms, whose keys carry both the magnitude
+// and the plural category they apply to: "1000-count-one" is how one thousand
+// is written. The magnitude is kept as its power of ten.
+func compactPatterns(in map[string]string) []numdata.CompactPattern {
+	out := make([]numdata.CompactPattern, 0, len(in))
+	for key, pattern := range in {
+		magnitude, count, ok := strings.Cut(key, "-count-")
+		if !ok {
+			continue
+		}
+		// A pattern of a bare "0" means the locale writes this magnitude out
+		// in full rather than compacting it, and carries no information.
+		if strings.TrimSpace(pattern) == "0" {
+			continue
+		}
+		exponent := len(magnitude) - 1
+		if _, err := strconv.Atoi(magnitude); err != nil || exponent < 0 {
+			continue
+		}
+		out = append(out, numdata.CompactPattern{
+			Exponent: exponent, Count: count, Pattern: pattern,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Exponent != out[j].Exponent {
+			return out[i].Exponent < out[j].Exponent
+		}
+		return out[i].Count < out[j].Count
+	})
+	return out
 }

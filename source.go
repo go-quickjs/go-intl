@@ -37,6 +37,10 @@ const (
 	// MarkerCurrencyDigits is how many decimals each currency is written
 	// with, which does not vary by locale.
 	MarkerCurrencyDigits Marker = "currencydigits"
+	// MarkerPlurals is one language's plural rules.
+	MarkerPlurals Marker = "plurals"
+	// MarkerLists is one locale's list-joining patterns.
+	MarkerLists Marker = "lists"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It
