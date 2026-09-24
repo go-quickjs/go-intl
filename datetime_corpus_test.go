@@ -60,39 +60,14 @@ func TestDateTimeFormatMatchesICU(t *testing.T) {
 	}
 	t.Logf("%d of %d DateTimeFormat cases match ICU exactly (%.2f%%)",
 		matched, ran, 100*float64(matched)/float64(ran))
-	// What is not done yet is named rather than hidden, and the count is
-	// checked too, so that finishing one of these or breaking something else
-	// is noticed. Both are stated in PLAN.md.
-	//
-	//	zh-Hant  joins a date to a time with a space that CLDR 48.0's glue,
-	//	         "{1}{0}", does not contain. CLDR 48.2 writes a thin space
-	//	         there and ICU 78.3 a plain one, so the ICU this is anchored
-	//	         to was built from a CLDR newer than the pin. SOURCES.md has
-	//	         the evidence; moving the pin is its own piece of work.
-	const outstanding = 9
-	var unexpected []string
-	for _, d := range differences {
-		if strings.Contains(d, `DateTimeFormat("zh-Hant"`) {
-			continue
-		}
-		unexpected = append(unexpected, d)
-	}
-	sort.Strings(unexpected)
-	if len(unexpected) > 0 {
-		shown := unexpected
+	if matched != ran {
+		sort.Strings(differences)
+		shown := differences
 		if len(shown) > 20 {
 			shown = shown[:20]
 		}
-		t.Errorf("%d cases differ for reasons that are not known:\n%s",
-			len(unexpected), strings.Join(shown, "\n"))
-	}
-	switch got := ran - matched; {
-	case got > outstanding:
-		t.Errorf("%d cases differ, which is more than the %d outstanding",
-			got, outstanding)
-	case got < outstanding:
-		t.Errorf("only %d cases differ where %d were outstanding; something "+
-			"was fixed and the count needs lowering", got, outstanding)
+		t.Errorf("%d of %d cases differ:\n%s", ran-matched, ran,
+			strings.Join(shown, "\n"))
 	}
 }
 

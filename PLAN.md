@@ -81,8 +81,9 @@ project exists to remove. The strangler contract removes the reason to hurry.
 
 ## Version anchor
 
-go-intl targets **ICU 78.3** - CLDR 48.0, Unicode 17.0 - because that is what
-produced the golden corpus. Generating from a newer CLDR than the oracle was
+go-intl targets **ICU 78.3** - CLDR 48.2.0, Unicode 17.0 - because that is what
+produced the golden corpus. The CLDR pin began at 48.0.0, on node's own report,
+and the corpus moved it: see SOURCES.md. Generating from a newer CLDR than the oracle was
 built with turns upstream drift into corpus differences that look like bugs.
 Both move together or neither moves. [SOURCES.md](SOURCES.md) holds every pin,
 what is still unverified, and the defects go-intl inherits.
@@ -346,7 +347,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** except `selectRange` |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
-| 5. DateTimeFormat | **1,221/1,230** - Gregorian and Buddhist |
+| 5. DateTimeFormat | **done** - 1,230/1,230, Gregorian and Buddhist |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started |
@@ -354,10 +355,7 @@ README's Intl section.
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 5,903 of 7,949 cases.** Five services are exact;
-DateTimeFormat is at 1,221 of 1,230; the nine that remain are one locale and
-one character, and SOURCES.md has the evidence that they are a CLDR release
-behind rather than a bug.
+**Corpus coverage so far: 5,914 of 7,949 cases, every one of them exact.**
 
 | Service | Cases | Matching |
 |---|---|---|
@@ -365,7 +363,7 @@ behind rather than a bug.
 | PluralRules | 300 | 300 |
 | RelativeTimeFormat | 1,260 | 1,260 |
 | ListFormat | 120 | 120 |
-| DateTimeFormat | 1,230 | 1,221 |
+| DateTimeFormat | 1,230 | 1,230 |
 | DisplayNames | 34 | 34 |
 
 Switched over in go-quickjs: *none yet.* Three services are now at parity, so

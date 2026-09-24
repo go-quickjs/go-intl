@@ -13,9 +13,9 @@ $ node -e "console.log(process.versions.icu, process.versions.unicode, process.v
 78.3 17.0 48.0 2026b
 ```
 
-Generating from a newer CLDR than the oracle was built with makes some corpus
-differences genuine upstream drift rather than bugs, which is time spent
-chasing nothing. Both move together, deliberately, or neither moves.
+Generating from a CLDR the oracle was not built with turns upstream drift into
+corpus differences that look like bugs. Both move together, deliberately, or
+neither moves.
 
 Note this differs from ICU4X's own pins (CLDR `49.0.0-ALPHA2`, icuexport
 `icu4x/2026-08-31/79.x`). ICU4X is an architectural reference, not a version
@@ -26,30 +26,30 @@ authority.
 | Source | Pin | Feeds | Confirmed |
 |---|---|---|---|
 | ICU | 78.3 | the anchor; the golden corpus oracle | yes, from node |
-| CLDR (`cldr-json`) | 48.0 | numbers, dates, units, names, plurals, zones | yes, from node |
+| CLDR (`cldr-json`) | **48.2.0** | numbers, dates, units, names, plurals, zones | yes, by the corpus |
 | Unicode (UCD) | 17.0 | properties, normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings, normalizer, properties, case, dictionaries | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
-the release page offers. `cldr-core` is 205 KB and carries all of the
+the release page offers. `cldr-core` is 200 KB and carries all of the
 supplemental data, so a generator takes only the package it reads:
 
 ```sh
-curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.0.0.tgz
+curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 ```
 
 | Package | Version | sha256 | Used by |
 |---|---|---|---|
-| `cldr-core` | 48.0.0 | `3b739a175e47e50905050a34612584fd5590c9352b11f36e3498eacff1c9aa94` | `internal/localegen`, `internal/numbergen` |
-| `cldr-numbers-full` | 48.0.0 | `d3d12515b0f6f7c4b5f82586b52b16164a0cffbf4d45a9f2bd894380a96b1cb3` | `internal/numbergen` |
-| `cldr-misc-full` | 48.0.0 | `c72d7aef0022206f0c65bbad9fb3d5524078c89066febb397d94cca9e2983176` | `internal/listgen` |
-| `cldr-units-full` | 48.0.0 | `702cec5d8caa9c1c323188eab426262003f45d1a58fc7ad073be4c7128ee8137` | `internal/unitgen` |
-| `cldr-dates-full` | 48.0.0 | `72fece9f1c86dc2a5e5ae71fdece65f0dc9907ce4371453b3033cb6ed0c2438b` | `internal/reltimegen`, `internal/namegen`, `internal/dategen`, `internal/zonegen` |
-| `cldr-localenames-full` | 48.0.0 | `b79db910fe2ba45ef20ca2f34ee5c269920a232a43e9af47676b79dfa6c03ac7` | `internal/namegen` |
-| `cldr-bcp47` | 48.0.0 | `3ec2ddbb9eb91b011031de5aa21ccc59390b7b2ebca873d322ab0b35bdd26993` | `internal/zonegen` |
-| `cldr-cal-buddhist-full` | 48.0.0 | `11c5c2ff601aa589f4388b31b50383c639486b5da64ec8190cc535fc963a1551` | `internal/dategen` |
+| `cldr-core` | 48.2.0 | `5310e0c7a06c1feb83dc8e54c8584bbe0b9c2ea8320172a18d541986b124585d` | `localegen`, `numbergen`, `pluralgen`, `dategen`, `zonegen` |
+| `cldr-numbers-full` | 48.2.0 | `2d17a1453c559a62112caeed52e0bcfe3cb8539c99d239ae7b7ed4d0827679d9` | `numbergen` |
+| `cldr-misc-full` | 48.2.0 | `c6ba8384d7ea8701cf86935db0461379231ddd970cc41c249f4a33b9857ded3c` | `listgen` |
+| `cldr-units-full` | 48.2.0 | `754d55f183570c53029a77493302f432fb3e905df35a715f9cb022e2ebcb093c` | `unitgen` |
+| `cldr-dates-full` | 48.2.0 | `0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430` | `reltimegen`, `namegen`, `dategen`, `zonegen` |
+| `cldr-localenames-full` | 48.2.0 | `7f2ac7fd3b5d90f56ad127f9ed5ae67b58b3e556818f55530b9f47bb81bcde57` | `namegen` |
+| `cldr-bcp47` | 48.2.0 | `b4a4f36a891b9fde1ffeddf1b1cb7f87d025656a58415291a96b563a82700fe0` | `zonegen` |
+| `cldr-cal-buddhist-full` | 48.2.0 | `3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff` | `dategen` |
 
 Each calendar beyond the Gregorian one is its own CLDR package, so the
 remaining fourteen arrive as fourteen more rows here rather than as a change
@@ -68,24 +68,26 @@ Other URLs:
   — sha256 `eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60`, 5.6 MB
 - `https://github.com/unicode-org/lstm_word_segmentation/releases`
 
-## Which CLDR 48
+## Which CLDR 48, settled
 
-CLDR ships 48.0.0, 48.1.0 and 48.2.x. Node reports ICU 78.3's CLDR as "48.0",
-so that is the pin. The distinction has not mattered yet: 48.0.0 and 48.2.0
-carry **identical** likely subtags, 7,788 entries with no differences between
-them. If it ever does matter the corpus decides, since the corpus is the ground
-truth and the version string is only a label.
+Node reports ICU 78.3's CLDR as "48.0", and that turned out to be a coarser
+label than a version. The pin started at 48.0.0 on the strength of it, and
+**the corpus moved it to 48.2.0**.
 
-**The pin is probably a release too old, and there is now evidence.** CLDR
-48.0 joins a date to a time in zh-Hant with nothing at all, `{1}{0}`; CLDR 48.2
-writes a thin space, `{1} {0}`; ICU 78.3 writes a plain space. So the ICU
-this is anchored to was built from a CLDR somewhere after 48.0. It costs nine
-corpus cases in one locale, which is the whole of what DateTimeFormat still
-misses.
+The evidence was one locale and one character. Chinese joins a date to a time:
 
-Moving the pin to 48.2.0 is its own piece of work: every table is regenerated
-and every service re-measured, which is the rule for changing a pin. It is not
-folded in here.
+| | `zh-Hant` glue |
+|---|---|
+| CLDR 48.0.0 | `{1}{0}` - nothing between them |
+| CLDR 48.2.0 | a thin space, U+2009 |
+| ICU 78.3, per the corpus | a plain space |
+
+Nothing in 48.0 could produce that space; 48.2 can, once thin spaces are
+normalized the way ICU normalizes them. Regenerating every table at 48.2.0 took
+DateTimeFormat from 1,221 of 1,230 to **1,230 of 1,230** and moved no other
+service by a single case, which is as clean a confirmation as this offers.
+
+The version string was never the authority. The corpus was.
 
 One thing that looks like a contradiction and is not: CLDR 48 reports
 `_unicodeVersion: "16.0.0"` while ICU 78.3 reports Unicode 17.0. Those describe
@@ -164,7 +166,8 @@ generator is brought over.
 CLDR separates a time from its day period with U+202F, a narrow no-break
 space, in 440 locales, and joins a date to a time with U+2009, a thin space, in
 some. **ICU 78.3 writes a plain space for both**, and the golden corpus agrees,
-so `dategen` replaces them.
+so `dategen` replaces them. Normalizing the thin one is what let the 48.2.0 pin
+close the last nine cases.
 
 CLDR offers "-alt-ascii" patterns that look like they say the same thing and do
 not: `en-GB`'s medium time is `HH:mm:ss` and its ascii alternate is
