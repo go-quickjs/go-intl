@@ -49,6 +49,11 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.0.0.tgz
 | `cldr-dates-full` | 48.0.0 | `72fece9f1c86dc2a5e5ae71fdece65f0dc9907ce4371453b3033cb6ed0c2438b` | `internal/reltimegen`, `internal/namegen`, `internal/dategen`, `internal/zonegen` |
 | `cldr-localenames-full` | 48.0.0 | `b79db910fe2ba45ef20ca2f34ee5c269920a232a43e9af47676b79dfa6c03ac7` | `internal/namegen` |
 | `cldr-bcp47` | 48.0.0 | `3ec2ddbb9eb91b011031de5aa21ccc59390b7b2ebca873d322ab0b35bdd26993` | `internal/zonegen` |
+| `cldr-cal-buddhist-full` | 48.0.0 | `11c5c2ff601aa589f4388b31b50383c639486b5da64ec8190cc535fc963a1551` | `internal/dategen` |
+
+Each calendar beyond the Gregorian one is its own CLDR package, so the
+remaining fourteen arrive as fourteen more rows here rather than as a change
+to anything.
 
 **What is vendored and what is not.** A supplemental file of a few tens of
 kilobytes is vendored beside the generator that reads it, so that generator

@@ -6,12 +6,18 @@
 //
 //	go run ./internal/dategen <cldr-dates-full/package>
 //
-// Only the Gregorian calendar is written so far. The encoding keeps the
-// calendars in a list keyed by name, so the other fifteen arrive without its
-// shape changing.
+// Each calendar beyond the Gregorian one is its own CLDR package, and each is
+// given as a further argument:
+//
+//	go run ./internal/dategen <cldr-dates-full/package> <cldr-cal-buddhist-full/package>
+//
+// Which calendar a locale reckons in by default is a property of its region
+// rather than its language, and CLDR's calendarPreferenceData says so. That
+// file is vendored beside this command and written out as its own table.
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,6 +28,16 @@ import (
 
 	"github.com/go-quickjs/go-intl/internal/datedata"
 )
+
+//go:embed calendarPreferenceData.json
+var calendarPreferenceJSON []byte
+
+// extras are the calendars beyond the Gregorian one, in the order their
+// packages are given. CLDR's name for a calendar is not always BCP-47's, which
+// is the name ECMA-402 uses and the one stored.
+var extras = []struct{ cldr, bcp47 string }{
+	{"buddhist", "buddhist"},
+}
 
 type file struct {
 	Main map[string]struct {
@@ -58,17 +74,18 @@ var weekdayKeys = [7]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 var eraWidths = [datedata.Widths]string{"eraNames", "eraAbbr", "eraNarrow", "eraNarrow"}
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/dategen <cldr-dates-full/package>")
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr,
+			"usage: go run ./internal/dategen <cldr-dates-full/package> [<cldr-cal-*-full/package>...]")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1]); err != nil {
+	if err := run(os.Args[1], os.Args[2:]); err != nil {
 		fmt.Fprintln(os.Stderr, "dategen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(root string) error {
+func run(root string, others []string) error {
 	main := filepath.Join(root, "main")
 	entries, err := os.ReadDir(main)
 	if err != nil {
@@ -86,6 +103,22 @@ func run(root string) error {
 		}
 		if l == nil {
 			continue
+		}
+		for i, other := range others {
+			if i >= len(extras) {
+				break
+			}
+			c, err := readCalendar(filepath.Join(other, "main"), e.Name(),
+				extras[i].cldr, "ca-"+extras[i].cldr+".json")
+			if err != nil {
+				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
+			}
+			if c == nil {
+				continue
+			}
+			l.Calendars = append(l.Calendars, datedata.NamedCalendar{
+				Name: extras[i].bcp47, Calendar: *c,
+			})
 		}
 		built[e.Name()] = datedata.Encode(l)
 	}
@@ -115,13 +148,70 @@ func run(root string) error {
 		}
 		total += len(built[name])
 	}
-	fmt.Fprintf(os.Stderr, "dategen: %d locales, %.1f MB\n",
-		len(names), float64(total)/(1<<20))
+	prefs, err := calendarPreferences()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "calendarprefs.bin"), prefs, 0o644); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "dategen: %d locales, %d calendars, %.1f MB\n",
+		len(names), 1+len(others), float64(total)/(1<<20))
 	return nil
 }
 
+// calendarPreferences writes which calendar each region reckons in, as lines
+// of "region calendar", sorted. Only the first is kept: the rest are calendars
+// a region also uses rather than ones it defaults to.
+func calendarPreferences() ([]byte, error) {
+	var res struct {
+		Supplemental struct {
+			CalendarPreferenceData map[string][]string `json:"calendarPreferenceData"`
+		} `json:"supplemental"`
+	}
+	if err := json.Unmarshal(calendarPreferenceJSON, &res); err != nil {
+		return nil, fmt.Errorf("calendarPreferenceData.json: %w", err)
+	}
+	if len(res.Supplemental.CalendarPreferenceData) == 0 {
+		return nil, fmt.Errorf("calendarPreferenceData.json names no regions")
+	}
+	regions := make([]string, 0, len(res.Supplemental.CalendarPreferenceData))
+	for region := range res.Supplemental.CalendarPreferenceData {
+		regions = append(regions, region)
+	}
+	sort.Strings(regions)
+
+	var b strings.Builder
+	for _, region := range regions {
+		list := res.Supplemental.CalendarPreferenceData[region]
+		if len(list) == 0 {
+			continue
+		}
+		name := list[0]
+		// CLDR writes the Gregorian calendar's name in full where BCP-47
+		// shortens it, and the short one is what ECMA-402 uses.
+		if name == "gregorian" {
+			name = "gregory"
+		}
+		fmt.Fprintf(&b, "%s %s\n", region, name)
+	}
+	return []byte(b.String()), nil
+}
+
 func read(main, name string) (*datedata.Locale, error) {
-	raw, err := os.ReadFile(filepath.Join(main, name, "ca-gregorian.json"))
+	c, err := readCalendar(main, name, "gregorian", "ca-gregorian.json")
+	if err != nil || c == nil {
+		return nil, err
+	}
+	return &datedata.Locale{
+		Calendars: []datedata.NamedCalendar{{Name: "gregory", Calendar: *c}},
+	}, nil
+}
+
+// readCalendar reads one calendar out of one package.
+func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar, error) {
+	raw, err := os.ReadFile(filepath.Join(main, name, fileName))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -130,13 +220,13 @@ func read(main, name string) (*datedata.Locale, error) {
 	}
 	var f file
 	if err := json.Unmarshal(raw, &f); err != nil {
-		return nil, fmt.Errorf("ca-gregorian.json: %w", err)
+		return nil, fmt.Errorf("%s: %w", fileName, err)
 	}
 	entry, ok := f.Main[name]
 	if !ok {
 		return nil, nil
 	}
-	source, ok := entry.Dates.Calendars["gregorian"]
+	source, ok := entry.Dates.Calendars[calendarName]
 	if !ok {
 		return nil, nil
 	}
@@ -204,9 +294,7 @@ func read(main, name string) (*datedata.Locale, error) {
 	if c.DateFormats[datedata.Full] == "" && len(c.Available) == 0 {
 		return nil, nil
 	}
-	return &datedata.Locale{
-		Calendars: []datedata.NamedCalendar{{Name: "gregory", Calendar: c}},
-	}, nil
+	return &c, nil
 }
 
 // pattern reads a pattern, which CLDR writes either as a string or, where it

@@ -64,16 +64,13 @@ func TestDateTimeFormatMatchesICU(t *testing.T) {
 	// checked too, so that finishing one of these or breaking something else
 	// is noticed. Both are stated in PLAN.md.
 	//
-	//	th       writes its dates in the Buddhist calendar, and only the
-	//	         Gregorian one is implemented.
 	//	zh-Hant  uses the flexible day period -- the small hours are 凌晨
 	//	         rather than 上午 -- and joins a date to a time with a space
 	//	         that CLDR's own glue, "{1}{0}", does not contain.
-	const outstanding = 59
+	const outstanding = 11
 	var unexpected []string
 	for _, d := range differences {
-		if strings.Contains(d, `DateTimeFormat("th"`) ||
-			strings.Contains(d, `DateTimeFormat("zh-Hant"`) {
+		if strings.Contains(d, `DateTimeFormat("zh-Hant"`) {
 			continue
 		}
 		unexpected = append(unexpected, d)

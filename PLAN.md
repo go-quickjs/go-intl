@@ -346,7 +346,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** except `selectRange` |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
-| 5. DateTimeFormat | not started |
+| 5. DateTimeFormat | **1,219/1,230** - Gregorian and Buddhist |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started |
@@ -354,7 +354,9 @@ README's Intl section.
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 4,684 of 7,949 cases, all at 100%.**
+**Corpus coverage so far: 5,903 of 7,949 cases.** Five services are exact;
+DateTimeFormat is at 1,219 of 1,230 with the eleven that remain named in its
+test rather than hidden.
 
 | Service | Cases | Matching |
 |---|---|---|
@@ -362,6 +364,7 @@ README's Intl section.
 | PluralRules | 300 | 300 |
 | RelativeTimeFormat | 1,260 | 1,260 |
 | ListFormat | 120 | 120 |
+| DateTimeFormat | 1,230 | 1,219 |
 | DisplayNames | 34 | 34 |
 
 Switched over in go-quickjs: *none yet.* Three services are now at parity, so

@@ -55,6 +55,9 @@ const (
 	// MarkerMetazones maps a zone to the metazone it belongs to, which is not
 	// a matter of language and so is one table for every locale.
 	MarkerMetazones Marker = "metazones"
+	// MarkerCalendarPrefs maps a region to the calendar it reckons in, which
+	// is likewise not a matter of language.
+	MarkerCalendarPrefs Marker = "calendarprefs"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

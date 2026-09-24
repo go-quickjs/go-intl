@@ -104,6 +104,7 @@ type DateTimeFormat struct {
 	opts     DateTimeFormatOptions
 	data     *datedata.Locale
 	calendar *datedata.Calendar
+	system   CalendarSystem
 	numbers  *numberDigits
 
 	location *time.Location
@@ -137,20 +138,25 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	if (opts.DateStyle != LengthNone || opts.TimeStyle != LengthNone) && opts.hasFields() {
 		return nil, fmt.Errorf("intl: a date style cannot be combined with named fields")
 	}
-	if opts.Calendar != "" && opts.Calendar != "gregory" {
-		return nil, fmt.Errorf("intl: only the Gregorian calendar is implemented so far")
-	}
-
 	data, err := loadDates(src, loc)
 	if err != nil {
 		return nil, err
 	}
-	cal, ok := data.Calendar("gregory")
+	system, err := chooseCalendar(src, loc, opts.Calendar)
+	if err != nil {
+		return nil, err
+	}
+	cal, ok := data.Calendar(string(system))
 	if !ok {
-		return nil, fmt.Errorf("intl: %s has no Gregorian calendar: %w", loc, ErrNotFound)
+		// A locale with no data for the calendar its region uses falls back to
+		// the Gregorian one rather than to nothing.
+		if cal, ok = data.Calendar(string(Gregory)); !ok {
+			return nil, fmt.Errorf("intl: %s has no calendar data: %w", loc, ErrNotFound)
+		}
+		system = Gregory
 	}
 
-	f := &DateTimeFormat{locale: loc, opts: opts, data: data, calendar: cal}
+	f := &DateTimeFormat{locale: loc, opts: opts, data: data, calendar: cal, system: system}
 	if f.location, f.zoneName, err = loadZone(opts.TimeZone); err != nil {
 		return nil, err
 	}
@@ -348,7 +354,7 @@ func (f *DateTimeFormat) Format(t time.Time) string {
 // FormatToParts writes an instant as the pieces it is made of.
 func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
 	local := t.In(f.location)
-	p := partsOf(local)
+	p := reckon(local, f.system)
 	abbr, offset := local.Zone()
 	p.zoneOffset = offset
 	p.zoneShort, p.zoneLong = f.zoneNamesFor(local, abbr, offset)
@@ -392,7 +398,7 @@ func (f *DateTimeFormat) ResolvedOptions() ResolvedDateTimeFormat {
 	}
 	return ResolvedDateTimeFormat{
 		Locale:          f.locale.String(),
-		Calendar:        "gregory",
+		Calendar:        string(f.system),
 		NumberingSystem: system,
 		TimeZone:        f.zoneName,
 		HourCycle:       cycle,
