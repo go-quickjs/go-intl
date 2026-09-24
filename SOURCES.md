@@ -30,7 +30,7 @@ authority.
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
-| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue (`dategen`) | yes |
+| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue (`dategen`); zone names, region names for zones, and the zone metadata (`zonegen`) | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
@@ -43,13 +43,12 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 
 | Package | Version | sha256 | Used by |
 |---|---|---|---|
-| `cldr-core` | 48.2.0 | `5310e0c7a06c1feb83dc8e54c8584bbe0b9c2ea8320172a18d541986b124585d` | `localegen`, `numbergen`, `pluralgen`, `dategen`, `zonegen` |
+| `cldr-core` | 48.2.0 | `5310e0c7a06c1feb83dc8e54c8584bbe0b9c2ea8320172a18d541986b124585d` | `localegen`, `numbergen`, `pluralgen`, `dategen` |
 | `cldr-numbers-full` | 48.2.0 | `2d17a1453c559a62112caeed52e0bcfe3cb8539c99d239ae7b7ed4d0827679d9` | `numbergen` |
 | `cldr-misc-full` | 48.2.0 | `c6ba8384d7ea8701cf86935db0461379231ddd970cc41c249f4a33b9857ded3c` | `listgen` |
 | `cldr-units-full` | 48.2.0 | `754d55f183570c53029a77493302f432fb3e905df35a715f9cb022e2ebcb093c` | `unitgen` |
-| `cldr-dates-full` | 48.2.0 | `0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430` | `reltimegen`, `namegen`, `dategen`, `zonegen` |
+| `cldr-dates-full` | 48.2.0 | `0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430` | `reltimegen`, `namegen`, `dategen` |
 | `cldr-localenames-full` | 48.2.0 | `7f2ac7fd3b5d90f56ad127f9ed5ae67b58b3e556818f55530b9f47bb81bcde57` | `namegen` |
-| `cldr-bcp47` | 48.2.0 | `b4a4f36a891b9fde1ffeddf1b1cb7f87d025656a58415291a96b563a82700fe0` | `zonegen` |
 | `cldr-cal-buddhist-full` | 48.2.0 | `3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff` | `dategen` |
 
 Each calendar beyond the Gregorian one is its own CLDR package, so the
@@ -70,6 +69,12 @@ Other URLs:
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-data.zip`
   — sha256 `9d8b3899096aeb83e4e21ef8a40fec9e03b28db18c48452efac882ce25a91e27`, 20 MB.
   `collgen` checks both checksums before reading either archive.
+- `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
+  — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
+  Only `source/common/localefallback_data.h` is read, and it is vendored in
+  `internal/icusrc`: ICU's tables of parent locales and default scripts,
+  which ICU's resource fallback consults and which are not in the data
+  archive.
 - `https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt` - sha256
   `2e1efc1dcb59c575...`, vendored in `internal/normgen`
 - `https://www.unicode.org/Public/17.0.0/ucd/CompositionExclusions.txt` -
@@ -174,6 +179,12 @@ does not actually check the version, only that every zone loads and one
 Vancouver rule holds. Nothing currently fails because of it. go-intl should pin
 deliberately rather than inherit the drift.
 
+The zone data format matters as well as the version. The tz database gives
+Ireland a negative daylight saving in winter; ICU builds `zoneinfo64` from
+the rearguard form, where Irish summer is daylight time. go-intl reads Go's
+zone data today and so disagrees with Node about Dublin's specific names, a
+named gap in PLAN.md.
+
 ## Known defects in the data go-intl inherits
 
 **Normalization is Unicode 13.0.0 while everything else is 17.0.** go-quickjs's
@@ -210,6 +221,7 @@ archive, through `internal/icusrc`:
 |---|---|---|
 | a numbering system a locale does not use | missing | the locale's own few fields, then the root's entry, then the locale's Latin data |
 | a calendar's date-time atTime glue | the root's for other calendars; the locale's own plain glue where it overrides only that | the first bundle up the chain that has one, else the Gregorian one |
+| zone names | each locale resolved by CLDR's inheritance | merged field by field along ICU's chain; a locale with no zone bundle falls back by ICU's resource rules and ICU's own default scripts, so `sr-Cyrl-ME` reads the Latin `sr_Latn_ME` |
 
 ## The space before AM and PM
 

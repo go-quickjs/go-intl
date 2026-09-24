@@ -18,21 +18,53 @@ import (
 // dateTimeGaps are cases the expectations hold go-intl to that it does not
 // meet yet, each with the reason. A case in one that starts to pass is
 // reported, so the entry goes.
-var dateTimeGaps = map[string]string{
-	// ICU's zone-name tree has no bundle for sr_Cyrl_ME, and ICU's fallback
-	// for a missing bundle steps from a locale whose script is its
-	// language's default to the language and region: sr_ME, an alias of
-	// sr_Latn_ME. So Node names zones in Montenegrin Cyrillic Serbian in
-	// Latin letters. go-intl falls back as CLDR does and writes Cyrillic.
-	// Reproducing it needs ICU's per-tree fallback; see PLAN.md.
-	"sr-Cyrl-ME": "ICU's zone-tree fallback",
+var dateTimeGaps = []struct {
+	zone, style string
+	why         string
+}{
+	// Ireland's summer is its standard time and its winter a negative
+	// daylight saving in the tz database, which is how Go's copy has it.
+	// ICU builds from the rearguard form, where summer is daylight time as
+	// everywhere else, so Node calls a January instant Greenwich Mean Time
+	// and go-intl Irish Standard Time. Taking offsets and seasons from ICU's
+	// zoneinfo64 rather than Go's tzdata is the fix; see PLAN.md.
+	{"Europe/Dublin", "short", "Go's tzdata has Ireland's negative DST"},
+	{"Europe/Dublin", "long", "Go's tzdata has Ireland's negative DST"},
+}
+
+// dateTimeGap returns why a case is a known gap, if it is one.
+func dateTimeGap(opts map[string]any) (string, bool) {
+	for _, g := range dateTimeGaps {
+		if opts["timeZone"] == g.zone && opts["timeZoneName"] == g.style {
+			return g.why, true
+		}
+	}
+	return "", false
 }
 
 // TestDateTimeFormatMatchesNode holds every locale with date data to what
 // Node writes under a spread of styles and field sets, in two zones and two
 // seasons. The expectations are written by testdata/datetime_node.js.
 func TestDateTimeFormatMatchesNode(t *testing.T) {
-	f, err := os.Open(filepath.FromSlash("testdata/datetime_node.txt.gz"))
+	testDateTimeAgainstNode(t, "testdata/datetime_node.txt.gz")
+}
+
+// TestDateTimeZonesMatchNode holds the names of every zone Node knows, in
+// every timeZoneName style, to Node's, in a handful of locales. The
+// expectations are written by testdata/datetime_zones_node.js.
+func TestDateTimeZonesMatchNode(t *testing.T) {
+	testDateTimeAgainstNode(t, "testdata/datetime_zones_node.txt.gz")
+}
+
+// TestDateTimeFeaturesMatchNode holds dayPeriod, fractionalSecondDigits and
+// the six timeZoneName styles to Node, in every locale. The expectations are
+// written by testdata/datetime_features_node.js.
+func TestDateTimeFeaturesMatchNode(t *testing.T) {
+	testDateTimeAgainstNode(t, "testdata/datetime_features_node.txt.gz")
+}
+
+func testDateTimeAgainstNode(t *testing.T, file string) {
+	f, err := os.Open(filepath.FromSlash(file))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +77,7 @@ func TestDateTimeFormatMatchesNode(t *testing.T) {
 	s.Buffer(make([]byte, 1<<20), 1<<20)
 
 	var ran, matched, gaps int
+	gapCases, gapPasses := map[string]int{}, map[string]int{}
 	var differences []string
 	var lastKey string
 	var last *intl.DateTimeFormat
@@ -89,11 +122,14 @@ func TestDateTimeFormatMatchesNode(t *testing.T) {
 			continue
 		}
 		got := last.Format(time.UnixMilli(int64(when)))
-		if why, gap := dateTimeGaps[tag]; gap && strings.Contains(string(fields[1]), `"timeZoneName":"long"`) {
+		if why, gap := dateTimeGap(opts); gap {
+			// Some cases of a gap pass by chance -- a locale that writes
+			// the offset either way -- so a gap is over only when all do.
 			ran--
 			gaps++
+			gapCases[why]++
 			if got == want {
-				differences = append(differences, fmt.Sprintf("%s: passes, so %q is no longer a gap", name, why))
+				gapPasses[why]++
 			}
 			continue
 		}
@@ -105,6 +141,11 @@ func TestDateTimeFormatMatchesNode(t *testing.T) {
 	}
 	if err := s.Err(); err != nil {
 		t.Fatal(err)
+	}
+	for why, n := range gapCases {
+		if gapPasses[why] == n {
+			differences = append(differences, fmt.Sprintf("all %d cases of %q pass, so it is no longer a gap", n, why))
+		}
 	}
 	t.Logf("%d of %d match Node exactly; %d left out as known gaps", matched, ran, gaps)
 	if len(differences) > 0 {

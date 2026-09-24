@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/numdata"
-	"github.com/go-quickjs/go-intl/internal/zonedata"
 )
 
 // Intl.DateTimeFormat.
@@ -47,6 +46,25 @@ const (
 	WidthLong
 	WidthShort
 	WidthNarrow
+)
+
+// ZoneStyle is how a time zone is named, ECMA-402's timeZoneName.
+type ZoneStyle int
+
+const (
+	ZoneNone ZoneStyle = iota
+	// ZoneShort and ZoneLong are the specific names, "EST" and "Eastern
+	// Standard Time", which say which half of the year it is.
+	ZoneShort
+	ZoneLong
+	// ZoneShortOffset and ZoneLongOffset are the distance from UTC,
+	// "GMT-5" and "GMT-05:00".
+	ZoneShortOffset
+	ZoneLongOffset
+	// ZoneShortGeneric and ZoneLongGeneric are the names whatever the
+	// season, "ET" and "Eastern Time".
+	ZoneShortGeneric
+	ZoneLongGeneric
 )
 
 // HourCycle is how the hours are counted.
@@ -98,7 +116,14 @@ type DateTimeFormatOptions struct {
 	Hour         FieldWidth
 	Minute       FieldWidth
 	Second       FieldWidth
-	TimeZoneName FieldWidth
+	TimeZoneName ZoneStyle
+
+	// DayPeriod names the part of the day, "in the afternoon", at a width:
+	// short, long or narrow.
+	DayPeriod FieldWidth
+	// FractionalSecondDigits writes one to three digits of the second's
+	// fraction. Zero writes none.
+	FractionalSecondDigits int
 
 	// TimeZone is the zone to write the instant in. Empty means UTC.
 	TimeZone string
@@ -156,13 +181,13 @@ type DateTimeFormat struct {
 	// systems are the numeric numbering systems, read when an override
 	// names one.
 	systems []numdata.NumberingSystem
-	// gmtPattern and gmtHourFormat write a zone as an offset from UTC.
-	gmtPattern    string
-	gmtHourFormat string
-	gmtZero       string
-	zones         *zoneNames
-	zoneNames     zonedata.Names
-	zoneKnown     bool
+	// zones are the locale's zone names and zone the formatter's zone as
+	// they see it.
+	zones *zoneNames
+	zone  zoneInfo
+	// hasMinute and hasSecond say whether the pattern writes them, which
+	// decides whether a time is written as exactly noon.
+	hasMinute, hasSecond bool
 }
 
 // numberDigits is the little a date formatter needs from the number data: the
@@ -216,15 +241,6 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		f.locale = f.locale.withKeyword("nu", nu)
 		f.decimal = chosen.Symbols.Decimal
 	}
-	if f.zones, err = loadZoneNames(src, loc); err != nil {
-		return nil, err
-	}
-	f.gmtPattern, f.gmtHourFormat = f.zones.gmtFormat, f.zones.hourFormat
-	f.gmtZero = f.zones.gmtZero
-	if f.gmtZero == "" {
-		f.gmtZero = "GMT"
-	}
-	f.zoneNames, f.zoneKnown = f.zones.namesForZone(f.zoneName)
 
 	pattern, cycle, err := f.choosePattern(src, f.decimal)
 	if err != nil {
@@ -232,6 +248,20 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 	f.hourCycle = cycle
 	f.fields = parseDatePattern(pattern)
+	hasZone := false
+	for _, fd := range f.fields {
+		f.hasMinute = f.hasMinute || fd.letter == 'm'
+		f.hasSecond = f.hasSecond || fd.letter == 's'
+		hasZone = hasZone || datePartKind(fd.letter) == PartTimeZoneName
+	}
+	// Most patterns write no zone, and the zone names are much the largest
+	// thing a formatter would otherwise read.
+	if hasZone {
+		if f.zones, err = loadZoneNames(src, loc); err != nil {
+			return nil, err
+		}
+		f.zone = f.zones.zone(f.zoneName, f.location)
+	}
 	return f, nil
 }
 
@@ -264,7 +294,8 @@ func (o *DateTimeFormatOptions) applyDefaults() error {
 		}
 	}
 	if required == ComponentsTime || required == ComponentsAny {
-		if o.Hour != WidthNone || o.Minute != WidthNone || o.Second != WidthNone {
+		if o.DayPeriod != WidthNone || o.Hour != WidthNone || o.Minute != WidthNone ||
+			o.Second != WidthNone || o.FractionalSecondDigits != 0 {
 			need = false
 		}
 	}
@@ -283,7 +314,8 @@ func (o *DateTimeFormatOptions) applyDefaults() error {
 func (o *DateTimeFormatOptions) hasFields() bool {
 	return o.Weekday != WidthNone || o.Era != WidthNone || o.Year != WidthNone ||
 		o.Month != WidthNone || o.Day != WidthNone || o.Hour != WidthNone ||
-		o.Minute != WidthNone || o.Second != WidthNone || o.TimeZoneName != WidthNone
+		o.Minute != WidthNone || o.Second != WidthNone || o.TimeZoneName != ZoneNone ||
+		o.DayPeriod != WidthNone || o.FractionalSecondDigits != 0
 }
 
 func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
@@ -434,9 +466,8 @@ func (f *DateTimeFormat) Format(t time.Time) string {
 func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
 	local := t.In(f.location)
 	p := reckon(local, f.system)
-	abbr, offset := local.Zone()
-	p.zoneOffset = offset
-	p.zoneShort, p.zoneLong = f.zoneNamesFor(local, abbr, offset)
+	_, p.zoneOffset = local.Zone()
+	p.instant = local
 
 	var out []Part
 	for _, fd := range f.fields {

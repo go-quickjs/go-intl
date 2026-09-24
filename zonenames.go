@@ -12,43 +12,43 @@ import (
 //
 // A locale does not name zones one by one. It names metazones -- the Eastern
 // Time that a dozen American zones share -- and a zone is written with the
-// name of the metazone it belongs to. Which of that metazone's names is used
-// depends on the instant: Eastern Standard Time in winter and Eastern Daylight
-// Time in summer.
+// name of the metazone it belongs to at the instant. Which of that metazone's
+// names is used depends on the instant too: Eastern Standard Time in winter
+// and Eastern Daylight Time in summer.
 //
-// A zone with no metazone, and a locale with no name for the one it has, falls
-// back to the offset from UTC, which is what ICU does and is why every zone
-// can be written even when nothing has a name for it.
+// This follows ICU's TimeZoneFormat (tzfmt.cpp), TimeZoneNamesImpl
+// (tznames_impl.cpp) and TimeZoneGenericNames (tzgnames.cpp), which is what
+// V8 formats with:
+//
+//   - A specific name, "z" and "zzzz", is the zone's own name for the season,
+//     else its metazone's. There is no falling back from one kind of name to
+//     another: a locale that has no short standard name for a zone writes the
+//     offset.
+//   - A generic name, "v" and "vvvv", is the zone's own generic name, else its
+//     metazone's -- or the standard one, when the zone keeps no summer time
+//     near the instant -- qualified by a place when the zone's offset is not
+//     the one the metazone's name means in the reader's region: "Pacific Time
+//     (Canada)". Failing a name, it is the zone's location: "United Kingdom
+//     Time", "Los Angeles Time".
+//   - Failing everything, the offset: "GMT-5", "GMT-05:00". UTC itself is
+//     "GMT+0" and "GMT+00:00"; ICU writes the locale's word for zero offset,
+//     "GMT", only when it has a name to write, and it never does for these.
 
-// zoneNames is a locale's zone data together with the mapping every locale
+// zoneNames is a locale's zone data together with the tables every locale
 // shares.
 type zoneNames struct {
-	locale     *zonedata.Locale
-	metazones  metazoneTable
-	gmtFormat  string
-	hourFormat string
-	gmtZero    string
-}
-
-// metazoneTable maps a zone to the metazone it belongs to now. It is one table
-// for every locale, since which metazone a zone is in is not a matter of
-// language.
-type metazoneTable string
-
-func (t metazoneTable) of(zone string) (string, bool) {
-	for line := range strings.SplitSeq(strings.TrimRight(string(t), "\n"), "\n") {
-		name, metazone, ok := strings.Cut(line, " ")
-		if ok && name == zone {
-			return metazone, true
-		}
-	}
-	return "", false
+	locale *zonedata.Locale
+	meta   *zonedata.Meta
+	// region is the region the reader is in, which decides whether a
+	// metazone's name needs qualifying.
+	region string
 }
 
 func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
 	chain := loc.Fallback()
-	if f, err := NewFallbacker(src); err == nil {
-		chain = f.Chain(loc.Data())
+	fb, fbErr := NewFallbacker(src)
+	if fbErr == nil {
+		chain = fb.Chain(loc.Data())
 	}
 	var data *zonedata.Locale
 	for _, d := range chain {
@@ -67,78 +67,297 @@ func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
 		// answer than the locale's own but not a wrong one.
 		data = &zonedata.Locale{}
 	}
+	if data.GMTFormat == "" {
+		data.GMTFormat = "GMT{0}"
+	}
+	if data.HourFormat == "" {
+		data.HourFormat = "+HH:mm;-HH:mm"
+	}
+	if data.RegionFormat == "" {
+		data.RegionFormat = "{0}"
+	}
+	if data.FallbackFormat == "" {
+		data.FallbackFormat = "{1} ({0})"
+	}
 
-	out := &zoneNames{locale: data}
+	out := &zoneNames{locale: data, meta: &zonedata.Meta{}}
 	if b, err := src.Open(MarkerMetazones, DataLocale{}); err == nil {
-		out.metazones = metazoneTable(b)
+		if out.meta, err = zonedata.DecodeMeta(b); err != nil {
+			return nil, fmt.Errorf("intl: the zone table: %w", err)
+		}
 	}
-	out.gmtFormat, out.hourFormat, out.gmtZero = data.GMTFormat, data.HourFormat, data.GMTZero
-	if out.gmtFormat == "" {
-		out.gmtFormat = "GMT{0}"
-	}
-	if out.hourFormat == "" {
-		out.hourFormat = "+HH:mm;-HH:mm"
+	// TZGNCore's target region: the locale's, or the one it most likely
+	// means.
+	out.region = loc.Region.String()
+	if out.region == "" && fbErr == nil {
+		if full, ok := fb.Maximize(loc.Data()); ok {
+			out.region = full.Region.String()
+		}
 	}
 	return out, nil
 }
 
-// namesForZone finds the names for the formatter's zone, once, when it is
-// built. The mapping is a table scan and there is no reason to do it again for
-// every instant.
-func (z *zoneNames) namesForZone(zone string) (zonedata.Names, bool) {
-	var names zonedata.Names
-	found := false
-	if metazone, ok := z.metazones.of(zone); ok {
-		names, found = z.locale.Metazone(metazone)
-	}
-	// A zone named in its own right overrides the metazone field by field
-	// rather than wholesale. London carries only "British Summer Time" and
-	// takes "Greenwich Mean Time" from the GMT metazone it belongs to; reading
-	// its entry as the whole answer leaves it nameless all winter.
-	if own, ok := z.locale.Zone(zone); ok {
-		found = true
-		for _, pair := range [][2]*string{
-			{&names.LongGeneric, &own.LongGeneric},
-			{&names.LongStandard, &own.LongStandard},
-			{&names.LongDaylight, &own.LongDaylight},
-			{&names.ShortGeneric, &own.ShortGeneric},
-			{&names.ShortStandard, &own.ShortStandard},
-			{&names.ShortDaylight, &own.ShortDaylight},
-		} {
-			if *pair[1] != "" {
-				*pair[0] = *pair[1]
-			}
-		}
-	}
-	return names, found && !names.Empty()
+// zoneInfo is one zone as the names see it, found once when a formatter is
+// built.
+type zoneInfo struct {
+	// id is the zone's canonical identifier, empty for one ICU does not
+	// know, which is then written only as an offset.
+	id       string
+	meta     *zonedata.MetaZone
+	own      zonedata.ZoneEntry
+	location *time.Location
 }
 
-// zoneNamesFor returns the short and long names for an instant in the
-// formatter's zone, either of which may be empty.
-func (f *DateTimeFormat) zoneNamesFor(local time.Time, abbr string, offset int) (short, long string) {
-	if f.zones == nil || !f.zoneKnown {
-		return "", ""
+func (z *zoneNames) zone(name string, loc *time.Location) zoneInfo {
+	info := zoneInfo{location: loc}
+	id, ok := z.meta.Canonical(name)
+	if !ok {
+		return info
 	}
-	names := f.zoneNames
+	info.id = id
+	info.meta, _ = z.meta.Zone(id)
+	info.own, _ = z.locale.Zone(id)
+	return info
+}
 
-	// Which half of the year decides which name: a zone in summer time is
-	// called something else from the same zone in winter.
-	daylight := local.IsDST()
-	switch {
-	case daylight && names.LongDaylight != "":
-		long = names.LongDaylight
-	case !daylight && names.LongStandard != "":
-		long = names.LongStandard
-	default:
-		long = names.LongGeneric
+// metazone is the metazone a zone belongs to at an instant, if any.
+func (info *zoneInfo) metazone(t time.Time) string {
+	if info.meta == nil {
+		return ""
 	}
-	switch {
-	case daylight && names.ShortDaylight != "":
-		short = names.ShortDaylight
-	case !daylight && names.ShortStandard != "":
-		short = names.ShortStandard
-	default:
-		short = names.ShortGeneric
+	m := int(t.Unix()/60) + 1
+	if t.Unix() < 0 && t.Unix()%60 != 0 {
+		m-- // round toward the past
 	}
-	return short, long
+	for _, u := range info.meta.Uses {
+		if (u.From == 0 || m >= u.From) && (u.To == 0 || m < u.To) {
+			return u.Metazone
+		}
+	}
+	return ""
+}
+
+// The kinds of name, as TimeZoneNames numbers them.
+type zoneNameType int
+
+const (
+	longGeneric zoneNameType = iota
+	longStandard
+	longDaylight
+	shortGeneric
+	shortStandard
+	shortDaylight
+)
+
+func (t zoneNameType) of(n zonedata.Names) string {
+	switch t {
+	case longGeneric:
+		return n.LongGeneric
+	case longStandard:
+		return n.LongStandard
+	case longDaylight:
+		return n.LongDaylight
+	case shortGeneric:
+		return n.ShortGeneric
+	case shortStandard:
+		return n.ShortStandard
+	}
+	return n.ShortDaylight
+}
+
+// displayName is TimeZoneNames::getDisplayName: the zone's own name of the
+// type, else its metazone's at the instant.
+func (z *zoneNames) displayName(info *zoneInfo, typ zoneNameType, t time.Time) string {
+	if name := typ.of(info.own.Names); name != "" {
+		return name
+	}
+	return z.metazoneName(info.metazone(t), typ)
+}
+
+func (z *zoneNames) metazoneName(metazone string, typ zoneNameType) string {
+	if metazone == "" {
+		return ""
+	}
+	names, _ := z.locale.Metazone(metazone)
+	return typ.of(names)
+}
+
+// specific is TimeZoneFormat::formatSpecific, "z" and "zzzz"; empty when the
+// locale has no such name.
+func (z *zoneNames) specific(info *zoneInfo, t time.Time, long bool) string {
+	if info.id == "" {
+		return ""
+	}
+	typ := shortStandard
+	switch {
+	case long && t.IsDST():
+		typ = longDaylight
+	case long:
+		typ = longStandard
+	case t.IsDST():
+		typ = shortDaylight
+	}
+	return z.displayName(info, typ, t)
+}
+
+// generic is TZGNCore::getDisplayName for "v" and "vvvv": a generic name,
+// else the zone's location; empty when there is neither.
+func (z *zoneNames) generic(info *zoneInfo, t time.Time, long bool) string {
+	if info.id == "" {
+		return ""
+	}
+	if name := z.genericNonLocation(info, t, long); name != "" {
+		return name
+	}
+	return z.locationName(info.id)
+}
+
+// dstCheckRange is how near summer time has to be for ICU to call a zone's
+// winter by its generic name rather than its standard one.
+const dstCheckRange = 184 * 24 * time.Hour
+
+// genericNonLocation is TZGNCore::formatGenericNonLocationName.
+func (z *zoneNames) genericNonLocation(info *zoneInfo, t time.Time, long bool) string {
+	typ, std := shortGeneric, shortStandard
+	if long {
+		typ, std = longGeneric, longStandard
+	}
+	if name := typ.of(info.own.Names); name != "" {
+		return name
+	}
+	metazone := info.metazone(t)
+	if metazone == "" {
+		return ""
+	}
+	local := t.In(info.location)
+	// A zone that keeps no summer time around the instant is called by its
+	// standard name, "Greenwich Mean Time" rather than "GMT Time", unless the
+	// two are the same.
+	if !local.IsDST() && !summerNear(local) {
+		if name := z.displayName(info, std, t); name != "" &&
+			!strings.EqualFold(name, z.metazoneName(metazone, typ)) {
+			return name
+		}
+	}
+	name := z.metazoneName(metazone, typ)
+	if name == "" {
+		return ""
+	}
+	// The metazone's name means the offset of its reference zone in the
+	// reader's region. A zone at another offset just now is named with a
+	// place as well.
+	golden := z.meta.Reference(metazone, z.region)
+	if golden == "" || golden == info.id {
+		return name
+	}
+	gloc, err := time.LoadLocation(golden)
+	if err != nil {
+		return name
+	}
+	_, offset := local.Zone()
+	wall := t.Add(time.Duration(offset) * time.Second).UTC()
+	there := time.Date(wall.Year(), wall.Month(), wall.Day(), wall.Hour(), wall.Minute(),
+		wall.Second(), wall.Nanosecond(), gloc)
+	_, goldenOffset := there.Zone()
+	if goldenOffset == offset && there.IsDST() == local.IsDST() {
+		return name
+	}
+	return z.partialLocationName(info, metazone, name)
+}
+
+// summerNear reports whether a zone left summer time or goes into it within
+// ICU's range of the instant.
+func summerNear(local time.Time) bool {
+	start, end := local.ZoneBounds()
+	if !start.IsZero() && local.Sub(start) < dstCheckRange && start.Add(-time.Second).In(local.Location()).IsDST() {
+		return true
+	}
+	if !end.IsZero() && end.Sub(local) < dstCheckRange && end.In(local.Location()).IsDST() {
+		return true
+	}
+	return false
+}
+
+// partialLocationName is TZGNCore::getPartialLocationName: a metazone's name
+// qualified by where the zone is -- its region where it is the metazone's
+// reference zone there, its city otherwise.
+func (z *zoneNames) partialLocationName(info *zoneInfo, metazone, name string) string {
+	var location string
+	if country := info.country(); country != "" {
+		if z.meta.Reference(metazone, country) == info.id {
+			location = z.regionName(country)
+		} else {
+			location = z.exemplarCity(info.id)
+		}
+	} else {
+		location = z.exemplarCity(info.id)
+		if location == "" {
+			location = info.id
+		}
+	}
+	return simpleFormat(z.locale.FallbackFormat, location, name)
+}
+
+// country is the region a zone is in; empty for none.
+func (info *zoneInfo) country() string {
+	if info.meta == nil || info.meta.Region == "001" {
+		return ""
+	}
+	return info.meta.Region
+}
+
+// locationName is TZGNCore::getGenericLocationName: a zone named by where it
+// is. A region with one zone, or whose primary zone this is, is named by the
+// region; any other zone by its city.
+func (z *zoneNames) locationName(id string) string {
+	mz, ok := z.meta.Zone(id)
+	if !ok || mz.Region == "001" {
+		return ""
+	}
+	if z.isPrimary(id, mz.Region) {
+		return simpleFormat(z.locale.RegionFormat, z.regionName(mz.Region))
+	}
+	city := z.exemplarCity(id)
+	if city == "" {
+		return ""
+	}
+	return simpleFormat(z.locale.RegionFormat, city)
+}
+
+// isPrimary is ZoneMeta::getCanonicalCountry's answer to whether a zone
+// stands for its region: the only canonical zone there, or the one CLDR
+// names as primary.
+func (z *zoneNames) isPrimary(id, region string) bool {
+	count := 0
+	for i := range z.meta.Zones {
+		if z.meta.Zones[i].Region == region {
+			count++
+		}
+	}
+	return count == 1 || z.meta.PrimaryZone(region) == id
+}
+
+func (z *zoneNames) regionName(code string) string {
+	if name, ok := z.locale.Region(code); ok {
+		return name
+	}
+	return code
+}
+
+// exemplarCity is TimeZoneNamesImpl::getExemplarLocationName: the city the
+// locale names, or else the last part of the identifier with its underscores
+// made spaces. Zones that are not places have none.
+func (z *zoneNames) exemplarCity(id string) string {
+	if e, ok := z.locale.Zone(id); ok && e.City != "" {
+		return e.City
+	}
+	if id == "" || strings.HasPrefix(id, "Etc/") || strings.HasPrefix(id, "SystemV/") ||
+		strings.Index(id, "Riyadh8") > 0 {
+		return ""
+	}
+	sep := strings.LastIndexByte(id, '/')
+	if sep <= 0 || sep+1 >= len(id) {
+		return ""
+	}
+	return strings.ReplaceAll(id[sep+1:], "_", " ")
 }

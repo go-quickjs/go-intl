@@ -404,9 +404,8 @@ overrides only the plain one (French in Mali), the offset format's
 truncation and fixed digit widths (Hebrew, Makhuwa), and numbering overrides
 on a style pattern (Hawaiian writes its short month in Roman numerals).
 
-The two left are a known gap: ICU's zone-name tree has no Montenegrin
-Cyrillic Serbian bundle, and ICU's fallback for a missing bundle takes it to
-the Latin one. Matching that needs ICU's fallback per data tree.
+The two left then were Montenegrin Cyrillic Serbian's zone names, and they
+now match too: see the zone names below.
 
 Two findings for later:
 
@@ -418,6 +417,47 @@ Two findings for later:
   supports at all** -- Afar, Occitan and others ICU does not ship. Node
   negotiates them away to its default locale. Matching that is the
   negotiation layer's job, from ICU's installed locales.
+
+### Zone names, day periods and fractions
+
+**Done.** DateTimeFormat takes `dayPeriod`, `fractionalSecondDigits` and all
+six `timeZoneName` styles. `testdata/datetime_features_node.js` records
+66,023 cases over every locale Node supports, and
+`testdata/datetime_zones_node.js` 45,144 more: every zone Node knows, in
+every style, in nine locales. All match but 36, a named gap.
+
+Zone names follow ICU's TimeZoneFormat and TimeZoneGenericNames, not CLDR's
+description of them:
+
+- A specific name ("z") is the zone's own name for the season, else its
+  metazone's, and never another kind of name: without a short standard name
+  a zone is written as its offset.
+- A generic name ("v") is the standard name when the zone keeps no summer
+  time within 184 days ("India Standard Time"), is qualified by a place when
+  the zone's offset differs from the metazone's reference zone in the
+  reader's region, and failing a name is the zone's location: its region's
+  name when it is the region's only or primary zone ("United Kingdom Time"),
+  its city otherwise.
+- An offset of zero is "GMT+0", not the locale's "GMT": ICU reads that word
+  but does not write it.
+
+The names come from ICU's zone tree rather than cldr-json, merged field by
+field along ICU's chain, as ICU reads them. A locale ICU keeps no zone bundle
+for falls back by ICU's resource rules, with ICU's own tables of parents and
+default scripts, which are not the likely subtags: Montenegrin Cyrillic
+Serbian goes to `sr_ME`, an alias of the Latin `sr_Latn_ME`, because ICU's
+table has Serbian written in Cyrillic everywhere.
+
+The day period ("B") is noon only when the time as written is exactly noon,
+its minutes and seconds zero where the pattern writes them. ICU never writes
+midnight.
+
+**Known gap:** Ireland. The tz database gives it a negative daylight saving
+in winter, and Go's zone data follows it, so go-intl calls January "Irish
+Standard Time"; ICU builds from the rearguard form and calls it "Greenwich
+Mean Time". The fix is to take offsets and seasons from ICU's own
+`zoneinfo64` rather than Go's zone data, which is part of the time-zone work
+below.
 
 ### Numbering systems
 
@@ -466,7 +506,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
 | 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
-| 5. DateTimeFormat | 1,230/1,230, and 33,330/33,332 against node over every locale; surface incomplete, see below |
+| 5. DateTimeFormat | 1,230/1,230, and 144,497 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits` and every `timeZoneName` done; offset zones, `formatRange` and 14 calendars left |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -515,7 +555,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Service | Corpus | Missing |
 |---|---|---|
 | NumberFormat | done | exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
-| DateTimeFormat | done | `dayPeriod`; `fractionalSecondDigits`; `timeZoneName` as `shortOffset`, `longOffset`, `shortGeneric`, `longGeneric`; offset time zones; `formatRange`, `formatRangeToParts`; 14 calendars |
+| DateTimeFormat | done | offset time zones; `formatRange`, `formatRangeToParts`; 14 calendars |
 | PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
@@ -527,7 +567,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`; CLDR's alias data for `getCanonicalLocales` |
 | `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
-| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization |
+| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
 | Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
 
 The formatter surfaces come first: they are go-intl's own API, and each item

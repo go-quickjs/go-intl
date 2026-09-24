@@ -130,7 +130,28 @@ func dateTimeOptions(in map[string]any) (intl.DateTimeFormatOptions, error) {
 		case "second":
 			out.Second, err = width(value)
 		case "timeZoneName":
-			out.TimeZoneName, err = width(value)
+			switch value {
+			case "short":
+				out.TimeZoneName = intl.ZoneShort
+			case "long":
+				out.TimeZoneName = intl.ZoneLong
+			case "shortOffset":
+				out.TimeZoneName = intl.ZoneShortOffset
+			case "longOffset":
+				out.TimeZoneName = intl.ZoneLongOffset
+			case "shortGeneric":
+				out.TimeZoneName = intl.ZoneShortGeneric
+			case "longGeneric":
+				out.TimeZoneName = intl.ZoneLongGeneric
+			default:
+				err = fmt.Errorf("timeZoneName %v", value)
+			}
+		case "dayPeriod":
+			out.DayPeriod, err = width(value)
+		case "fractionalSecondDigits":
+			if n, ok := value.(float64); ok {
+				out.FractionalSecondDigits = int(n)
+			}
 		case "hour12":
 			if on, ok := value.(bool); ok {
 				out.Hour12 = intl.Bool(on)

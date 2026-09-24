@@ -83,9 +83,10 @@ type dateParts struct {
 	hour, minute     int
 	second, millis   int
 	era              int // zero before the epoch, one after
-	// zone is what the time zone is called and how far it is from UTC.
-	zoneShort, zoneLong string
-	zoneOffset          int
+	// instant is the moment in the formatter's zone, which the zone's name
+	// depends on, and zoneOffset its distance from UTC in seconds.
+	instant    time.Time
+	zoneOffset int
 	// hour12 and dayPeriod are worked out once rather than per field.
 	hour12    int
 	afternoon bool
@@ -217,19 +218,30 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 	case 'a', 'b', 'B':
 		width := datedata.Abbreviated
 		switch {
-		case fd.count == 4:
+		case fd.count == 4 || fd.count > 5:
 			width = datedata.Wide
-		case fd.count >= 5:
+		case fd.count == 5:
 			width = datedata.Narrow
 		}
-		// B asks for the part of the day rather than which half it is: the
-		// small hours are 凌晨 in Chinese and neither morning nor afternoon.
-		// A language with no rule for the hour, or no word for the part it
-		// falls in, is written with the half instead.
-		if fd.letter == 'B' {
-			if id := f.data.Period(p.hour*60 + p.minute); id != "" {
-				if name := cal.PeriodName(width, id); name != "" {
+		// b and B are ICU's subFormat: noon when the time as written is
+		// exactly noon -- its minutes and seconds zero, where the pattern
+		// writes them -- and B otherwise the part of the day the hour is
+		// in, the small hours being 凌晨 in Chinese rather than morning or
+		// afternoon. Midnight is never written, for ICU finds it ambiguous.
+		// What has no name falls back: noon to the part of the day, the
+		// part of the day to which half it is.
+		if fd.letter != 'a' {
+			noon := p.hour == 12 && (!f.hasMinute || p.minute == 0) && (!f.hasSecond || p.second == 0)
+			if noon && (fd.letter == 'b' || f.data.HasPoint("noon")) {
+				if name := cal.PeriodName(width, "noon"); name != "" {
 					return name
+				}
+			}
+			if fd.letter == 'B' {
+				if id := f.data.Period(p.hour * 60); id != "" && id != "am" && id != "pm" {
+					if name := cal.PeriodName(width, id); name != "" {
+						return name
+					}
 				}
 			}
 		}
@@ -269,14 +281,18 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		}
 		return f.digits(s[:fd.count])
 
-	case 'z', 'v':
+	case 'z':
+		// TimeZoneFormat::format: a name, else the offset, long or short
+		// as the name would have been.
 		long := fd.count >= 4
-		if long {
-			if p.zoneLong != "" {
-				return p.zoneLong
-			}
-		} else if p.zoneShort != "" {
-			return p.zoneShort
+		if name := f.zones.specific(&f.zone, p.instant, long); name != "" {
+			return name
+		}
+		return f.digits(f.offsetText(p.zoneOffset, !long))
+	case 'v':
+		long := fd.count >= 4
+		if name := f.zones.generic(&f.zone, p.instant, long); name != "" {
+			return name
 		}
 		return f.digits(f.offsetText(p.zoneOffset, !long))
 	case 'O':
@@ -287,13 +303,11 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 	return ""
 }
 
-// offsetText writes a zone as its distance from UTC, or as the locale's own
-// word for no distance at all: English writes "GMT" rather than "GMT+0".
+// offsetText writes a zone as its distance from UTC, localized GMT format.
+// Zero is written like any other offset, "GMT+0": ICU keeps the locale's
+// "GMT" for reading, not for writing.
 func (f *DateTimeFormat) offsetText(seconds int, short bool) string {
-	if seconds == 0 {
-		return f.gmtZero
-	}
-	return gmtOffset(seconds, f.gmtPattern, f.gmtHourFormat, short)
+	return gmtOffset(seconds, f.zones.locale.GMTFormat, f.zones.locale.HourFormat, short)
 }
 
 // gmtOffset writes a zone as its distance from UTC, as ICU's

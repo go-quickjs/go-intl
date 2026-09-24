@@ -211,6 +211,17 @@ func (l *Locale) Period(minutes int) string {
 	return ""
 }
 
+// HasPoint reports whether the language's rules name a moment of the day,
+// "noon" or "midnight".
+func (l *Locale) HasPoint(id string) bool {
+	for _, r := range l.PeriodRules {
+		if r.Point && r.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // PeriodName returns what a calendar calls one part of the day.
 func (c *Calendar) PeriodName(width int, id string) string {
 	for w := width; w >= Wide; w-- {

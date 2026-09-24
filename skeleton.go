@@ -140,6 +140,14 @@ func v8Skeleton(o *DateTimeFormatOptions, hc HourCycle) string {
 		name(o.Month, "M")
 	}
 	number(o.Day, "d")
+	switch o.DayPeriod {
+	case WidthNarrow:
+		b.WriteString("BBBBB")
+	case WidthLong:
+		b.WriteString("BBBB")
+	case WidthShort:
+		b.WriteString("B")
+	}
 	hour := "j"
 	if letter, ok := hourLetters[hc]; ok {
 		hour = string(letter)
@@ -147,12 +155,15 @@ func v8Skeleton(o *DateTimeFormatOptions, hc HourCycle) string {
 	number(o.Hour, hour)
 	number(o.Minute, "m")
 	number(o.Second, "s")
-	switch o.TimeZoneName {
-	case WidthLong:
-		b.WriteString("zzzz")
-	case WidthShort:
-		b.WriteString("z")
+	// V8 reads the fraction just before the zone, so it goes there.
+	for i := 0; i < o.FractionalSecondDigits && i < 3; i++ {
+		b.WriteByte('S')
 	}
+	b.WriteString(map[ZoneStyle]string{
+		ZoneShort: "z", ZoneLong: "zzzz",
+		ZoneShortOffset: "O", ZoneLongOffset: "OOOO",
+		ZoneShortGeneric: "v", ZoneLongGeneric: "vvvv",
+	}[o.TimeZoneName])
 	return b.String()
 }
 
