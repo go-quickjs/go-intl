@@ -349,8 +349,9 @@ README's Intl section.
 | 5. DateTimeFormat | **done** - 1,230/1,230, Gregorian and Buddhist |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
-| 6c. DurationFormat | not started |
-| 7. Collator | not started |
+| 6c. DurationFormat | not started - not in the corpus |
+| **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
+| 7. Collator | not started - unblocked now the normalizer is done |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
@@ -365,8 +366,28 @@ README's Intl section.
 | DateTimeFormat | 1,230 | 1,230 |
 | DisplayNames | 34 | 34 |
 
-Switched over in go-quickjs: *none yet.* Three services are now at parity, so
-the first switch-over is due.
+Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
+All six finished services meet both gate conditions, which makes them
+**eligible, not scheduled**.
+
+## What is left
+
+| | Corpus cases | Needs |
+|---|---|---|
+| Collator | 1,805 | `icuexportdata` collation tables; the normalizer, now done |
+| Segmenter | 140 | the LSTM models and the break dictionaries |
+| legacy `toLocale*` | 90 | thin wrappers over DateTimeFormat, no new data |
+| 14 more calendars | 0 | one CLDR package each, no new machinery |
+| DurationFormat | 0 | `cldr-units-full`, already pinned |
+| `PluralRules.selectRange` | 0 | CLDR's plural ranges |
+
+Two choices the collator forces, both recorded in SOURCES.md and neither yet
+made: `fast` or `small` tables for the properties, and `implicithan` or
+`unihan` for how Han characters order.
+
+The three with no corpus cases are the ones to be careful about. The corpus
+cannot grade them, so they need what DisplayNames and RelativeTimeFormat
+needed: expectations taken from node where the corpus does not reach.
 
 ## Resuming cold
 
@@ -394,8 +415,9 @@ wrote it.
 
 ## Data size, measured
 
-Deferred, not dismissed. The numbers are here so the decision can be made
-without measuring again.
+**Decided: not compressed, for now.** The maintainer chose to keep go-intl
+free of dependencies and revisit this later. The numbers are here so the
+decision can be reopened without measuring again.
 
 **The repository is not the problem.** It is 9.7 MB, a 9.0 MiB packfile, because
 git already compresses its objects. An earlier note in this file claimed 48 MB
