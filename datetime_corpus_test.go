@@ -71,8 +71,10 @@ func TestDateTimeFormatMatchesICU(t *testing.T) {
 	}
 }
 
+// dateTimeOptions reads an option bag from the corpus or a node file. Both
+// hold Node's answers, so the profile is Node's.
 func dateTimeOptions(in map[string]any) (intl.DateTimeFormatOptions, error) {
-	var out intl.DateTimeFormatOptions
+	out := intl.DateTimeFormatOptions{Compat: intl.NodeICU}
 	length := func(v any) (intl.DateTimeLength, error) {
 		switch v {
 		case "full":

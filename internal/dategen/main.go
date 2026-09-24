@@ -420,14 +420,14 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 					if err != nil || n < 1 || n > 12 {
 						continue
 					}
-					text[n-1] = ascii(value)
+					text[n-1] = value
 				}
 				c.Months[at].Text = text
 			}
 			if set, ok := source.Days[contextNames[ctx]][widthNames[w]]; ok {
 				text := make([]string, 7)
 				for i, key := range weekdayKeys {
-					text[i] = ascii(set[key])
+					text[i] = set[key]
 				}
 				c.Days[at].Text = text
 			}
@@ -435,7 +435,7 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 	}
 	for w := 0; w < datedata.Widths; w++ {
 		if set, ok := source.DayPeriods["format"][widthNames[w]]; ok {
-			c.AM[w], c.PM[w] = ascii(set["am"]), ascii(set["pm"])
+			c.AM[w], c.PM[w] = set["am"], set["pm"]
 			// The finer parts of the day are kept too, for the patterns that
 			// ask for them rather than for the two halves.
 			for id, text := range set {
@@ -444,14 +444,14 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 					continue
 				}
 				c.Periods[w] = append(c.Periods[w],
-					datedata.DayPeriod{ID: id, Text: ascii(text)})
+					datedata.DayPeriod{ID: id, Text: text})
 			}
 			sort.Slice(c.Periods[w], func(a, b int) bool {
 				return c.Periods[w][a].ID < c.Periods[w][b].ID
 			})
 		}
 		if set, ok := source.Eras[eraWidths[w]]; ok {
-			c.Eras[w].Text = []string{ascii(set["0"]), ascii(set["1"])}
+			c.Eras[w].Text = []string{set["0"], set["1"]}
 		}
 	}
 
@@ -510,13 +510,13 @@ func pattern(raw json.RawMessage) string {
 	}
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		return ascii(text)
+		return text
 	}
 	var wrapped struct {
 		Value string `json:"_value"`
 	}
 	if err := json.Unmarshal(raw, &wrapped); err == nil {
-		return ascii(wrapped.Value)
+		return wrapped.Value
 	}
 	return ""
 }
@@ -531,27 +531,6 @@ func numbersOverride(raw json.RawMessage) string {
 		return ""
 	}
 	return wrapped.Numbers
-}
-
-// ascii puts a plain space where CLDR writes a narrow no-break one.
-//
-// CLDR separates a time from its day period with U+202F, and the ICU this is
-// anchored to writes U+0020 instead, in all 440 locales that have the narrow
-// one. ECMA-402 does not specify the character, so the reference decides, and
-// the reference is ICU.
-//
-// The thin space U+2009 is not touched. CLDR joins a short date to a time
-// with one in some locales -- traditional Chinese among them -- and ICU keeps
-// it: "2024/1/5", U+2009, "下午3:04:05". An earlier version replaced it too, on the
-// evidence of a medium-length case whose glue was a plain space in CLDR
-// already.
-//
-// Only the character is taken. CLDR's "-alt-ascii" patterns look like they say
-// the same thing and do not: en-GB's medium time is "HH:mm:ss" and its ascii
-// alternate is "h:mm:ss a", which is a different clock rather than a different
-// space.
-func ascii(pattern string) string {
-	return strings.ReplaceAll(pattern, "\u202f", " ")
 }
 
 // atTimeFromICU is a calendar's date-and-time glue as ICU looks it up: the
@@ -586,7 +565,7 @@ func atTimeFromICU(icu *icusrc.Locales, name, calendar string) ([datedata.Length
 				return out, fmt.Errorf("%s's atTime glue has %d patterns", cal, len(glue.Values))
 			}
 			for i, v := range glue.Values {
-				out[i] = ascii(v)
+				out[i] = v
 			}
 			return out, nil
 		}

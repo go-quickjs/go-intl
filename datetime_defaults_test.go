@@ -38,6 +38,7 @@ func TestDateTimeRequiredAndDefaults(t *testing.T) {
 	} {
 		opts := c.opts
 		opts.TimeZone = "UTC"
+		opts.Compat = intl.NodeICU
 		opts.Required, opts.Defaults = c.method[0], c.method[1]
 		if got := newDateTime(t, "en", opts).Format(when); got != c.want {
 			t.Errorf("%s = %q, want %q", c.name, got, c.want)

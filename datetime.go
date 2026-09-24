@@ -450,6 +450,13 @@ func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
 			out = append(out, Part{datePartKind(fd.letter), value})
 		}
 	}
+	if f.opts.Compat == NodeICU {
+		// V8 writes a plain space wherever ICU writes a narrow no-break
+		// one, reverting ICU 72 for the web's sake (Replace202F).
+		for i := range out {
+			out[i].Value = strings.ReplaceAll(out[i].Value, "\u202f", " ")
+		}
+	}
 	return out
 }
 

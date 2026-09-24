@@ -39,10 +39,17 @@ func (c Compat) String() string {
 // can be read rather than discovered. Nothing consults this; it is here to be
 // kept honest and to be printed when someone asks what NodeICU changes.
 //
-// Number formatting has none so far. The ones go-quickjs carries today are in
+// Number formatting has none so far. The ones go-quickjs carries today in
 // date formatting -- proleptic Islamic era names, the Japanese hour cycle, and
-// Temporal's handling of a standalone era -- and they arrive with stage 5.
+// Temporal's handling of a standalone era -- arrive with the calendars.
 var Divergences = []Divergence{
+	{
+		Area:     "DateTimeFormat",
+		What:     "the space before a day period, and every other narrow no-break space",
+		Standard: "CLDR's character, U+202F, as ICU writes it: \"3:04\u202fPM\"",
+		Node: "a plain space: V8 replaces U+202F in everything it formats, " +
+			"reverting ICU 72's change for the web's sake",
+	},
 	{
 		Area: "Collator",
 		What: "a collation chosen by option, in the resolved locale",

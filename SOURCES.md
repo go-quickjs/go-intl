@@ -211,12 +211,18 @@ archive, through `internal/icusrc`:
 | a numbering system a locale does not use | missing | the locale's own few fields, then the root's entry, then the locale's Latin data |
 | a calendar's date-time atTime glue | the root's for other calendars; the locale's own plain glue where it overrides only that | the first bundle up the chain that has one, else the Gregorian one |
 
-## One deliberate divergence from CLDR
+## The space before AM and PM
 
 CLDR separates a time from its day period with U+202F, a narrow no-break
-space, in 440 locales. **ICU 78.3 writes a plain space**, and the golden corpus
-agrees, so `dategen` replaces it. The thin space U+2009 that some locales put
-between a short date and a time is kept: ICU keeps it too.
+space, in 440 locales, and ICU writes it. **Node writes a plain space**, and
+the golden corpus has plain spaces, but that is V8's doing and not ICU's: V8
+replaces U+202F in everything it formats (`Replace202F` in
+`js-date-time-format.cc`), reverting ICU 72's change for the web's sake.
+
+So the date tables keep CLDR's character, and the NodeICU profile makes V8's
+replacement, as a named divergence (`compat.go`). An earlier version of
+`dategen` replaced the character in the data itself, on the belief that ICU
+did; reading V8 showed otherwise.
 
 CLDR offers "-alt-ascii" patterns that look like they say the same thing and do
 not: `en-GB`'s medium time is `HH:mm:ss` and its ascii alternate is

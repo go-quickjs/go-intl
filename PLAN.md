@@ -412,8 +412,8 @@ Two findings for later:
 
 - **The plain space before AM/PM is V8's, not ICU's.** V8 replaces U+202F
   with a space in every formatted date (`Replace202F`, reverting ICU 72).
-  `dategen` bakes the replacement into the data; it belongs in the NodeICU
-  profile, with the data keeping CLDR's character.
+  Done: the data keeps CLDR's character and the NodeICU profile replaces it,
+  as a named divergence.
 - **125 of the 766 locales go-intl has date data for are not ones Node
   supports at all** -- Afar, Occitan and others ICU does not ship. Node
   negotiates them away to its default locale. Matching that is the

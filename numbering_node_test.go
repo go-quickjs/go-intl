@@ -104,7 +104,7 @@ func TestNumberingSystemsMatchNode(t *testing.T) {
 		case "DateTimeFormat":
 			dtf, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
 				TimeZone: "UTC", DateStyle: intl.LengthShort, TimeStyle: intl.LengthMedium,
-				NumberingSystem: nu,
+				NumberingSystem: nu, Compat: intl.NodeICU,
 			})
 			if err != nil {
 				differences = append(differences, name+": "+err.Error())

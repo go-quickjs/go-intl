@@ -35,7 +35,8 @@ func TestDateTimeGlueKeepsThinSpace(t *testing.T) {
 func TestDateTimeFieldsTakeAtTimeGlue(t *testing.T) {
 	when := time.UnixMilli(1704467045000)
 	fields := intl.DateTimeFormatOptions{TimeZone: "UTC", Year: intl.WidthNumeric,
-		Month: intl.WidthNumeric, Day: intl.WidthNumeric, Hour: intl.WidthNumeric, Minute: intl.WidthNumeric}
+		Month: intl.WidthNumeric, Day: intl.WidthNumeric, Hour: intl.WidthNumeric, Minute: intl.WidthNumeric,
+		Compat: intl.NodeICU}
 	long := fields
 	long.Month = intl.WidthLong
 	for _, c := range []struct {
@@ -79,6 +80,26 @@ func TestOtherCalendarsTakeGregorianGlue(t *testing.T) {
 	} {
 		if got := newDateTime(t, c.tag, c.opts).Format(when); got != c.want {
 			t.Errorf("%s %+v = %+q, want %+q", c.tag, c.opts, got, c.want)
+		}
+	}
+}
+
+// V8 writes a plain space wherever ICU writes a narrow no-break one; the
+// standard profile keeps CLDR's character.
+func TestNarrowNoBreakSpaceByProfile(t *testing.T) {
+	when := time.UnixMilli(1704467045000)
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "3:04\u202fPM"},
+		{intl.NodeICU, "3:04 PM"},
+	} {
+		f := newDateTime(t, "en", intl.DateTimeFormatOptions{
+			TimeZone: "UTC", TimeStyle: intl.LengthShort, Compat: c.compat,
+		})
+		if got := f.Format(when); got != c.want {
+			t.Errorf("%v: %+q, want %+q", c.compat, got, c.want)
 		}
 	}
 }
