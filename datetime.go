@@ -2,10 +2,12 @@ package intl
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-quickjs/go-intl/internal/datedata"
+	"github.com/go-quickjs/go-intl/internal/numdata"
 	"github.com/go-quickjs/go-intl/internal/zonedata"
 )
 
@@ -144,6 +146,16 @@ type DateTimeFormat struct {
 
 	// fields is the pattern this formatter writes, already taken apart.
 	fields []dateField
+	// hourCycle is the cycle resolvedOptions reports, unset unless an hour
+	// or a time style was asked for.
+	hourCycle HourCycle
+	decimal   string
+	// overrides are the numbering systems some fields of a style pattern
+	// are written in, by pattern letter; nil for most.
+	overrides map[byte]string
+	// systems are the numeric numbering systems, read when an override
+	// names one.
+	systems []numdata.NumberingSystem
 	// gmtPattern and gmtHourFormat write a zone as an offset from UTC.
 	gmtPattern    string
 	gmtHourFormat string
@@ -202,6 +214,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		}
 		f.numbers = &numberDigits{digits: chosen.Digits, system: chosen.NumberingSystem}
 		f.locale = f.locale.withKeyword("nu", nu)
+		f.decimal = chosen.Symbols.Decimal
 	}
 	if f.zones, err = loadZoneNames(src, loc); err != nil {
 		return nil, err
@@ -213,10 +226,11 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 	f.zoneNames, f.zoneKnown = f.zones.namesForZone(f.zoneName)
 
-	pattern, err := f.choosePattern()
+	pattern, cycle, err := f.choosePattern(src, f.decimal)
 	if err != nil {
 		return nil, err
 	}
+	f.hourCycle = cycle
 	f.fields = parseDatePattern(pattern)
 	return f, nil
 }
@@ -304,102 +318,6 @@ func loadZone(name string) (*time.Location, string, error) {
 	return loc, name, nil
 }
 
-// choosePattern settles which pattern this formatter writes.
-func (f *DateTimeFormat) choosePattern() (string, error) {
-	cal := f.calendar
-	date, tim := f.opts.DateStyle, f.opts.TimeStyle
-	if date != LengthNone || tim != LengthNone {
-		var datePattern, timePattern string
-		if date != LengthNone {
-			datePattern = cal.DateFormats[date-1]
-		}
-		if tim != LengthNone {
-			timePattern = cal.TimeFormats[tim-1]
-		}
-		switch {
-		case datePattern == "":
-			return f.withHourCycle(timePattern), nil
-		case timePattern == "":
-			return datePattern, nil
-		}
-		// A whole date beside a whole time takes its own glue, which is not
-		// the one a set of fields takes: English joins these with "at".
-		glue := cal.AtTimeFormats[date-1]
-		if glue == "" {
-			glue = cal.DateTimeFormats[date-1]
-		}
-		if glue == "" {
-			glue = "{1}, {0}"
-		}
-		joined := strings.ReplaceAll(glue, "{1}", datePattern)
-		joined = strings.ReplaceAll(joined, "{0}", f.withHourCycle(timePattern))
-		return joined, nil
-	}
-
-	pattern, err := f.skeletonPattern()
-	if err != nil {
-		return "", err
-	}
-	return f.withHourCycle(pattern), nil
-}
-
-// withHourCycle rewrites the hour field where the caller asked for a different
-// way of counting than the locale's own pattern uses.
-func (f *DateTimeFormat) withHourCycle(pattern string) string {
-	want := f.hourLetter()
-	if want == 0 || pattern == "" {
-		return pattern
-	}
-	twelve := want == 'h' || want == 'K'
-
-	var b strings.Builder
-	for _, fd := range parseDatePattern(pattern) {
-		switch fd.letter {
-		case 'h', 'H', 'K', 'k':
-			b.WriteString(strings.Repeat(string(want), fd.count))
-		case 'a', 'b', 'B':
-			// A twenty-four hour clock has no morning and afternoon, and the
-			// space before them goes with them.
-			if !twelve {
-				continue
-			}
-			b.WriteString(strings.Repeat(string(fd.letter), fd.count))
-		case 0:
-			b.WriteString(quoteLiteral(fd.literal))
-		default:
-			b.WriteString(strings.Repeat(string(fd.letter), fd.count))
-		}
-	}
-	out := b.String()
-	if !twelve {
-		// Removing the day period leaves the space that stood beside it.
-		out = strings.TrimSpace(strings.ReplaceAll(out, " ", " "))
-	}
-	return out
-}
-
-// hourLetter is the pattern letter the options ask for, or zero to leave the
-// locale's own alone.
-func (f *DateTimeFormat) hourLetter() byte {
-	if f.opts.Hour12 != nil {
-		if *f.opts.Hour12 {
-			return 'h'
-		}
-		return 'H'
-	}
-	switch f.opts.HourCycle {
-	case H11:
-		return 'K'
-	case H12:
-		return 'h'
-	case H23:
-		return 'H'
-	case H24:
-		return 'k'
-	}
-	return 0
-}
-
 // quoteLiteral puts a literal back into a pattern, quoting the letters that
 // would otherwise be read as fields.
 func quoteLiteral(s string) string {
@@ -420,6 +338,82 @@ func quoteLiteral(s string) string {
 }
 
 // digits writes ASCII digits in the locale's own, where they differ.
+// number writes a numeric field, in the numbering system an override gives
+// its letter or else the formatter's.
+func (f *DateTimeFormat) number(letter byte, v, width int) string {
+	if system, ok := f.overrides[letter]; ok {
+		switch system {
+		case "romanlow":
+			return roman(v, true)
+		case "roman":
+			return roman(v, false)
+		}
+		for _, s := range f.systems {
+			if s.Name == system {
+				return mapDigits(pad(v, width), s.Digits)
+			}
+		}
+	}
+	return f.digits(pad(v, width))
+}
+
+// roman writes a number in Roman numerals, as ICU's rule-based %roman-upper
+// and %roman-lower do for the numbers a date has: one to 3,999, and anything
+// outside that in plain digits.
+func roman(v int, lower bool) string {
+	if v <= 0 || v >= 4000 {
+		return strconv.Itoa(v)
+	}
+	numerals := []struct {
+		value int
+		text  string
+	}{{1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"}, {100, "C"}, {90, "XC"},
+		{50, "L"}, {40, "XL"}, {10, "X"}, {9, "IX"}, {5, "V"}, {4, "IV"}, {1, "I"}}
+	var b strings.Builder
+	for _, n := range numerals {
+		for v >= n.value {
+			b.WriteString(n.text)
+			v -= n.value
+		}
+	}
+	if lower {
+		return strings.ToLower(b.String())
+	}
+	return b.String()
+}
+
+// The fields an override without a letter applies to, ICU's kDateFields and
+// kTimeFields as pattern letters.
+const (
+	overrideDateLetters = "yMdDFwWYugLqQUr"
+	overrideTimeLetters = "kHmsSKhA"
+)
+
+// parseNumberingOverride reads CLDR's override for a style pattern: either a
+// system for every date or time field, or "letter=system" pairs separated by
+// semicolons.
+func parseNumberingOverride(into map[byte]string, s string, date bool) {
+	if s == "" {
+		return
+	}
+	for _, part := range strings.Split(s, ";") {
+		letter, system, found := strings.Cut(part, "=")
+		if !found {
+			letters := overrideTimeLetters
+			if date {
+				letters = overrideDateLetters
+			}
+			for i := 0; i < len(letters); i++ {
+				into[letters[i]] = part
+			}
+			continue
+		}
+		if letter != "" {
+			into[letter[0]] = system
+		}
+	}
+}
+
 func (f *DateTimeFormat) digits(s string) string {
 	if f.numbers == nil {
 		return s
@@ -474,13 +468,7 @@ func (f *DateTimeFormat) ResolvedOptions() ResolvedDateTimeFormat {
 	if f.numbers != nil && f.numbers.system != "" {
 		system = f.numbers.system
 	}
-	cycle := f.opts.HourCycle
-	if f.opts.Hour12 != nil {
-		cycle = H23
-		if *f.opts.Hour12 {
-			cycle = H12
-		}
-	}
+	cycle := f.hourCycle
 	return ResolvedDateTimeFormat{
 		Locale:          f.locale.String(),
 		Calendar:        string(f.system),

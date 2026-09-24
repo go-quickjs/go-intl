@@ -133,6 +133,21 @@ func dateTimeOptions(in map[string]any) (intl.DateTimeFormatOptions, error) {
 			if on, ok := value.(bool); ok {
 				out.Hour12 = intl.Bool(on)
 			}
+		case "calendar":
+			out.Calendar, _ = value.(string)
+		case "hourCycle":
+			switch value {
+			case "h11":
+				out.HourCycle = intl.H11
+			case "h12":
+				out.HourCycle = intl.H12
+			case "h23":
+				out.HourCycle = intl.H23
+			case "h24":
+				out.HourCycle = intl.H24
+			default:
+				return out, fmt.Errorf("hourCycle %v", value)
+			}
 		default:
 			return out, fmt.Errorf("unknown option %q", key)
 		}

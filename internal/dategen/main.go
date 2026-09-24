@@ -43,6 +43,23 @@ var calendarPreferenceJSON []byte
 //go:embed dayPeriods.json
 var dayPeriodsJSON []byte
 
+//go:embed timeData.json
+var timeDataJSON []byte
+
+// appendFields are CLDR's names for the append items, by pattern-generator
+// field. The fields with no append item of their own are empty.
+var appendFields = [datedata.Fields]string{
+	"Era", "Year", "Quarter", "Month", "Week", "", "Day-Of-Week",
+	"", "", "Day", "", "Hour", "Minute", "Second", "", "Timezone",
+}
+
+// fieldNames are CLDR's names for the fields in dateFields.json, by
+// pattern-generator field.
+var fieldNames = [datedata.Fields]string{
+	"era", "year", "quarter", "month", "week", "weekOfMonth", "weekday",
+	"dayOfYear", "weekdayOfMonth", "day", "dayperiod", "hour", "minute", "second", "", "zone",
+}
+
 // extras are the calendars beyond the Gregorian one, in the order their
 // packages are given. CLDR's name for a calendar is not always BCP-47's, which
 // is the name ECMA-402 uses and the one stored.
@@ -123,6 +140,10 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		if l == nil {
 			continue
 		}
+		greg := &l.Calendars[0].Calendar
+		if greg.AtTimeFormats, err = atTimeFromICU(icu, e.Name(), "gregorian"); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		for i, other := range others {
 			if i >= len(extras) {
 				break
@@ -135,12 +156,8 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 			if c == nil {
 				continue
 			}
-			own, err := ownsAtTime(icu, e.Name(), extras[i].cldr)
-			if err != nil {
+			if c.AtTimeFormats, err = atTimeFromICU(icu, e.Name(), extras[i].cldr); err != nil {
 				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
-			}
-			if !own {
-				c.AtTimeFormats = l.Calendars[0].Calendar.AtTimeFormats
 			}
 			l.Calendars = append(l.Calendars, datedata.NamedCalendar{
 				Name: extras[i].bcp47, Calendar: *c,
@@ -179,6 +196,13 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join("data", "calendarprefs.bin"), prefs, 0o644); err != nil {
+		return err
+	}
+	hours, err := timeData()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "timedata.bin"), hours, 0o644); err != nil {
 		return err
 	}
 
@@ -230,10 +254,74 @@ func read(main, name string) (*datedata.Locale, error) {
 	if err != nil || c == nil {
 		return nil, err
 	}
-	return &datedata.Locale{
+	l := &datedata.Locale{
 		Calendars:   []datedata.NamedCalendar{{Name: "gregory", Calendar: *c}},
 		PeriodRules: periodRules(name),
-	}, nil
+	}
+	if l.FieldNames, err = readFieldNames(main, name); err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
+// readFieldNames reads what a locale calls each field, from dateFields.json.
+func readFieldNames(main, name string) ([datedata.Fields]string, error) {
+	var out [datedata.Fields]string
+	raw, err := os.ReadFile(filepath.Join(main, name, "dateFields.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
+		}
+		return out, err
+	}
+	var f struct {
+		Main map[string]struct {
+			Dates struct {
+				Fields map[string]struct {
+					DisplayName string `json:"displayName"`
+				} `json:"fields"`
+			} `json:"dates"`
+		} `json:"main"`
+	}
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return out, fmt.Errorf("dateFields.json: %w", err)
+	}
+	fields := f.Main[name].Dates.Fields
+	for i, key := range fieldNames {
+		if key != "" {
+			out[i] = fields[key].DisplayName
+		}
+	}
+	return out, nil
+}
+
+// timeData writes CLDR's hour-cycle preferences, which are a property of a
+// region, or of a language in a region: one line each, the key, the preferred
+// cycle and the allowed ones, as CLDR spells them ("h", "H", "hB").
+func timeData() ([]byte, error) {
+	var res struct {
+		Supplemental struct {
+			TimeData map[string]struct {
+				Allowed   string `json:"_allowed"`
+				Preferred string `json:"_preferred"`
+			} `json:"timeData"`
+		} `json:"supplemental"`
+	}
+	if err := json.Unmarshal(timeDataJSON, &res); err != nil {
+		return nil, fmt.Errorf("timeData.json: %w", err)
+	}
+	keys := make([]string, 0, len(res.Supplemental.TimeData))
+	for key := range res.Supplemental.TimeData {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, key := range keys {
+		d := res.Supplemental.TimeData[key]
+		fmt.Fprintf(&b, "%s %s %s\n", strings.ReplaceAll(key, "-", "_"), d.Preferred,
+			strings.Join(strings.Fields(d.Allowed), ","))
+	}
+	return []byte(b.String()), nil
 }
 
 // periodRuleSets are CLDR's day-period rules, read once.
@@ -370,6 +458,8 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 	for i, length := range datedata.LengthNames {
 		c.DateFormats[i] = pattern(source.DateFormats[length])
 		c.TimeFormats[i] = pattern(source.TimeFormats[length])
+		c.DateNumbers[i] = numbersOverride(source.DateFormats[length])
+		c.TimeNumbers[i] = numbersOverride(source.TimeFormats[length])
 		c.DateTimeFormats[i] = pattern(source.DateTimeFormats[length])
 		c.AtTimeFormats[i] = pattern(source.AtTime.Standard[length])
 	}
@@ -384,7 +474,7 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 			available[id] = pattern(value)
 		}
 		for id, text := range available {
-			if strings.Contains(id, "-alt-") || text == "" {
+			if strings.Contains(id, "-alt-") || strings.Contains(id, "-count-") || text == "" {
 				continue
 			}
 			c.Available = append(c.Available, datedata.Skeleton{ID: id, Pattern: text})
@@ -392,6 +482,18 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 		sort.Slice(c.Available, func(i, j int) bool {
 			return c.Available[i].ID < c.Available[j].ID
 		})
+	}
+
+	if raw, ok := source.DateTimeFormats["appendItems"]; ok {
+		var items map[string]string
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, fmt.Errorf("appendItems: %w", err)
+		}
+		for i, key := range appendFields {
+			if key != "" {
+				c.AppendItems[i] = items[key]
+			}
+		}
 	}
 
 	if c.DateFormats[datedata.Full] == "" && len(c.Available) == 0 {
@@ -419,6 +521,18 @@ func pattern(raw json.RawMessage) string {
 	return ""
 }
 
+// numbersOverride is the numbering override CLDR gives a pattern, written
+// beside it as "_numbers": "M=romanlow".
+func numbersOverride(raw json.RawMessage) string {
+	var wrapped struct {
+		Numbers string `json:"_numbers"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return ""
+	}
+	return wrapped.Numbers
+}
+
 // ascii puts a plain space where CLDR writes a narrow no-break one.
 //
 // CLDR separates a time from its day period with U+202F, and the ICU this is
@@ -440,18 +554,44 @@ func ascii(pattern string) string {
 	return strings.ReplaceAll(pattern, "\u202f", " ")
 }
 
-// ownsAtTime reports whether a locale, or a parent below the root, gives a
-// calendar a date-and-time glue of its own. Only then is cldr-json's glue for
-// it the locale's; otherwise ICU takes the locale's Gregorian glue.
-func ownsAtTime(icu *icusrc.Locales, name, calendar string) (bool, error) {
+// atTimeFromICU is a calendar's date-and-time glue as ICU looks it up: the
+// first bundle up the locale's chain, the root included, that gives the
+// calendar one, and for a calendar none gives one to, the Gregorian glue
+// looked up the same way. A locale no bundle gives one to has none, and is
+// joined with its plain glue.
+//
+// cldr-json gets this wrong twice over. It resolves CLDR's root alias for a
+// calendar's glue to the root's value, so Arabic's Buddhist dates took a
+// Latin comma; and where a locale overrides only the plain glue, it derives
+// the atTime glue from that rather than inheriting its parent's, so French
+// in Mali took a comma that French does not write.
+func atTimeFromICU(icu *icusrc.Locales, name, calendar string) ([datedata.Lengths]string, error) {
+	var out [datedata.Lengths]string
 	chain, err := icu.Chain(strings.ReplaceAll(name, "-", "_"))
 	if err != nil {
-		return false, err
+		return out, err
 	}
-	for _, n := range chain {
-		if n.Get("calendar", calendar, "DateTimePatterns%atTime") != nil {
-			return true, nil
+	root, err := icu.Get("root")
+	if err != nil {
+		return out, err
+	}
+	chain = append(chain, root)
+	for _, cal := range []string{calendar, "gregorian"} {
+		for _, n := range chain {
+			glue := n.Get("calendar", cal, "DateTimePatterns%atTime")
+			if glue == nil {
+				continue
+			}
+			if len(glue.Values) != datedata.Lengths {
+				return out, fmt.Errorf("%s's atTime glue has %d patterns", cal, len(glue.Values))
+			}
+			for i, v := range glue.Values {
+				out[i] = ascii(v)
+			}
+			return out, nil
 		}
 	}
-	return false, nil
+	// None anywhere, the root included: ICU then joins with the plain glue,
+	// and so does the reader, finding this empty.
+	return out, nil
 }

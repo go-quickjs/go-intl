@@ -3,420 +3,370 @@ package intl
 import (
 	"fmt"
 	"strings"
-
-	"github.com/go-quickjs/go-intl/internal/datedata"
 )
 
-// Matching a request for fields to a pattern the locale has.
+// Choosing a pattern, as V8 asks ICU for one.
 //
-// A caller that names the fields it wants -- the year, a long month, the day
-// -- is not asking for an order. Where the month goes relative to the day is
-// the locale's business, and CLDR answers it with a list of skeletons: "yMMMd"
-// resolves to "MMM d, y" in English and "d. MMM y" in German.
+// A caller either asks for whole styles -- a long date, a short time -- or
+// names fields. For fields, V8 spells the options as a skeleton, in a fixed
+// order and with the hour letter its hour cycle calls for, and hands it to
+// ICU's pattern generator (dtpg.go). For styles, ICU's own date formatter
+// takes the locale's style patterns and glues them together, and V8
+// regenerates the result when the hour cycle it settled on disagrees with
+// the one the locale's time pattern counts in. Either way V8 then rewrites
+// the hour letters for the cycle, which is where the answer is final.
 //
-// A request rarely matches a skeleton exactly. UTS #35 says to find the
-// closest, then bend its fields to what was asked for: a pattern found under
-// "yMMMd" is used for "yMMMMd" with its month widened, because the order was
-// what was wanted from it and the width was not.
+// The code follows V8's js-date-time-format.cc and ICU's smpdtfmt.cpp; the
+// comments name the functions it follows.
 
-// skeletonOrder is the order fields appear in a skeleton, which UTS #35 fixes
-// so that two requests for the same fields spell the same skeleton.
-const skeletonOrder = "GyMdEahmsz"
+// hourLetters are the pattern letters of the hour cycles.
+var hourLetters = map[HourCycle]byte{H11: 'K', H12: 'h', H23: 'H', H24: 'k'}
 
-// requestedSkeleton builds the skeleton the options ask for.
-func (f *DateTimeFormat) requestedSkeleton() string {
+// choosePattern settles on the formatter's pattern and the hour cycle
+// resolvedOptions reports, which is unset unless an hour or a time style was
+// asked for.
+func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, HourCycle, error) {
+	hourChar, allowed, err := allowedHourFormats(src, f.locale)
+	if err != nil {
+		return "", HourCycleAuto, err
+	}
+	g := newDTPG(f.calendar, f.data.FieldNames, decimal, hourChar, allowed)
+	hc := f.resolveHourCycle(g.defaultHourCycle())
+
 	o := &f.opts
+	if o.DateStyle != LengthNone || o.TimeStyle != LengthNone {
+		// DateTimeStylePattern.
+		pattern := f.stylePattern()
+		if o.TimeStyle == LengthNone {
+			f.styleOverrides(src)
+			return pattern, HourCycleAuto, nil
+		}
+		if hourCycleFromPattern(pattern) == hc {
+			f.styleOverrides(src)
+			return pattern, hc, nil
+		}
+		// A regenerated pattern is a new one, with no overrides.
+		pattern = g.bestPattern(replaceSkeleton(staticSkeleton(pattern), hc), matchHourFieldLength)
+		return replaceHourCycleInPattern(pattern, hc), hc, nil
+	}
+
+	skeleton := v8Skeleton(o, hc)
+	if skeleton == "" {
+		return "", HourCycleAuto, fmt.Errorf("intl: nothing to format: %w", ErrNotFound)
+	}
+	patternCycle := HourCycleAuto
+	if o.Hour != WidthNone {
+		patternCycle = hc
+	}
+	pattern := g.bestPattern(skeleton, matchHourFieldLength)
+	return replaceHourCycleInPattern(pattern, patternCycle), patternCycle, nil
+}
+
+// resolveHourCycle is V8's: hour12 wins over hourCycle, which wins over the
+// -u-hc keyword, which wins over the locale's default. hour12 picks the
+// locale's own twelve- or twenty-four-hour cycle, and V8 decides the twelve
+// hour one by whether the locale names Japan, where the clock counts from 0.
+func (f *DateTimeFormat) resolveHourCycle(def HourCycle) HourCycle {
+	o := &f.opts
+	if o.Hour12 != nil {
+		if *o.Hour12 {
+			if def == H11 || def == H12 {
+				return def
+			}
+			if f.locale.Region.String() == "JP" {
+				return H11
+			}
+			return H12
+		}
+		if def == H23 || def == H24 {
+			return def
+		}
+		return H23
+	}
+	if o.HourCycle != HourCycleAuto {
+		return o.HourCycle
+	}
+	if kw, ok := f.locale.keywordValue("hc"); ok {
+		if hc, ok := parseHourCycle(kw); ok {
+			return hc
+		}
+	}
+	return def
+}
+
+func parseHourCycle(s string) (HourCycle, bool) {
+	switch s {
+	case "h11":
+		return H11, true
+	case "h12":
+		return H12, true
+	case "h23":
+		return H23, true
+	case "h24":
+		return H24, true
+	}
+	return HourCycleAuto, false
+}
+
+// v8Skeleton spells the options as a skeleton, in the order of V8's pattern
+// data table: weekday, era, year, month, day, day period, hour, minute,
+// second, the fraction, then the zone.
+func v8Skeleton(o *DateTimeFormatOptions, hc HourCycle) string {
 	var b strings.Builder
-
-	repeat := func(letter byte, n int) {
-		for i := 0; i < n; i++ {
-			b.WriteByte(letter)
-		}
-	}
-	nameWidth := func(w FieldWidth, letter byte) {
+	name := func(w FieldWidth, letter string) {
 		switch w {
-		case WidthLong:
-			repeat(letter, 4)
-		case WidthShort:
-			repeat(letter, 3)
 		case WidthNarrow:
-			repeat(letter, 5)
+			b.WriteString(strings.Repeat(letter, 5))
+		case WidthLong:
+			b.WriteString(strings.Repeat(letter, 4))
+		case WidthShort:
+			b.WriteString(strings.Repeat(letter, 3))
 		}
 	}
-
-	switch o.Era {
-	case WidthLong:
-		repeat('G', 4)
-	case WidthShort:
-		repeat('G', 3)
-	case WidthNarrow:
-		repeat('G', 5)
+	number := func(w FieldWidth, letter string) {
+		switch w {
+		case Width2Digit:
+			b.WriteString(letter + letter)
+		case WidthNumeric:
+			b.WriteString(letter)
+		}
 	}
-	switch o.Year {
-	case WidthNumeric:
-		repeat('y', 1)
-	case Width2Digit:
-		repeat('y', 2)
+	name(o.Weekday, "E")
+	name(o.Era, "G")
+	number(o.Year, "y")
+	if o.Month == WidthNumeric || o.Month == Width2Digit {
+		number(o.Month, "M")
+	} else {
+		name(o.Month, "M")
 	}
-	switch o.Month {
-	case WidthNumeric:
-		repeat('M', 1)
-	case Width2Digit:
-		repeat('M', 2)
-	default:
-		nameWidth(o.Month, 'M')
+	number(o.Day, "d")
+	hour := "j"
+	if letter, ok := hourLetters[hc]; ok {
+		hour = string(letter)
 	}
-	switch o.Day {
-	case WidthNumeric:
-		repeat('d', 1)
-	case Width2Digit:
-		repeat('d', 2)
-	}
-	nameWidth(o.Weekday, 'E')
-
-	hour := f.hourLetter()
-	if hour == 0 {
-		hour = f.preferredHour()
-	}
-	switch o.Hour {
-	case WidthNumeric:
-		repeat(hour, 1)
-	case Width2Digit:
-		repeat(hour, 2)
-	}
-	switch o.Minute {
-	case WidthNumeric:
-		repeat('m', 1)
-	case Width2Digit:
-		repeat('m', 2)
-	}
-	switch o.Second {
-	case WidthNumeric:
-		repeat('s', 1)
-	case Width2Digit:
-		repeat('s', 2)
-	}
+	number(o.Hour, hour)
+	number(o.Minute, "m")
+	number(o.Second, "s")
 	switch o.TimeZoneName {
 	case WidthLong:
-		repeat('z', 4)
+		b.WriteString("zzzz")
 	case WidthShort:
-		repeat('z', 1)
+		b.WriteString("z")
 	}
 	return b.String()
 }
 
-// skeletonPattern finds the pattern for what the options asked for.
-func (f *DateTimeFormat) skeletonPattern() (string, error) {
-	// The constructor has supplied the default fields, so something is
-	// always asked for.
-	want := f.requestedSkeleton()
-
-	if pattern, ok := f.calendar.Skeleton(want); ok {
-		return plainDayPeriod(pattern), nil
-	}
-
-	// A request that mixes date fields with time fields rarely has a skeleton
-	// of its own: no locale lists one for every combination. UTS #35 says to
-	// answer each half separately and join them with the same glue a whole
-	// date and a whole time take.
-	if date, clock := splitSkeleton(want); date != "" && clock != "" {
-		datePattern, err := f.onePattern(date)
-		if err != nil {
-			return "", err
-		}
-		timePattern, err := f.onePattern(clock)
-		if err != nil {
-			return "", err
-		}
-		// ICU joins the halves with the same glue a whole date and a whole
-		// time take, the "atTime" one: Bengali writes a comma here that its
-		// plain glue does not have, and English writes "at" after a long
-		// date.
-		glue := f.calendar.AtTimeFormats[glueLength(date)]
-		if glue == "" {
-			glue = f.calendar.DateTimeFormats[glueLength(date)]
-		}
-		if glue == "" {
-			glue = "{1}, {0}"
-		}
-		joined := strings.ReplaceAll(glue, "{1}", datePattern)
-		return strings.ReplaceAll(joined, "{0}", timePattern), nil
-	}
-
-	return f.onePattern(want)
-}
-
-// splitSkeleton divides a request into its date fields and its time fields.
-func splitSkeleton(want string) (date, clock string) {
-	var d, c strings.Builder
-	for i := 0; i < len(want); i++ {
-		switch want[i] {
-		case 'G', 'y', 'Y', 'u', 'r', 'M', 'L', 'd', 'D', 'E', 'e', 'c', 'w', 'W', 'Q', 'q':
-			d.WriteByte(want[i])
-		default:
-			c.WriteByte(want[i])
-		}
-	}
-	return d.String(), c.String()
-}
-
-// glueLength picks which of the four glue patterns joins a date to a time.
-//
-// UTS #35 takes it from how the date is written: a date naming its weekday is
-// the full one, a date spelling its month out is long, an abbreviated month is
-// medium and everything else short.
-func glueLength(date string) int {
-	months := strings.Count(date, "M") + strings.Count(date, "L")
+// stylePattern is what ICU's SimpleDateFormat builds for a date style, a time
+// style or both: the locale's patterns, joined by the "atTime" glue for the
+// date's length where there is one.
+func (f *DateTimeFormat) stylePattern() string {
+	cal := f.calendar
+	date, clock := f.opts.DateStyle, f.opts.TimeStyle
 	switch {
-	case strings.ContainsAny(date, "E"):
-		return datedata.Full
-	case months >= 4:
-		return datedata.Long
-	case months == 3:
-		return datedata.Medium
+	case date == LengthNone:
+		return cal.TimeFormats[clock-1]
+	case clock == LengthNone:
+		return cal.DateFormats[date-1]
 	}
-	return datedata.ShortLength
+	glue := cal.AtTimeFormats[date-1]
+	if glue == "" {
+		glue = cal.DateTimeFormats[date-1]
+	}
+	if glue == "" {
+		glue = "{1}, {0}"
+	}
+	return simpleFormat(glue, cal.TimeFormats[clock-1], cal.DateFormats[date-1])
 }
 
-// onePattern answers a request that is all date or all time.
-func (f *DateTimeFormat) onePattern(want string) (string, error) {
-	if pattern, ok := f.calendar.Skeleton(want); ok {
-		return plainDayPeriod(pattern), nil
+// styleOverrides takes the numbering overrides of the style patterns in use,
+// as ICU's date formatter does when it builds one from styles.
+func (f *DateTimeFormat) styleOverrides(src Source) {
+	o := &f.opts
+	overrides := map[byte]string{}
+	if o.DateStyle != LengthNone {
+		parseNumberingOverride(overrides, f.calendar.DateNumbers[o.DateStyle-1], true)
 	}
-	best, found := f.closestSkeleton(want)
-	if !found {
-		return "", fmt.Errorf("intl: %s has no pattern for %q: %w",
-			f.locale, want, ErrNotFound)
+	if o.TimeStyle != LengthNone {
+		parseNumberingOverride(overrides, f.calendar.TimeNumbers[o.TimeStyle-1], false)
 	}
-	return plainDayPeriod(f.adjustWidths(best, want)), nil
+	if len(overrides) == 0 {
+		return
+	}
+	f.overrides = overrides
+	f.systems, _ = loadNumberingSystems(src)
 }
 
-// plainDayPeriod writes the two halves of the day where a pattern asks for the
-// finer parts.
-//
-// It applies only where the caller named the fields it wanted. ECMA-402 has no
-// option for the part of the day, so a request for an hour is answered with the
-// half: Chinese writes 上午 at midnight for a named hour and 凌晨 for a whole
-// time asked for by length, from the same "Bh:mm" the locale supplies.
-func plainDayPeriod(pattern string) string {
-	if !strings.ContainsRune(pattern, 'B') {
+// hourCycleFromPattern is the cycle of the first hour letter outside quotes.
+func hourCycleFromPattern(pattern string) HourCycle {
+	inQuote := false
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\'':
+			inQuote = !inQuote
+		case 'K':
+			if !inQuote {
+				return H11
+			}
+		case 'h':
+			if !inQuote {
+				return H12
+			}
+		case 'H':
+			if !inQuote {
+				return H23
+			}
+		case 'k':
+			if !inQuote {
+				return H24
+			}
+		}
+	}
+	return HourCycleAuto
+}
+
+// replaceSkeleton is V8's ReplaceSkeleton: a skeleton with its hour letters
+// changed to the cycle's and its day periods removed (ICU-20437).
+func replaceSkeleton(skeleton string, hc HourCycle) string {
+	to := hourLetters[hc]
+	var b strings.Builder
+	for i := 0; i < len(skeleton); i++ {
+		switch c := skeleton[i]; c {
+		case 'a', 'b', 'B':
+		case 'h', 'H', 'K', 'k':
+			b.WriteByte(to)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// replaceHourCycleInPattern is V8's ReplaceHourCycleInPattern: every hour
+// letter outside quotes becomes the cycle's. V8 also puts a space before an
+// hour that directly follows a day, and so does this.
+func replaceHourCycleInPattern(pattern string, hc HourCycle) string {
+	to, ok := hourLetters[hc]
+	if !ok {
 		return pattern
 	}
 	var b strings.Builder
-	for _, fd := range parseDatePattern(pattern) {
-		switch {
-		case fd.letter == 0:
-			b.WriteString(quoteLiteral(fd.literal))
-		case fd.letter == 'B':
-			b.WriteString(strings.Repeat("a", fd.count))
-		default:
-			b.WriteString(strings.Repeat(string(fd.letter), fd.count))
-		}
-	}
-	return b.String()
-}
-
-// fieldCounts reduces a skeleton to how many times each letter appears.
-func fieldCounts(skeleton string) map[byte]int {
-	out := map[byte]int{}
-	for i := 0; i < len(skeleton); i++ {
-		c := skeleton[i]
+	replace := true
+	var last byte
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
 		switch c {
-		case 'L':
-			c = 'M'
-		case 'c':
-			c = 'E'
-		case 'k', 'K', 'H', 'h', 'j':
-			c = 'h'
-		case 'v', 'V', 'Z', 'O':
-			c = 'z'
-		case 'b', 'B':
-			c = 'a'
-		}
-		out[c]++
-	}
-	return out
-}
-
-// closestSkeleton finds the available format nearest to what was asked for.
-//
-// Nearness is a distance rather than a score, and the ordering matters more
-// than the numbers: a candidate missing a field the request wanted, or
-// carrying one it did not, is far away, while one that merely writes a field
-// at another width is close. That is what makes "yMMMd" answer a request for
-// "yMMMMd" -- the order was what was wanted from it and the width was not --
-// rather than "MMMM" answering it.
-//
-// Within a field, writing a name where a number was asked for is a bigger
-// difference than writing two digits where one was asked for, since the first
-// changes what the field says and the second only how wide it is.
-func (f *DateTimeFormat) closestSkeleton(want string) (string, bool) {
-	wanted := fieldCounts(want)
-	wantHour := hourLetterOf(want)
-
-	const (
-		missing  = 4096
-		extra    = 4096
-		classGap = 64
-	)
-	bestDistance, bestPattern, bestID := -1, "", ""
-	for _, s := range f.calendar.Available {
-		// The hour letter is not a width: h counts to twelve and H to
-		// twenty-four, and a skeleton that counts the other way is the wrong
-		// one however well its other fields line up.
-		if wantHour != 0 {
-			if got := hourLetterOf(s.ID); got != 0 && got != wantHour {
-				continue
+		case '\'':
+			replace = !replace
+			b.WriteByte(c)
+		case 'H', 'h', 'K', 'k':
+			if replace && last == 'd' {
+				b.WriteByte(' ')
 			}
-		}
-		have := fieldCounts(s.ID)
-
-		distance := 0
-		for letter, n := range wanted {
-			m, present := have[letter]
-			if !present {
-				distance += missing
-				continue
-			}
-			if isTextWidth(letter, n) != isTextWidth(letter, m) {
-				distance += classGap
-			}
-			if diff := n - m; diff > 0 {
-				distance += diff
+			if replace {
+				b.WriteByte(to)
 			} else {
-				distance -= diff
+				b.WriteByte(c)
 			}
+		default:
+			b.WriteByte(c)
 		}
-		for letter := range have {
-			if _, asked := wanted[letter]; !asked {
-				distance += extra
-			}
-		}
-		if bestDistance < 0 || distance < bestDistance ||
-			(distance == bestDistance && s.ID < bestID) {
-			bestDistance, bestPattern, bestID = distance, s.Pattern, s.ID
-		}
-	}
-	return bestPattern, bestPattern != ""
-}
-
-// isTextWidth reports whether a field written this many times is a name rather
-// than a number. Only the fields that can be either are asked.
-func isTextWidth(letter byte, count int) bool {
-	switch letter {
-	case 'M':
-		return count >= 3
-	case 'E':
-		return true
-	case 'G', 'a':
-		return true
-	}
-	return false
-}
-
-// hourLetterOf is the way a skeleton counts hours, or zero if it has none.
-func hourLetterOf(skeleton string) byte {
-	for i := 0; i < len(skeleton); i++ {
-		switch c := skeleton[i]; c {
-		case 'h', 'K':
-			return 'h'
-		case 'H', 'k':
-			return 'H'
-		}
-	}
-	return 0
-}
-
-// adjustWidths bends a pattern's fields to the widths that were asked for,
-// keeping the order and the literals the locale chose.
-func (f *DateTimeFormat) adjustWidths(pattern, want string) string {
-	wanted := map[byte]int{}
-	for i := 0; i < len(want); i++ {
-		c := want[i]
-		switch c {
-		case 'j':
-			continue
-		case 'L':
-			c = 'M'
-		case 'c':
-			c = 'E'
-		case 'K', 'H', 'h', 'k':
-			c = 'h'
-		case 'v', 'V', 'Z', 'O':
-			c = 'z'
-		case 'b', 'B':
-			c = 'a'
-		}
-		wanted[c]++
-	}
-
-	var b strings.Builder
-	for _, fd := range parseDatePattern(pattern) {
-		if fd.letter == 0 {
-			b.WriteString(quoteLiteral(fd.literal))
-			continue
-		}
-		key := fd.letter
-		switch key {
-		case 'L':
-			key = 'M'
-		case 'c':
-			key = 'E'
-		case 'K', 'H', 'h', 'k':
-			key = 'h'
-		case 'v', 'V', 'Z', 'O':
-			key = 'z'
-		case 'b', 'B':
-			key = 'a'
-		}
-		count := fd.count
-		if n, ok := wanted[key]; ok && n > 0 {
-			// A width is adjusted only within its own class. Turning a number
-			// into a name is not a widening: Japanese writes the month as
-			// "M月", where the 月 belongs to the pattern, and widening the M to
-			// a name would write the character twice.
-			if isTextWidth(key, n) == isTextWidth(key, fd.count) {
-				count = n
-			}
-		}
-		if key == 'h' && count < 2 && f.padsHour() {
-			count = 2
-		}
-		b.WriteString(strings.Repeat(string(fd.letter), count))
+		last = c
 	}
 	return b.String()
 }
 
-// preferredHour is the way this locale counts hours when nobody said.
-//
-// It is read from the locale's own medium time pattern rather than from a
-// table of preferences: that pattern is what the locale actually writes, so it
-// cannot disagree with itself. A locale that writes "h:mm:ss a" counts to
-// twelve and one that writes "HH:mm:ss" counts to twenty-four.
-func (f *DateTimeFormat) preferredHour() byte {
-	for _, length := range []int{datedata.Medium, datedata.Full} {
-		for _, fd := range parseDatePattern(f.calendar.TimeFormats[length]) {
-			switch fd.letter {
-			case 'h', 'H', 'K', 'k':
-				return fd.letter
+// allowedHourFormats is ICU's getAllowedHourFormats: the hour letter a "j"
+// means in this locale and the cycles it allows, from CLDR's time data, keyed
+// by the language and region or by the region alone. A -u-hc keyword sets
+// the letter.
+func allowedHourFormats(src Source, loc Locale) (byte, []string, error) {
+	table, err := loadTimeData(src)
+	if err != nil {
+		return 0, nil, err
+	}
+	language := loc.Language.String()
+	region := regionForSupplementalData(loc)
+	if language == "" || language == "und" || region == "" {
+		if fb, err := NewFallbacker(src); err == nil {
+			if full, ok := fb.Maximize(loc.Data()); ok {
+				language = full.Language.String()
+				region = full.Region.String()
 			}
 		}
 	}
-	return 'H'
+	if language == "" {
+		language = "und"
+	}
+	if region == "" {
+		region = "001"
+	}
+	entry, ok := table[language+"_"+region]
+	if !ok {
+		entry, ok = table[region]
+	}
+
+	var hourChar byte
+	if kw, has := loc.keywordValue("hc"); has {
+		switch kw {
+		case "h24":
+			hourChar = 'k'
+		case "h23":
+			hourChar = 'H'
+		case "h12":
+			hourChar = 'h'
+		case "h11":
+			hourChar = 'K'
+		}
+	}
+	if !ok {
+		if hourChar == 0 {
+			hourChar = 'H'
+		}
+		return hourChar, []string{"H"}, nil
+	}
+	if hourChar == 0 {
+		switch entry.preferred {
+		case "h":
+			hourChar = 'h'
+		case "K":
+			hourChar = 'K'
+		case "k":
+			hourChar = 'k'
+		default:
+			hourChar = 'H'
+		}
+	}
+	return hourChar, entry.allowed, nil
 }
 
-// padsHour reports whether the hour is written to two digits although only a
-// plain number was asked for.
-//
-// It happens in one place: a locale that counts to twelve, asked to count to
-// twenty-four instead. English writes "9:30 AM" but "09:30", and German, which
-// counts to twenty-four already, writes "9:30" either way. The rule is ICU's
-// and the corpus is what establishes it.
-func (f *DateTimeFormat) padsHour() bool {
-	forced := f.hourLetter()
-	if forced != 'H' && forced != 'k' {
-		return false
+// regionForSupplementalData is the region a locale's preferences are looked
+// up by: the -u-rg keyword's where it names one, else the locale's own.
+func regionForSupplementalData(loc Locale) string {
+	if rg, ok := loc.keywordValue("rg"); ok && len(rg) >= 3 {
+		return strings.ToUpper(rg[:2])
 	}
-	preferred := f.preferredHour()
-	return preferred == 'h' || preferred == 'K'
+	return loc.Region.String()
+}
+
+type timeDataEntry struct {
+	preferred string
+	allowed   []string
+}
+
+// loadTimeData reads CLDR's hour-cycle preferences: a line per key, the
+// preferred cycle, and the allowed ones separated by commas.
+func loadTimeData(src Source) (map[string]timeDataEntry, error) {
+	b, err := src.Open(MarkerTimeData, DataLocale{})
+	if err != nil {
+		return nil, fmt.Errorf("intl: the hour-cycle preferences: %w", err)
+	}
+	out := map[string]timeDataEntry{}
+	for _, line := range strings.Split(string(b), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			continue
+		}
+		out[fields[0]] = timeDataEntry{preferred: fields[1], allowed: strings.Split(fields[2], ",")}
+	}
+	return out, nil
 }

@@ -14,7 +14,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // The widths a name may be written at, in the order they are stored.
 const (
@@ -108,7 +108,24 @@ type Calendar struct {
 
 	// Available are the skeletons the locale answers, sorted by id.
 	Available []Skeleton
+
+	// DateNumbers and TimeNumbers are the numbering overrides of the style
+	// patterns, as CLDR writes them: "M=romanlow" has Hawaiian write the
+	// month of its short date in lowercase Roman numerals, and "hanidec"
+	// would write every number in Chinese digits. Empty for most.
+	DateNumbers [Lengths]string
+	TimeNumbers [Lengths]string
+
+	// AppendItems say how to add a field a pattern lacks, "{0} {1}" for the
+	// zone, by pattern-generator field; see Fields. {0} is the pattern, {1}
+	// the field and {2} the field's name.
+	AppendItems [Fields]string
 }
+
+// Fields is how many fields ICU's pattern generator distinguishes: era, year,
+// quarter, month, week of year, week of month, weekday, day of year, weekday
+// of month, day, day period, hour, minute, second, fraction, zone.
+const Fields = 16
 
 // Month returns a month's name, counting from one, falling back from a width
 // the locale does not give to the wide one.
@@ -167,6 +184,10 @@ type Locale struct {
 	// language that names both a range covering midnight and the moment
 	// itself is written with the range, which is what ICU does.
 	PeriodRules []PeriodRule
+
+	// FieldNames are what the locale calls each field, by pattern-generator
+	// field, for an append item that names the field it adds.
+	FieldNames [Fields]string
 }
 
 // Period returns the part of the day a time falls in, as minutes past
@@ -236,6 +257,9 @@ func Encode(l *Locale) []byte {
 			b.Uint(0)
 		}
 	}
+	for _, name := range l.FieldNames {
+		b.String(name)
+	}
 	b.Uint(len(l.Calendars))
 	for i := range l.Calendars {
 		b.String(l.Calendars[i].Name)
@@ -279,6 +303,14 @@ func encodeCalendar(b *blob.Writer, c *Calendar) {
 		b.String(s.ID)
 		b.String(s.Pattern)
 	}
+	for _, item := range c.AppendItems {
+		b.String(item)
+	}
+	for _, set := range [][Lengths]string{c.DateNumbers, c.TimeNumbers} {
+		for _, s := range set {
+			b.String(s)
+		}
+	}
 }
 
 // Decode reads what Encode wrote.
@@ -299,6 +331,9 @@ func Decode(data []byte) (*Locale, error) {
 			rule.Point = r.Uint() == 1
 			l.PeriodRules = append(l.PeriodRules, rule)
 		}
+	}
+	for i := range l.FieldNames {
+		l.FieldNames[i] = r.String()
 	}
 	n := r.Uint()
 	if n < 0 || n > r.Left() {
@@ -371,5 +406,13 @@ func decodeCalendar(r *blob.Reader, c *Calendar) {
 		id := r.String()
 		pattern := r.String()
 		c.Available = append(c.Available, Skeleton{ID: id, Pattern: pattern})
+	}
+	for i := range c.AppendItems {
+		c.AppendItems[i] = r.String()
+	}
+	for _, set := range []*[Lengths]string{&c.DateNumbers, &c.TimeNumbers} {
+		for i := range set {
+			set[i] = r.String()
+		}
 	}
 }

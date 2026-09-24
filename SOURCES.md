@@ -209,7 +209,7 @@ archive, through `internal/icusrc`:
 | What | cldr-json | ICU, and so go-intl |
 |---|---|---|
 | a numbering system a locale does not use | missing | the locale's own few fields, then the root's entry, then the locale's Latin data |
-| a non-Gregorian calendar's date-time glue | the root's | the locale's own for that calendar, else its Gregorian glue |
+| a calendar's date-time atTime glue | the root's for other calendars; the locale's own plain glue where it overrides only that | the first bundle up the chain that has one, else the Gregorian one |
 
 ## One deliberate divergence from CLDR
 

@@ -173,9 +173,9 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 
 	case 'y', 'Y', 'u', 'r':
 		if fd.count == 2 {
-			return f.digits(pad(p.year%100, 2))
+			return f.number(fd.letter, p.year%100, 2)
 		}
-		return f.digits(pad(p.year, fd.count))
+		return f.number(fd.letter, p.year, fd.count)
 
 	case 'M', 'L':
 		context := datedata.Format
@@ -184,7 +184,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		}
 		switch {
 		case fd.count <= 2:
-			return f.digits(pad(p.month, fd.count))
+			return f.number(fd.letter, p.month, fd.count)
 		case fd.count == 3:
 			return cal.Month(context, datedata.Abbreviated, p.month)
 		case fd.count == 4:
@@ -194,7 +194,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		}
 
 	case 'd':
-		return f.digits(pad(p.day, fd.count))
+		return f.number('d', p.day, fd.count)
 
 	case 'E', 'e', 'c':
 		context := datedata.Format
@@ -296,50 +296,48 @@ func (f *DateTimeFormat) offsetText(seconds int, short bool) string {
 	return gmtOffset(seconds, f.gmtPattern, f.gmtHourFormat, short)
 }
 
-// gmtOffset writes a zone as its distance from UTC, by the locale's pattern:
-// "GMT{0}" around "+5:30".
+// gmtOffset writes a zone as its distance from UTC, as ICU's
+// formatOffsetLocalizedGMT does: the locale's pattern, "GMT{0}", around one of
+// three offset patterns made from its hour format.
 //
-// The short form drops what it can: the hour is not padded and the minutes are
-// left off when they are zero, so Nairobi is "GMT+3" and Kolkata "GMT+5:30".
-// The long form always writes both, "GMT+03:00".
+// With seconds the hour format is extended by them; without minutes, in the
+// short form, it is cut off after the hour, and whatever followed the hour
+// goes -- Hebrew's hour format ends in a left-to-right mark, which the short
+// form therefore does not write. The hour is one digit in the short form and
+// two in the long whatever the format says, and minutes and seconds are
+// always two: Makhuwa's format says "H:mm" and ICU writes "GMT-05:00".
 func gmtOffset(seconds int, pattern, hourFormat string, short bool) string {
-	positive, negative, _ := strings.Cut(hourFormat, ";")
+	positive, negative, ok := strings.Cut(hourFormat, ";")
+	if !ok {
+		positive, negative = "+H:mm", "-H:mm"
+	}
 	form := positive
 	if seconds < 0 {
-		if negative != "" {
-			form = negative
-		}
+		form = negative
 		seconds = -seconds
 	}
-	if form == "" {
-		form = "+HH:mm"
-		if seconds < 0 {
-			form = "-HH:mm"
-		}
+	hours, minutes, secs := seconds/3600, seconds%3600/60, seconds%60
+	switch {
+	case secs != 0:
+		form = expandOffsetPattern(form)
+	case minutes == 0 && short:
+		form = truncateOffsetPattern(form)
 	}
-	hours, minutes := seconds/3600, (seconds%3600)/60
 
 	var b strings.Builder
-	fields := parseDatePattern(form)
-	for i, fd := range fields {
+	for _, fd := range parseDatePattern(form) {
 		switch fd.letter {
 		case 'H':
-			width := fd.count
+			width := 2
 			if short {
 				width = 1
 			}
 			b.WriteString(pad(hours, width))
 		case 'm':
-			if short && minutes == 0 {
-				continue
-			}
-			b.WriteString(pad(minutes, fd.count))
+			b.WriteString(pad(minutes, 2))
+		case 's':
+			b.WriteString(pad(secs, 2))
 		default:
-			// The separator before minutes that are not written goes with
-			// them, so that "GMT+3" does not trail a colon.
-			if short && minutes == 0 && i+1 < len(fields) && fields[i+1].letter == 'm' {
-				continue
-			}
 			b.WriteString(fd.literal)
 		}
 	}
@@ -347,4 +345,33 @@ func gmtOffset(seconds int, pattern, hourFormat string, short bool) string {
 		pattern = "GMT{0}"
 	}
 	return strings.ReplaceAll(pattern, "{0}", b.String())
+}
+
+// expandOffsetPattern adds seconds after the minutes, with the separator
+// that stands between the hour and the minutes.
+func expandOffsetPattern(hm string) string {
+	mm := strings.Index(hm, "mm")
+	if mm < 0 {
+		return hm
+	}
+	sep := ""
+	if h := strings.LastIndexByte(hm[:mm], 'H'); h >= 0 {
+		sep = hm[h+1 : mm]
+	}
+	return hm[:mm+2] + sep + "ss" + hm[mm+2:]
+}
+
+// truncateOffsetPattern cuts an offset pattern off after its hour.
+func truncateOffsetPattern(hm string) string {
+	mm := strings.Index(hm, "mm")
+	if mm < 0 {
+		return hm
+	}
+	if hh := strings.LastIndex(hm[:mm], "HH"); hh >= 0 {
+		return hm[:hh+2]
+	}
+	if h := strings.LastIndexByte(hm[:mm], 'H'); h >= 0 {
+		return hm[:h+1]
+	}
+	return hm
 }

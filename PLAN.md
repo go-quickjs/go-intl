@@ -379,6 +379,46 @@ half-megabyte root table out of the embedded files; the tables are then read
 where they lie. A comparison is 1.5-2 µs. go-quickjs should keep collators
 rather than build one per `localeCompare`.
 
+### DateTimeFormat, as Node chooses its patterns
+
+The corpus covers DateTimeFormat in depth for a few locales. A sweep of every
+locale Node supports -- 23 option sets, two zones, two seasons, 33,332 cases
+in `testdata/datetime_node.js` -- found go-intl at 96.6%, and the misses were
+in how a pattern is chosen, not in the data.
+
+go-intl's skeleton matcher was a reading of UTS #35. Node runs a particular
+implementation of it, so the matcher is now that implementation: ICU's
+`DateTimePatternGenerator` ported from `dtptngen.cpp` (`dtpg.go`) -- its
+distance weights, tie-breaking, field adjustment and appending -- driven the
+way V8 drives it (`skeleton.go`): the skeleton spelled in V8's field order
+with the hour letter of the resolved cycle, the hour cycle resolved from
+`hour12`, `hourCycle`, `-u-hc` and CLDR's time data, and V8's rewriting of
+the hour letters afterwards. Style patterns are built as ICU's date
+formatter builds them, and regenerated when V8 finds the hour cycle
+disagrees.
+
+**33,330 of 33,332** match, and the corpus's 1,230 still do. Along the way,
+three more things turned out to be ICU's rather than CLDR's as cldr-json
+resolves it, and now come from ICU's sources: the atTime glue where a locale
+overrides only the plain one (French in Mali), the offset format's
+truncation and fixed digit widths (Hebrew, Makhuwa), and numbering overrides
+on a style pattern (Hawaiian writes its short month in Roman numerals).
+
+The two left are a known gap: ICU's zone-name tree has no Montenegrin
+Cyrillic Serbian bundle, and ICU's fallback for a missing bundle takes it to
+the Latin one. Matching that needs ICU's fallback per data tree.
+
+Two findings for later:
+
+- **The plain space before AM/PM is V8's, not ICU's.** V8 replaces U+202F
+  with a space in every formatted date (`Replace202F`, reverting ICU 72).
+  `dategen` bakes the replacement into the data; it belongs in the NodeICU
+  profile, with the data keeping CLDR's character.
+- **125 of the 766 locales go-intl has date data for are not ones Node
+  supports at all** -- Afar, Occitan and others ICU does not ship. Node
+  negotiates them away to its default locale. Matching that is the
+  negotiation layer's job, from ICU's installed locales.
+
 ### Numbering systems
 
 **Done.** NumberFormat, DateTimeFormat and RelativeTimeFormat take the
@@ -426,7 +466,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
 | 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
-| 5. DateTimeFormat | 1,230/1,230, Gregorian and Buddhist; surface incomplete, see below |
+| 5. DateTimeFormat | 1,230/1,230, and 33,330/33,332 against node over every locale; surface incomplete, see below |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
