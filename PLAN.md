@@ -325,6 +325,60 @@ every character up to U+2FFFF was checked against node in all four forms:
 *Gate:* collation order across the corpus's locales, including the CJK
 tailorings `internal/icu` carries.
 
+**Done.** The collator reads ICU's own collation tables, as ICU 78.3 exports
+them for ICU4X: a code point trie to 32-bit elements, expansion tables, and
+UCharsTrie contexts for contractions and prefixes. Those are inputs to the
+algorithm - ICU builds them from CLDR's rules with a rule compiler of many
+thousands of lines, and reading them is what every ICU runtime does. The
+algorithm is ICU's: the element tags, discontiguous contractions, numeric
+runs, script reordering, and the level-by-level comparison of
+`CollationCompare`, on NFD text.
+
+What the export does not carry had to come from somewhere, and each gap was
+found by the differential below rather than guessed:
+
+- **The combining diacritics and the conjoining jamo are not in the trie.**
+  The export keeps them in tables of their own (`dia`, `jamo`), and a collator
+  that reads only the trie gives U+0308 an unassigned weight.
+- **A tailoring's jamo are lost entirely.** The search collations make a
+  trailing consonant equal to the leading one, and the export drops that; ICU4X
+  lives without it. Those rules have one shape, `&ᄀᄀ =ᄁ`, so `collgen` reads
+  them from ICU's rule sources as runs of jamo - inputs, weighed at run time -
+  and refuses any jamo rule of another shape.
+- **How collation locales inherit is not in the export.** ICU's collation tree
+  differs from the ordinary one: Bokmål collates as Norwegian, Cantonese as
+  traditional Chinese, and simplified and traditional Chinese default to
+  different collations. That comes from ICU's `data/coll` sources:
+  `LOCALE_DEPS.json` and each locale's `default`.
+- **Han order.** The export offers `implicithan` and `unihan`. Node sorts
+  U+3400 before U+9FA0, which only radical-and-stroke order does, so go-intl
+  takes `unihan`. The `fast`/`small` choice turned out not to apply: the
+  collation tries carry their own type, and the normalizer does not use the
+  export at all.
+
+Beyond the corpus, `testdata/collator_node.js` records the order node puts
+1,113 words in - every script the tailorings touch, kana, Hangul, Han, digits,
+text out of canonical order - for **every installed collation locale under
+every option set and every collation type it supports: 2,903 cases, 2,901 of
+them exact.** The other two are one known gap:
+
+- **`ko-u-co-searchjl`** gives jamo secondary weights of its own and prefix
+  contexts. Its weights exist only in ICU's compiled data and allocating them
+  is the rule compiler's job. Nothing in go-quickjs or test262 reaches it.
+- **`en-US-POSIX`** (`en-US-u-va-posix`) carries a variant, which a data
+  locale cannot hold, so its ASCII-order collation is not generated and the
+  locale sorts as English. Node supports it; test262 and go-quickjs only
+  canonicalize the tag, never collate with it.
+
+One compat-profile entry: node writes an option-chosen collation into the
+resolved locale (`de` with `{collation: "eor"}` resolves to `de-u-co-eor`);
+ECMA-402's ResolveLocale does not.
+
+Cost: a collator builds in about 0.3 ms, most of it the source copying the
+half-megabyte root table out of the embedded files; the tables are then read
+where they lie. A comparison is 1.5-2 µs. go-quickjs should keep collators
+rather than build one per `localeCompare`.
+
 ### 8. Segmenter
 
 Needs the LSTM models and the dictionaries for Chinese, Japanese, Thai, Khmer,
@@ -351,11 +405,11 @@ README's Intl section.
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
-| 7. Collator | not started - unblocked now the normalizer is done |
+| 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 5,914 of 7,949 cases, every one of them exact.**
+**Corpus coverage so far: 7,719 of 7,949 cases, every one of them exact.**
 
 | Service | Cases | Matching |
 |---|---|---|
@@ -365,25 +419,21 @@ README's Intl section.
 | ListFormat | 120 | 120 |
 | DateTimeFormat | 1,230 | 1,230 |
 | DisplayNames | 34 | 34 |
+| Collator | 1,805 | 1,805 |
 
 Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
-All six finished services meet both gate conditions, which makes them
+All seven finished services meet both gate conditions, which makes them
 **eligible, not scheduled**.
 
 ## What is left
 
 | | Corpus cases | Needs |
 |---|---|---|
-| Collator | 1,805 | `icuexportdata` collation tables; the normalizer, now done |
 | Segmenter | 140 | the LSTM models and the break dictionaries |
 | legacy `toLocale*` | 90 | thin wrappers over DateTimeFormat, no new data |
 | 14 more calendars | 0 | one CLDR package each, no new machinery |
 | DurationFormat | 0 | `cldr-units-full`, already pinned |
 | `PluralRules.selectRange` | 0 | CLDR's plural ranges |
-
-Two choices the collator forces, both recorded in SOURCES.md and neither yet
-made: `fast` or `small` tables for the properties, and `implicithan` or
-`unihan` for how Han characters order.
 
 The three with no corpus cases are the ones to be careful about. The corpus
 cannot grade them, so they need what DisplayNames and RelativeTimeFormat

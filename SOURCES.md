@@ -29,7 +29,8 @@ authority.
 | CLDR (`cldr-json`) | **48.2.0** | numbers, dates, units, names, plurals, zones | yes, by the corpus |
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
-| `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings, normalizer, properties, case, dictionaries | yes |
+| `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
+| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`) | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
@@ -66,6 +67,9 @@ Other URLs:
 - `https://github.com/unicode-org/cldr-json/releases/download/{tag}/cldr-{tag}-json-full.zip`
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4x-icuexportdata-78.3.zip`
   — sha256 `eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60`, 5.6 MB
+- `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-data.zip`
+  — sha256 `9d8b3899096aeb83e4e21ef8a40fec9e03b28db18c48452efac882ce25a91e27`, 20 MB.
+  `collgen` checks both checksums before reading either archive.
 - `https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt` - sha256
   `2e1efc1dcb59c575...`, vendored in `internal/normgen`
 - `https://www.unicode.org/Public/17.0.0/ucd/CompositionExclusions.txt` -
@@ -129,12 +133,32 @@ The tailorings go-quickjs carries are all present: `zh_pinyin`, `zh_stroke`,
 node-scraped collation data, the Perl-derived normalizer tables, and the break
 dictionaries currently vendored as loose `.txt` copies from the ICU source tree.
 
-Two choices it forces, both to settle in stage 2:
+Two choices it seemed to force, both settled:
 
-- **`fast` or `small`** for norm, uprops and ucase — ICU4X's table-size against
-  lookup-speed tradeoff.
-- **`implicithan` or `unihan`** for how Han characters order. ICU's default is
-  implicit computation, with `zh_unihan` and `ja_unihan` offered separately.
+- **`implicithan` or `unihan`** for how Han characters order: **`unihan`**,
+  by evidence. The two flavors differ in the root, and Node sorts U+3400
+  before U+9FA0, which only radical-and-stroke order does; implicit order puts
+  the URO block, U+9FA0 included, before Extension A. ICU4X ships
+  `implicithan` because it is smaller; ICU4C does not.
+- **`fast` or `small`** for norm, uprops and ucase: **not a choice after
+  all** for anything built so far. The collation tries carry their own type,
+  and the normalizer is generated from the Unicode Character Database. It will
+  come back if the segmenter reads the export's property tables.
+
+**What the export leaves out of collation**, and where it comes from instead:
+
+- The combining diacritics U+0300-U+034E and the conjoining jamo are not in
+  any trie. The root's are in `root_standard_dia` and `root_standard_jamo`,
+  and a tailoring that changes the diacritics (Vietnamese, Ewe) has a `dia`
+  file of its own.
+- A tailoring's jamo are dropped altogether. For the search collations they
+  are read from ICU's rule sources in the data archive; Korean `searchjl`
+  cannot be, and is a recorded gap (PLAN.md, stage 7).
+- The collation tree - aliases, parents, default types, the installed
+  locales - is not in the export. It is in the data archive's `data/coll`:
+  `LOCALE_DEPS.json` and each locale's `default`. It is not the ordinary
+  tree: CLDR's `parentLocales` has a `collations` section of its own, and ICU
+  folds that into these files.
 
 **tzdb is 2026b in ICU 78.3, but go-quickjs bundles 2026c.** Its
 `internal/icu/timezones.go` calls the bundle "the same version used by the

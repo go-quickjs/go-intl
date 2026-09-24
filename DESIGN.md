@@ -74,12 +74,15 @@ been violated. This one rule is the difference between a library and a memo pad.
 
 ## Data sources
 
-Four upstream inputs, matching what ICU4X's `provider/source` takes:
+The upstream inputs, which are what ICU4X's `provider/source` takes plus two
+it does not:
 
 | Source | Feeds |
 |---|---|
 | `unicode-org/cldr-json` releases | numbers, dates, units, names, plurals, zones |
-| `icuexportdata` (tagged release) | UCA and collation tailorings, normalizer, properties, casemap |
+| `icuexportdata` (tagged release) | UCA and collation tailorings; later properties, casemap |
+| ICU's data sources (`icu4c-*-data.zip`) | the collation tree and what the export drops from tailorings |
+| Unicode Character Database | normalization |
 | IANA tzdb | zone rules |
 | segmenter LSTM models | Thai, Khmer, Lao, Burmese word breaking |
 

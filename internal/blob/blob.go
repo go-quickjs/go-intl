@@ -71,6 +71,23 @@ func (r *Reader) String() string {
 	return s
 }
 
+// Bytes reads the next length-prefixed string without copying it: what it
+// returns shares the table's memory, so a table read this way is read where it
+// lies, and the caller must not change it.
+func (r *Reader) Bytes() []byte {
+	n := r.Uint()
+	if r.err != nil {
+		return nil
+	}
+	if n > len(r.b) {
+		r.err = fmt.Errorf("blob: a string of %d bytes with %d left", n, len(r.b))
+		return nil
+	}
+	b := r.b[:n:n]
+	r.b = r.b[n:]
+	return b
+}
+
 // Uint reads the next number.
 func (r *Reader) Uint() int {
 	if r.err != nil {

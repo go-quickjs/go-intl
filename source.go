@@ -61,6 +61,15 @@ const (
 	// MarkerNormalization is how characters come apart and go back together,
 	// which is Unicode's rather than any locale's.
 	MarkerNormalization Marker = "normalization"
+	// MarkerCollation is the collations one locale defines: what it changes
+	// about the root order, and what it sorts by default.
+	MarkerCollation Marker = "collation"
+	// MarkerCollationRoot is the root collation table, which every
+	// collation falls back to.
+	MarkerCollationRoot Marker = "collationroot"
+	// MarkerCollationTree is how collation locales inherit from one
+	// another, which differs from the ordinary fallback.
+	MarkerCollationTree Marker = "collationtree"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

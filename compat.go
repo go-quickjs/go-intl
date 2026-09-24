@@ -42,7 +42,17 @@ func (c Compat) String() string {
 // Number formatting has none so far. The ones go-quickjs carries today are in
 // date formatting -- proleptic Islamic era names, the Japanese hour cycle, and
 // Temporal's handling of a standalone era -- and they arrive with stage 5.
-var Divergences = []Divergence{}
+var Divergences = []Divergence{
+	{
+		Area: "Collator",
+		What: "a collation chosen by option, in the resolved locale",
+		Standard: "the locale gains no keyword: ResolveLocale keeps a keyword only for " +
+			"a value the locale itself asked for",
+		Node: "unless the locale had a -u-co keyword it honoured, the locale gains one " +
+			"for the option: new Intl.Collator(\"de\", {collation: \"eor\"}) resolves " +
+			"to \"de-u-co-eor\"",
+	},
+}
 
 // A Divergence is one named difference between the profiles.
 type Divergence struct {
