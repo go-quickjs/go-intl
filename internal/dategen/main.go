@@ -4,12 +4,18 @@
 // pins the release and its checksum, and the path to an unpacked copy is given
 // here.
 //
-//	go run ./internal/dategen <cldr-dates-full/package>
+//	go run ./internal/dategen -icu icu4c-78.3-data.zip <cldr-dates-full/package>
 //
 // Each calendar beyond the Gregorian one is its own CLDR package, and each is
 // given as a further argument:
 //
-//	go run ./internal/dategen <cldr-dates-full/package> <cldr-cal-buddhist-full/package>
+//	go run ./internal/dategen -icu icu4c-78.3-data.zip <cldr-dates-full/package> <cldr-cal-buddhist-full/package>
+//
+// ICU's data sources, pinned in SOURCES.md, settle one thing cldr-json gets
+// wrong. CLDR's root points a calendar's date-and-time glue at the asking
+// locale's own, and cldr-json resolves that as if it pointed at the root's,
+// so Arabic's Buddhist dates take a Latin comma. ICU looks the glue up in the
+// locale's calendar and, finding none, in the locale's Gregorian one.
 //
 // Which calendar a locale reckons in by default is a property of its region
 // rather than its language, and CLDR's calendarPreferenceData says so. That
@@ -19,6 +25,7 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +34,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/datedata"
+	"github.com/go-quickjs/go-intl/internal/icusrc"
 )
 
 //go:embed calendarPreferenceData.json
@@ -77,18 +85,26 @@ var weekdayKeys = [7]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 var eraWidths = [datedata.Widths]string{"eraNames", "eraAbbr", "eraNarrow", "eraNarrow"}
 
 func main() {
-	if len(os.Args) < 2 {
+	icuData := flag.String("icu", "", "the path to icu4c-78.3-data.zip")
+	flag.Parse()
+	if flag.NArg() < 1 || *icuData == "" {
 		fmt.Fprintln(os.Stderr,
-			"usage: go run ./internal/dategen <cldr-dates-full/package> [<cldr-cal-*-full/package>...]")
+			"usage: go run ./internal/dategen -icu <icu4c-78.3-data.zip> <cldr-dates-full/package> [<cldr-cal-*-full/package>...]")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2:]); err != nil {
+	icu, err := icusrc.OpenLocales(*icuData)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dategen:", err)
+		os.Exit(1)
+	}
+	defer icu.Close()
+	if err := run(icu, flag.Arg(0), flag.Args()[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "dategen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(root string, others []string) error {
+func run(icu *icusrc.Locales, root string, others []string) error {
 	main := filepath.Join(root, "main")
 	entries, err := os.ReadDir(main)
 	if err != nil {
@@ -118,6 +134,13 @@ func run(root string, others []string) error {
 			}
 			if c == nil {
 				continue
+			}
+			own, err := ownsAtTime(icu, e.Name(), extras[i].cldr)
+			if err != nil {
+				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
+			}
+			if !own {
+				c.AtTimeFormats = l.Calendars[0].Calendar.AtTimeFormats
 			}
 			l.Calendars = append(l.Calendars, datedata.NamedCalendar{
 				Name: extras[i].bcp47, Calendar: *c,
@@ -415,4 +438,20 @@ func pattern(raw json.RawMessage) string {
 // space.
 func ascii(pattern string) string {
 	return strings.ReplaceAll(pattern, "\u202f", " ")
+}
+
+// ownsAtTime reports whether a locale, or a parent below the root, gives a
+// calendar a date-and-time glue of its own. Only then is cldr-json's glue for
+// it the locale's; otherwise ICU takes the locale's Gregorian glue.
+func ownsAtTime(icu *icusrc.Locales, name, calendar string) (bool, error) {
+	chain, err := icu.Chain(strings.ReplaceAll(name, "-", "_"))
+	if err != nil {
+		return false, err
+	}
+	for _, n := range chain {
+		if n.Get("calendar", calendar, "DateTimePatterns%atTime") != nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }

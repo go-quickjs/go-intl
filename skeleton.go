@@ -128,7 +128,14 @@ func (f *DateTimeFormat) skeletonPattern() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		glue := f.calendar.DateTimeFormats[glueLength(date)]
+		// ICU joins the halves with the same glue a whole date and a whole
+		// time take, the "atTime" one: Bengali writes a comma here that its
+		// plain glue does not have, and English writes "at" after a long
+		// date.
+		glue := f.calendar.AtTimeFormats[glueLength(date)]
+		if glue == "" {
+			glue = f.calendar.DateTimeFormats[glueLength(date)]
+		}
 		if glue == "" {
 			glue = "{1}, {0}"
 		}
