@@ -20,7 +20,10 @@ const instants = [1704467045000, 1721467800000];
 const lines = [];
 for (const loc of locales) {
   for (const style of styles) {
-    for (const zone of Intl.supportedValuesOf("timeZone")) {
+    // Every zone Node knows, and offsets from UTC in each of the forms
+    // ECMA-402 accepts.
+    const offsets = ["+05:30", "-08", "+0530", "-00:00", "+00", "+14:00", "-23:59"];
+    for (const zone of [...Intl.supportedValuesOf("timeZone"), ...offsets]) {
       const opts = { calendar: "gregory", timeZone: zone, hour: "numeric", timeZoneName: style };
       const f = new Intl.DateTimeFormat(loc, opts);
       for (const t of instants) {

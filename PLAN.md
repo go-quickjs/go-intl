@@ -423,8 +423,14 @@ Two findings for later:
 **Done.** DateTimeFormat takes `dayPeriod`, `fractionalSecondDigits` and all
 six `timeZoneName` styles. `testdata/datetime_features_node.js` records
 66,023 cases over every locale Node supports, and
-`testdata/datetime_zones_node.js` 45,144 more: every zone Node knows, in
-every style, in nine locales. All match but 36, a named gap.
+`testdata/datetime_zones_node.js` 45,900 more: every zone Node knows and
+offsets in each form ECMA-402 accepts, in every style, in nine locales. All
+match but 36, a named gap.
+
+An offset zone ("+05:30", "+0530", "-08") is reported as `±HH:MM`, minus
+zero as plus, and written as its offset. V8 hands ICU a custom zone, and ICU
+spells the custom zone of no offset "GMT", so "+00:00" alone is named: as
+Etc/GMT, "Greenwich Mean Time".
 
 Zone names follow ICU's TimeZoneFormat and TimeZoneGenericNames, not CLDR's
 description of them:
@@ -506,7 +512,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
 | 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
-| 5. DateTimeFormat | 1,230/1,230, and 144,497 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits` and every `timeZoneName` done; offset zones, `formatRange` and 14 calendars left |
+| 5. DateTimeFormat | 1,230/1,230, and 145,253 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName` and offset zones done; `formatRange` and 14 calendars left |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -555,7 +561,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Service | Corpus | Missing |
 |---|---|---|
 | NumberFormat | done | exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
-| DateTimeFormat | done | offset time zones; `formatRange`, `formatRangeToParts`; 14 calendars |
+| DateTimeFormat | done | `formatRange`, `formatRangeToParts`; 14 calendars |
 | PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |

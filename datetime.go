@@ -167,7 +167,10 @@ type DateTimeFormat struct {
 	numbers  *numberDigits
 
 	location *time.Location
+	// zoneName is the zone as resolvedOptions reports it, and zoneID the
+	// identifier its names are found by, empty for a zone that has none.
 	zoneName string
+	zoneID   string
 
 	// fields is the pattern this formatter writes, already taken apart.
 	fields []dateField
@@ -229,7 +232,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 
 	f := &DateTimeFormat{locale: loc, opts: opts, data: data, calendar: cal, system: system}
-	if f.location, f.zoneName, err = loadZone(opts.TimeZone); err != nil {
+	if f.location, f.zoneName, f.zoneID, err = loadZone(opts.TimeZone); err != nil {
 		return nil, err
 	}
 	if numbers, err := loadNumbers(src, loc); err == nil {
@@ -260,7 +263,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		if f.zones, err = loadZoneNames(src, loc); err != nil {
 			return nil, err
 		}
-		f.zone = f.zones.zone(f.zoneName, f.location)
+		f.zone = f.zones.zone(f.zoneID, f.location)
 	}
 	return f, nil
 }
@@ -337,17 +340,67 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 	return nil, fmt.Errorf("intl: no date data for %s: %w", loc, ErrNotFound)
 }
 
-// loadZone finds a named time zone. An empty name is UTC, which is what
-// ECMA-402 falls back to when the host says nothing.
-func loadZone(name string) (*time.Location, string, error) {
+// loadZone finds a time zone: a named one, or an offset from UTC. An empty
+// name is UTC, which is what ECMA-402 falls back to when the host says
+// nothing. It returns the zone, the name resolvedOptions reports, and the
+// identifier the zone is named by.
+func loadZone(name string) (*time.Location, string, string, error) {
 	if name == "" {
-		return time.UTC, "UTC", nil
+		return time.UTC, "UTC", "UTC", nil
+	}
+	if seconds, resolved, ok := parseOffsetZone(name); ok {
+		// V8 hands ICU an offset as a custom zone, "GMT+05:30", which has
+		// no names and so is written as its offset. ICU spells a custom
+		// zone of no offset "GMT", which is Etc/GMT and has the names of
+		// Greenwich Mean Time.
+		id := ""
+		if seconds == 0 {
+			id = "GMT"
+		}
+		return time.FixedZone(resolved, seconds), resolved, id, nil
 	}
 	loc, err := time.LoadLocation(name)
 	if err != nil {
-		return nil, "", fmt.Errorf("intl: %q is not a time zone: %w", name, err)
+		return nil, "", "", fmt.Errorf("intl: %q is not a time zone: %w", name, err)
 	}
-	return loc, name, nil
+	return loc, name, name, nil
+}
+
+// parseOffsetZone reads an offset time zone as ECMA-402 allows one: a sign
+// and two digits of hours, then optionally two of minutes, with or without a
+// colon -- "+05:30", "+0530", "-08". It returns the offset in seconds and
+// the form resolvedOptions reports, "+05:30"; minus zero is "+00:00".
+func parseOffsetZone(s string) (int, string, bool) {
+	if len(s) < 3 || s[0] != '+' && s[0] != '-' {
+		return 0, "", false
+	}
+	digits := s[1:]
+	switch {
+	case len(digits) == 2:
+		digits += "00"
+	case len(digits) == 5 && digits[2] == ':':
+		digits = digits[:2] + digits[3:]
+	case len(digits) != 4:
+		return 0, "", false
+	}
+	for i := 0; i < 4; i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return 0, "", false
+		}
+	}
+	hours := int(digits[0]-'0')*10 + int(digits[1]-'0')
+	minutes := int(digits[2]-'0')*10 + int(digits[3]-'0')
+	if hours > 23 || minutes > 59 {
+		return 0, "", false
+	}
+	seconds := hours*3600 + minutes*60
+	sign := s[0]
+	if seconds == 0 {
+		sign = '+'
+	} else if sign == '-' {
+		seconds = -seconds
+	}
+	return seconds, string(sign) + digits[:2] + ":" + digits[2:], true
 }
 
 // quoteLiteral puts a literal back into a pattern, quoting the letters that
