@@ -316,12 +316,11 @@ one that justifies the split-data design: it is most of the 14 MB.
 Needs `icuexportdata` for UCA and tailorings, plus normalization. Where ICU4X
 did its hardest work.
 
-**Prerequisite, and it is not optional:** replace the normalizer's data source
-first. go-quickjs's tables are Unicode 13.0.0, taken from whatever UCD the
-system's Perl shipped, while the anchor is 17.0. UCA runs on NFD, so the
-Collator sits directly on that table and every character changed between those
-versions is a sorting divergence waiting to surface in the hardest stage. See
-SOURCES.md.
+**Prerequisite: done.** go-intl carries its own normalizer, generated from the
+Unicode Character Database at 17.0.0, rather than inheriting go-quickjs's
+Unicode 13 tables. UCA runs on NFD, so the collator sits directly on it, and
+every character up to U+2FFFF was checked against node in all four forms:
+779,392 normalizations, no differences.
 
 *Gate:* collation order across the corpus's locales, including the CJK
 tailorings `internal/icu` carries.

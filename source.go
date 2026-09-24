@@ -58,6 +58,9 @@ const (
 	// MarkerCalendarPrefs maps a region to the calendar it reckons in, which
 	// is likewise not a matter of language.
 	MarkerCalendarPrefs Marker = "calendarprefs"
+	// MarkerNormalization is how characters come apart and go back together,
+	// which is Unicode's rather than any locale's.
+	MarkerNormalization Marker = "normalization"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

@@ -27,7 +27,7 @@ authority.
 |---|---|---|---|
 | ICU | 78.3 | the anchor; the golden corpus oracle | yes, from node |
 | CLDR (`cldr-json`) | **48.2.0** | numbers, dates, units, names, plurals, zones | yes, by the corpus |
-| Unicode (UCD) | 17.0 | properties, normalization | yes, from node |
+| Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings, normalizer, properties, case, dictionaries | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
@@ -66,6 +66,10 @@ Other URLs:
 - `https://github.com/unicode-org/cldr-json/releases/download/{tag}/cldr-{tag}-json-full.zip`
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4x-icuexportdata-78.3.zip`
   — sha256 `eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60`, 5.6 MB
+- `https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt` - sha256
+  `2e1efc1dcb59c575...`, vendored in `internal/normgen`
+- `https://www.unicode.org/Public/17.0.0/ucd/CompositionExclusions.txt` -
+  vendored likewise
 - `https://github.com/unicode-org/lstm_word_segmentation/releases`
 
 ## Which CLDR 48, settled
@@ -147,14 +151,15 @@ database, as shipped with the system's Perl" — an accidental input, four
 versions behind the `\p{...}` property tables in the same binary, which are at
 17.0.0.
 
-This is not cosmetic for go-intl: **UCA requires NFD**, so the Collator sits
-directly on this table. Every character added or recomposed between Unicode 13
-and 17 is a latent sorting divergence that would surface late, inside the
-hardest stage. Replace the normalizer's data source before stage 7 starts.
+**go-intl does not inherit it.** It carries its own normalizer, generated from
+the Unicode Character Database at 17.0.0 by `internal/normgen`, which is the
+primary source those tables are themselves built from. ICU exports its
+normalizer in `icuexportdata` too, but in ICU4X's trie encoding, which would
+have to be implemented to read; the database is line-based text and says the
+same thing.
 
-The replacement is already in hand: `norm/` in the 78.3 export carries `nfd`,
-`nfkd`, `compositions` and `decompositionex` at the anchor's Unicode 17.0. So
-this is a datagen task in stage 2, not research.
+Every character up to U+2FFFF was put through all four forms and compared with
+node: 779,392 normalizations, no differences.
 
 **Vendored `windowsZones.json` was taken from `cldr-json` `main`, not a tagged
 release.** Its content self-reports CLDR 48, which is correct for the anchor,
