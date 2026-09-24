@@ -48,6 +48,13 @@ const (
 	// MarkerNames is one locale's display names. It is much the largest of
 	// these, and a program that never asks for one never reads it.
 	MarkerNames Marker = "names"
+	// MarkerDates is one locale's calendar names and date patterns.
+	MarkerDates Marker = "dates"
+	// MarkerZoneNames is what one locale calls the time zones.
+	MarkerZoneNames Marker = "zonenames"
+	// MarkerMetazones maps a zone to the metazone it belongs to, which is not
+	// a matter of language and so is one table for every locale.
+	MarkerMetazones Marker = "metazones"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

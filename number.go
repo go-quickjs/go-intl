@@ -376,6 +376,19 @@ const (
 	PartExponentSeparator PartKind = "exponentSeparator"
 	PartExponentMinusSign PartKind = "exponentMinusSign"
 	PartExponentInteger   PartKind = "exponentInteger"
+
+	// The pieces of a date or a time, named as ECMA-402 names them.
+	PartEra              PartKind = "era"
+	PartYear             PartKind = "year"
+	PartMonth            PartKind = "month"
+	PartDay              PartKind = "day"
+	PartWeekday          PartKind = "weekday"
+	PartDayPeriod        PartKind = "dayPeriod"
+	PartHour             PartKind = "hour"
+	PartMinute           PartKind = "minute"
+	PartSecond           PartKind = "second"
+	PartFractionalSecond PartKind = "fractionalSecond"
+	PartTimeZoneName     PartKind = "timeZoneName"
 )
 
 // A Part is one piece of a formatted number.

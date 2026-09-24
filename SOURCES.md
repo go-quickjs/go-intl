@@ -46,8 +46,9 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.0.0.tgz
 | `cldr-numbers-full` | 48.0.0 | `d3d12515b0f6f7c4b5f82586b52b16164a0cffbf4d45a9f2bd894380a96b1cb3` | `internal/numbergen` |
 | `cldr-misc-full` | 48.0.0 | `c72d7aef0022206f0c65bbad9fb3d5524078c89066febb397d94cca9e2983176` | `internal/listgen` |
 | `cldr-units-full` | 48.0.0 | `702cec5d8caa9c1c323188eab426262003f45d1a58fc7ad073be4c7128ee8137` | `internal/unitgen` |
-| `cldr-dates-full` | 48.0.0 | `72fece9f1c86dc2a5e5ae71fdece65f0dc9907ce4371453b3033cb6ed0c2438b` | `internal/reltimegen`, `internal/namegen` |
+| `cldr-dates-full` | 48.0.0 | `72fece9f1c86dc2a5e5ae71fdece65f0dc9907ce4371453b3033cb6ed0c2438b` | `internal/reltimegen`, `internal/namegen`, `internal/dategen`, `internal/zonegen` |
 | `cldr-localenames-full` | 48.0.0 | `b79db910fe2ba45ef20ca2f34ee5c269920a232a43e9af47676b79dfa6c03ac7` | `internal/namegen` |
+| `cldr-bcp47` | 48.0.0 | `3ec2ddbb9eb91b011031de5aa21ccc59390b7b2ebca873d322ab0b35bdd26993` | `internal/zonegen` |
 
 **What is vendored and what is not.** A supplemental file of a few tens of
 kilobytes is vendored beside the generator that reads it, so that generator
@@ -141,3 +142,15 @@ this is a datagen task in stage 2, not research.
 release.** Its content self-reports CLDR 48, which is correct for the anchor,
 but the provenance is unpinned. Re-fetch it from the CLDR 48.0 tag when that
 generator is brought over.
+
+## One deliberate divergence from CLDR
+
+CLDR separates a time from its day period with U+202F, a narrow no-break
+space, in 440 locales. **ICU 78.3 writes a plain space in all of them**, and
+the golden corpus agrees, so `dategen` replaces the character.
+
+CLDR offers "-alt-ascii" patterns that look like they say the same thing and do
+not: `en-GB`'s medium time is `HH:mm:ss` and its ascii alternate is
+`h:mm:ss a`, which is a different clock rather than a different space.
+Preferring those alternates put 75 locales on the wrong clock before the corpus
+caught it. Only the character is taken.
