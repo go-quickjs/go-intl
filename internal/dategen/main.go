@@ -403,11 +403,16 @@ func pattern(raw json.RawMessage) string {
 // one. ECMA-402 does not specify the character, so the reference decides, and
 // the reference is ICU.
 //
+// The thin space U+2009 is not touched. CLDR joins a short date to a time
+// with one in some locales -- traditional Chinese among them -- and ICU keeps
+// it: "2024/1/5", U+2009, "下午3:04:05". An earlier version replaced it too, on the
+// evidence of a medium-length case whose glue was a plain space in CLDR
+// already.
+//
 // Only the character is taken. CLDR's "-alt-ascii" patterns look like they say
 // the same thing and do not: en-GB's medium time is "HH:mm:ss" and its ascii
 // alternate is "h:mm:ss a", which is a different clock rather than a different
 // space.
 func ascii(pattern string) string {
-	pattern = strings.ReplaceAll(pattern, " ", " ")
-	return strings.ReplaceAll(pattern, " ", " ")
+	return strings.ReplaceAll(pattern, "\u202f", " ")
 }

@@ -82,18 +82,25 @@ Node reports ICU 78.3's CLDR as "48.0", and that turned out to be a coarser
 label than a version. The pin started at 48.0.0 on the strength of it, and
 **the corpus moved it to 48.2.0**.
 
-The evidence was one locale and one character. Chinese joins a date to a time:
+The evidence was one locale and its spaces. Traditional Chinese joins a date
+to a time:
 
 | | `zh-Hant` glue |
 |---|---|
 | CLDR 48.0.0 | `{1}{0}` - nothing between them |
-| CLDR 48.2.0 | a thin space, U+2009 |
-| ICU 78.3, per the corpus | a plain space |
+| CLDR 48.2.0 | a plain space, except a thin space U+2009 after a short date |
+| ICU 78.3 | the same as 48.2.0 |
 
-Nothing in 48.0 could produce that space; 48.2 can, once thin spaces are
-normalized the way ICU normalizes them. Regenerating every table at 48.2.0 took
-DateTimeFormat from 1,221 of 1,230 to **1,230 of 1,230** and moved no other
-service by a single case, which is as clean a confirmation as this offers.
+Nothing in 48.0 could produce a space there. Regenerating every table at
+48.2.0 took DateTimeFormat from 1,221 of 1,230 to **1,230 of 1,230** and moved
+no other service by a single case, which is as clean a confirmation as this
+offers.
+
+An earlier version of this section said ICU writes a plain space where CLDR
+has the thin one, and `dategen` flattened U+2009 accordingly. The corpus
+cases it rested on all used a longer date, whose glue is a plain space in CLDR
+already. The legacy `toLocaleString` cases use a short date, and ICU writes
+the thin space there: `2024/1/5`, U+2009, `下午3:04:05`.
 
 The version string was never the authority. The corpus was.
 
@@ -193,10 +200,9 @@ generator is brought over.
 ## One deliberate divergence from CLDR
 
 CLDR separates a time from its day period with U+202F, a narrow no-break
-space, in 440 locales, and joins a date to a time with U+2009, a thin space, in
-some. **ICU 78.3 writes a plain space for both**, and the golden corpus agrees,
-so `dategen` replaces them. Normalizing the thin one is what let the 48.2.0 pin
-close the last nine cases.
+space, in 440 locales. **ICU 78.3 writes a plain space**, and the golden corpus
+agrees, so `dategen` replaces it. The thin space U+2009 that some locales put
+between a short date and a time is kept: ICU keeps it too.
 
 CLDR offers "-alt-ascii" patterns that look like they say the same thing and do
 not: `en-GB`'s medium time is `HH:mm:ss` and its ascii alternate is
