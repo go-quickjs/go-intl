@@ -74,6 +74,8 @@ const (
 type RelativeTimeFormatOptions struct {
 	Numeric RelativeTimeNumeric
 	Style   RelativeTimeStyle
+	// NumberingSystem names the digits to write, as for NumberFormat.
+	NumberingSystem string
 }
 
 // A RelativeTimeFormat writes relative times in one locale. It never changes
@@ -109,9 +111,14 @@ func NewRelativeTimeFormatFrom(src Source, loc Locale, opts RelativeTimeFormatOp
 	default:
 		f.width = reltimedata.Long
 	}
-	if f.numbers, err = NewNumberFormatFrom(src, loc, NumberFormatOptions{}); err != nil {
+	if f.numbers, err = NewNumberFormatFrom(src, loc, NumberFormatOptions{
+		NumberingSystem: opts.NumberingSystem,
+	}); err != nil {
 		return nil, err
 	}
+	// Like NumberFormat, it uses only the numbering system of the extension.
+	nu, _ := f.numbers.locale.keywordValue("nu")
+	f.locale = loc.onlyKeywords().withKeyword("nu", nu)
 	if f.plurals, err = NewPluralRulesFrom(src, loc, PluralRulesOptions{}); err != nil {
 		return nil, err
 	}

@@ -61,6 +61,9 @@ const (
 	// MarkerNormalization is how characters come apart and go back together,
 	// which is Unicode's rather than any locale's.
 	MarkerNormalization Marker = "normalization"
+	// MarkerNumberingSystems is CLDR's numeric numbering systems, with their
+	// digits and what the root says about writing numbers in each.
+	MarkerNumberingSystems Marker = "numberingsystems"
 	// MarkerCollation is the collations one locale defines: what it changes
 	// about the root order, and what it sorts by default.
 	MarkerCollation Marker = "collation"

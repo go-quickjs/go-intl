@@ -109,6 +109,9 @@ type DateTimeFormatOptions struct {
 	// which so far is always the Gregorian one.
 	Calendar string
 
+	// NumberingSystem names the digits to write, as for NumberFormat.
+	NumberingSystem string
+
 	// Required and Defaults are what the legacy methods differ in, and are
 	// the arguments ECMA-402 passes to CreateDateTimeFormat:
 	//
@@ -193,7 +196,12 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		return nil, err
 	}
 	if numbers, err := loadNumbers(src, loc); err == nil {
-		f.numbers = &numberDigits{digits: numbers.Digits, system: numbers.NumberingSystem}
+		chosen, nu, err := selectNumberingSystem(src, numbers, loc, opts.NumberingSystem)
+		if err != nil {
+			return nil, err
+		}
+		f.numbers = &numberDigits{digits: chosen.Digits, system: chosen.NumberingSystem}
+		f.locale = f.locale.withKeyword("nu", nu)
 	}
 	if f.zones, err = loadZoneNames(src, loc); err != nil {
 		return nil, err

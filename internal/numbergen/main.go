@@ -4,9 +4,14 @@
 // not vendored: SOURCES.md pins the release and its checksum, and the path to
 // an unpacked copy is given here.
 //
-//	curl -sLO https://registry.npmjs.org/cldr-numbers-full/-/cldr-numbers-full-48.0.0.tgz
-//	tar xzf cldr-numbers-full-48.0.0.tgz
-//	go run ./internal/numbergen package
+//	curl -sLO https://registry.npmjs.org/cldr-numbers-full/-/cldr-numbers-full-48.2.0.tgz
+//	tar xzf cldr-numbers-full-48.2.0.tgz
+//	go run ./internal/numbergen package icu4c-78.3-data.zip
+//
+// The second argument is ICU's data sources, pinned likewise, for the one
+// thing cldr-json leaves out: what the root says about writing numbers in each
+// numbering system. CLDR's root.xml gives Arabic digits Arabic separators in
+// every locale, and cldr-json's root has only the Latin entries.
 //
 // The two small supplemental files it also needs -- which digits a numbering
 // system writes, and how many decimals a currency is written with -- are
@@ -27,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/numdata"
 )
 
@@ -37,11 +43,11 @@ var numberingSystemsJSON []byte
 var currencyDataJSON []byte
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/numbergen <cldr-numbers-full/package>")
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/numbergen <cldr-numbers-full/package> <icu4c-78.3-data.zip>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1]); err != nil {
+	if err := run(os.Args[1], os.Args[2]); err != nil {
 		fmt.Fprintln(os.Stderr, "numbergen:", err)
 		os.Exit(1)
 	}
@@ -76,7 +82,12 @@ type currenciesFile struct {
 	} `json:"main"`
 }
 
-func run(root string) error {
+func run(root, icuData string) error {
+	icu, err := icusrc.OpenLocales(icuData)
+	if err != nil {
+		return err
+	}
+	defer icu.Close()
 	var systems numberingSystems
 	if err := json.Unmarshal(numberingSystemsJSON, &systems); err != nil {
 		return fmt.Errorf("reading numberingSystems.json: %w", err)
@@ -108,6 +119,9 @@ func run(root string) error {
 		if l == nil {
 			continue
 		}
+		if l.Partials, err = partials(icu, e.Name(), l, digits); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		built[e.Name()] = numdata.Encode(l)
 	}
 	if len(built) == 0 {
@@ -118,12 +132,20 @@ func run(root string) error {
 	if err != nil {
 		return err
 	}
+	rootSystems, err := readRootSystems(icu, digits)
+	if err != nil {
+		return err
+	}
+	systemsTable := numdata.EncodeSystems(rootSystems)
 
 	out := filepath.Join("data", "numbers")
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join("data", "currencydigits.bin"), fractions, 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "numberingsystems.bin"), systemsTable, 0o644); err != nil {
 		return err
 	}
 	// Anything left from a previous run for a locale CLDR no longer has would
@@ -149,8 +171,10 @@ func run(root string) error {
 	return nil
 }
 
-// readLocale builds one locale's data. A locale whose file names a numbering
-// system with no digits is skipped rather than written half-formed.
+// readLocale builds one locale's data: its default numbering system and every
+// other system its file has, each with the marks and patterns CLDR gives it.
+// A locale whose file names a numbering system with no digits is skipped
+// rather than written half-formed.
 func readLocale(main, name string, digits map[string]string) (*numdata.Locale, error) {
 	raw, err := os.ReadFile(filepath.Join(main, name, "numbers.json"))
 	if err != nil {
@@ -172,9 +196,27 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 	if err := json.Unmarshal(entry.Numbers["defaultNumberingSystem"], &system); err != nil {
 		return nil, fmt.Errorf("the default numbering system: %w", err)
 	}
-	out := &numdata.Locale{NumberingSystem: system}
-	if d, ok := digits[system]; ok && d != "0123456789" {
-		out.Digits = d
+	def, err := readSystem(entry.Numbers, system, digits)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", system, err)
+	}
+	out := &numdata.Locale{System: *def}
+
+	// The file is resolved, so it carries every system the locale or its
+	// parents define: usually Latin digits and the locale's native ones.
+	var others []string
+	for key := range entry.Numbers {
+		if other, ok := strings.CutPrefix(key, "symbols-numberSystem-"); ok && other != system {
+			others = append(others, other)
+		}
+	}
+	sort.Strings(others)
+	for _, other := range others {
+		s, err := readSystem(entry.Numbers, other, digits)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", other, err)
+		}
+		out.Others = append(out.Others, *s)
 	}
 
 	if raw, ok := entry.Numbers["minimumGroupingDigits"]; ok {
@@ -190,45 +232,8 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 		out.MinimumGroupingDigits = 1
 	}
 
-	var symbols struct {
-		Decimal         string `json:"decimal"`
-		Group           string `json:"group"`
-		PercentSign     string `json:"percentSign"`
-		PlusSign        string `json:"plusSign"`
-		MinusSign       string `json:"minusSign"`
-		Exponential     string `json:"exponential"`
-		NaN             string `json:"nan"`
-		Infinity        string `json:"infinity"`
-		CurrencyDecimal string `json:"currencyDecimal"`
-		CurrencyGroup   string `json:"currencyGroup"`
-	}
-	if err := unmarshalKey(entry.Numbers, "symbols-numberSystem-"+system, &symbols); err != nil {
-		return nil, err
-	}
-	out.Symbols = numdata.Symbols{
-		Decimal: symbols.Decimal, Group: symbols.Group,
-		PercentSign: symbols.PercentSign, PlusSign: symbols.PlusSign,
-		MinusSign: symbols.MinusSign, Exponential: symbols.Exponential,
-		NaN: symbols.NaN, Infinity: symbols.Infinity,
-		CurrencyDecimal: symbols.CurrencyDecimal, CurrencyGroup: symbols.CurrencyGroup,
-	}
-
-	var decimal struct {
-		Standard string                       `json:"standard"`
-		Short    map[string]map[string]string `json:"short"`
-		Long     map[string]map[string]string `json:"long"`
-	}
-	var percent struct {
-		Standard string `json:"standard"`
-	}
-	type spacing struct {
-		CurrencyMatch    string `json:"currencyMatch"`
-		SurroundingMatch string `json:"surroundingMatch"`
-		InsertBetween    string `json:"insertBetween"`
-	}
-	// currencyFormats holds nested objects beside its patterns -- the spacing
-	// rules, the compact forms -- so the values are read one at a time rather
-	// than as a map of strings.
+	// The patterns that join an amount to a spelled-out currency name do not
+	// vary by numbering system in any locale, so the default's are kept.
 	var currencyPatterns map[string]json.RawMessage
 	if err := unmarshalKey(entry.Numbers, "currencyFormats-numberSystem-"+system,
 		&currencyPatterns); err != nil {
@@ -250,6 +255,67 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 		return out.UnitPatterns[i].Count < out.UnitPatterns[j].Count
 	})
 
+	if out.Currencies, err = readCurrencies(main, name); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// cldrSymbols is how CLDR's JSON writes a system's marks.
+type cldrSymbols struct {
+	Decimal         string `json:"decimal"`
+	Group           string `json:"group"`
+	PercentSign     string `json:"percentSign"`
+	PlusSign        string `json:"plusSign"`
+	MinusSign       string `json:"minusSign"`
+	Exponential     string `json:"exponential"`
+	NaN             string `json:"nan"`
+	Infinity        string `json:"infinity"`
+	CurrencyDecimal string `json:"currencyDecimal"`
+	CurrencyGroup   string `json:"currencyGroup"`
+}
+
+func (c cldrSymbols) symbols() numdata.Symbols {
+	return numdata.Symbols{
+		Decimal: c.Decimal, Group: c.Group,
+		PercentSign: c.PercentSign, PlusSign: c.PlusSign,
+		MinusSign: c.MinusSign, Exponential: c.Exponential,
+		NaN: c.NaN, Infinity: c.Infinity,
+		CurrencyDecimal: c.CurrencyDecimal, CurrencyGroup: c.CurrencyGroup,
+	}
+}
+
+// readSystem reads one numbering system's marks and patterns from a locale's
+// numbers.
+func readSystem(numbers map[string]json.RawMessage, system string, digits map[string]string) (*numdata.System, error) {
+	out := &numdata.System{NumberingSystem: system}
+	d, ok := digits[system]
+	if !ok {
+		return nil, fmt.Errorf("no digits for the numbering system")
+	}
+	if d != "0123456789" {
+		out.Digits = d
+	}
+
+	var symbols cldrSymbols
+	if err := unmarshalKey(numbers, "symbols-numberSystem-"+system, &symbols); err != nil {
+		return nil, err
+	}
+	out.Symbols = symbols.symbols()
+
+	var decimal struct {
+		Standard string                       `json:"standard"`
+		Short    map[string]map[string]string `json:"short"`
+		Long     map[string]map[string]string `json:"long"`
+	}
+	var percent struct {
+		Standard string `json:"standard"`
+	}
+	type spacing struct {
+		CurrencyMatch    string `json:"currencyMatch"`
+		SurroundingMatch string `json:"surroundingMatch"`
+		InsertBetween    string `json:"insertBetween"`
+	}
 	var currency struct {
 		Standard        string `json:"standard"`
 		Accounting      string `json:"accounting"`
@@ -258,29 +324,118 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 			After  spacing `json:"afterCurrency"`
 		} `json:"currencySpacing"`
 	}
-	if err := unmarshalKey(entry.Numbers, "decimalFormats-numberSystem-"+system, &decimal); err != nil {
+	if err := unmarshalKey(numbers, "decimalFormats-numberSystem-"+system, &decimal); err != nil {
 		return nil, err
 	}
-	if err := unmarshalKey(entry.Numbers, "percentFormats-numberSystem-"+system, &percent); err != nil {
+	if err := unmarshalKey(numbers, "percentFormats-numberSystem-"+system, &percent); err != nil {
 		return nil, err
 	}
-	if err := unmarshalKey(entry.Numbers, "currencyFormats-numberSystem-"+system, &currency); err != nil {
+	if err := unmarshalKey(numbers, "currencyFormats-numberSystem-"+system, &currency); err != nil {
 		return nil, err
 	}
 	out.DecimalPattern, out.PercentPattern = decimal.Standard, percent.Standard
 	out.CurrencyPattern, out.AccountingPattern = currency.Standard, currency.Accounting
 	out.BeforeCurrency = numdata.Spacing(currency.CurrencySpacing.Before)
 	out.AfterCurrency = numdata.Spacing(currency.CurrencySpacing.After)
-
 	if out.DecimalPattern == "" || out.Symbols.Decimal == "" {
 		return nil, fmt.Errorf("no decimal pattern or separator")
 	}
-
 	out.CompactShort = compactPatterns(decimal.Short["decimalFormat"])
 	out.CompactLong = compactPatterns(decimal.Long["decimalFormat"])
+	return out, nil
+}
 
-	if out.Currencies, err = readCurrencies(main, name); err != nil {
+// readRootSystems reads what the root says about each numeric numbering system,
+// from ICU's root.txt: CLDR's root.xml has it, and cldr-json does not.
+//
+// An entry either gives the system marks and patterns of its own or points,
+// with a locale-relative alias, at the asking locale's Latin ones. An alias is
+// kept as nothing, which the reader takes to mean exactly that.
+func readRootSystems(icu *icusrc.Locales, digits map[string]string) ([]numdata.NumberingSystem, error) {
+	root, err := icu.Get("root")
+	if err != nil {
 		return nil, err
+	}
+	if root == nil {
+		return nil, fmt.Errorf("the data archive has no root.txt")
+	}
+	elements := root.Get("NumberElements")
+	if elements == nil {
+		return nil, fmt.Errorf("root.txt has no NumberElements")
+	}
+
+	names := make([]string, 0, len(digits))
+	for name := range digits {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out []numdata.NumberingSystem
+	for _, name := range names {
+		s := numdata.NumberingSystem{Name: name}
+		if d := digits[name]; d != "0123456789" {
+			s.Digits = d
+		}
+		entry := elements.Get(name)
+		if entry == nil || name == "latn" {
+			// Nothing of its own: the locale's Latin data serves.
+			out = append(out, s)
+			continue
+		}
+		if symbols := entry.Get("symbols"); symbols != nil && symbols.Table {
+			get := func(key string) string {
+				if n := symbols.Get(key); n != nil && !n.Alias {
+					return n.Value
+				}
+				return ""
+			}
+			s.Symbols = &numdata.Symbols{
+				Decimal: get("decimal"), Group: get("group"),
+				PercentSign: get("percentSign"), PlusSign: get("plusSign"),
+				MinusSign: get("minusSign"), Exponential: get("exponential"),
+				NaN: get("nan"), Infinity: get("infinity"),
+			}
+			if s.Symbols.Decimal == "" || s.Symbols.Group == "" {
+				return nil, fmt.Errorf("root.txt: %s has symbols without separators", name)
+			}
+		}
+		pattern := func(key string) (string, error) {
+			n := entry.Get("patterns", key)
+			for depth := 0; n != nil && n.Alias; depth++ {
+				if depth > 4 {
+					return "", fmt.Errorf("root.txt: %s %s aliases in a circle", name, key)
+				}
+				target, ok := strings.CutPrefix(n.Value, "/LOCALE/NumberElements/")
+				if !ok {
+					return "", fmt.Errorf("root.txt: %s %s aliases %q", name, key, n.Value)
+				}
+				parts := strings.Split(target, "/")
+				if parts[0] == "latn" {
+					return "", nil
+				}
+				if parts[0] != name || len(parts) != 3 || parts[1] != "patterns" {
+					return "", fmt.Errorf("root.txt: %s %s aliases %q", name, key, n.Value)
+				}
+				n = entry.Get("patterns", parts[2])
+			}
+			if n == nil {
+				return "", nil
+			}
+			return n.Value, nil
+		}
+		for _, f := range []struct {
+			key string
+			dst *string
+		}{
+			{"decimalFormat", &s.DecimalPattern},
+			{"percentFormat", &s.PercentPattern},
+			{"currencyFormat", &s.CurrencyPattern},
+			{"accountingFormat", &s.AccountingPattern},
+		} {
+			if *f.dst, err = pattern(f.key); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, s)
 	}
 	return out, nil
 }
@@ -409,4 +564,67 @@ func compactPatterns(in map[string]string) []numdata.CompactPattern {
 		return out[i].Count < out[j].Count
 	})
 	return out
+}
+
+// partials finds what a locale's ICU files say about numbering systems its
+// CLDR file does not carry. cldr-json writes only the systems a locale uses,
+// and drops the few marks and patterns a locale gives the others; ICU keeps
+// them, and looks each field up through the locale before the root.
+func partials(c *icusrc.Locales, name string, l *numdata.Locale, digits map[string]string) ([]numdata.System, error) {
+	have := map[string]bool{l.NumberingSystem: true, "latn": true}
+	for _, s := range l.Others {
+		have[s.NumberingSystem] = true
+	}
+	chain, err := c.Chain(strings.ReplaceAll(name, "-", "_"))
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(digits))
+	for system := range digits {
+		if !have[system] {
+			names = append(names, system)
+		}
+	}
+	sort.Strings(names)
+
+	symbolKeys := []string{"decimal", "group", "percentSign", "plusSign", "minusSign",
+		"exponential", "nan", "infinity", "currencyDecimal", "currencyGroup"}
+	patternKeys := []string{"decimalFormat", "percentFormat", "currencyFormat", "accountingFormat"}
+	var out []numdata.System
+	for _, system := range names {
+		p := numdata.System{NumberingSystem: system}
+		found := false
+		lookup := func(path ...string) (string, error) {
+			for _, n := range chain {
+				v := n.Get(append([]string{"NumberElements", system}, path...)...)
+				if v == nil {
+					continue
+				}
+				if v.Alias {
+					return "", fmt.Errorf("%s aliases %s under %s", system, v.Value, path)
+				}
+				found = true
+				return v.Value, nil
+			}
+			return "", nil
+		}
+		symbols := []*string{&p.Symbols.Decimal, &p.Symbols.Group, &p.Symbols.PercentSign,
+			&p.Symbols.PlusSign, &p.Symbols.MinusSign, &p.Symbols.Exponential,
+			&p.Symbols.NaN, &p.Symbols.Infinity, &p.Symbols.CurrencyDecimal, &p.Symbols.CurrencyGroup}
+		for i, key := range symbolKeys {
+			if *symbols[i], err = lookup("symbols", key); err != nil {
+				return nil, err
+			}
+		}
+		patterns := []*string{&p.DecimalPattern, &p.PercentPattern, &p.CurrencyPattern, &p.AccountingPattern}
+		for i, key := range patternKeys {
+			if *patterns[i], err = lookup("patterns", key); err != nil {
+				return nil, err
+			}
+		}
+		if found {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }

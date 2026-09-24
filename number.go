@@ -138,6 +138,11 @@ type NumberFormatOptions struct {
 	MinimumSignificantDigits *int
 	MaximumSignificantDigits *int
 
+	// NumberingSystem names the digits to write, "arab" or "deva". It
+	// overrides -u-nu. Empty, or a name that is not a numeric system, means
+	// the keyword's or else the locale's own.
+	NumberingSystem string
+
 	// Compat chooses between the standard and Node's observable behavior.
 	Compat Compat
 }
@@ -186,8 +191,13 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 	if err != nil {
 		return nil, err
 	}
+	data, nu, err := selectNumberingSystem(src, data, loc, opts.NumberingSystem)
+	if err != nil {
+		return nil, err
+	}
 
-	f := &NumberFormat{locale: loc, data: data, opts: opts}
+	// Of the Unicode extension, NumberFormat uses only the numbering system.
+	f := &NumberFormat{locale: loc.onlyKeywords().withKeyword("nu", nu), data: data, opts: opts}
 	switch opts.Style {
 	case StylePercent:
 		f.pattern, err = parsePattern(data.PercentPattern)

@@ -379,6 +379,32 @@ half-megabyte root table out of the embedded files; the tables are then read
 where they lie. A comparison is 1.5-2 µs. go-quickjs should keep collators
 rather than build one per `localeCompare`.
 
+### Numbering systems
+
+**Done.** NumberFormat, DateTimeFormat and RelativeTimeFormat take the
+`numberingSystem` option and `-u-nu`, for all 78 of CLDR's numeric systems.
+`NumberingSystems` lists them, as `Intl.supportedValuesOf` does. The resolved
+locale keeps `-u-nu` only when it was honoured.
+
+A system the locale uses brings the separators and patterns CLDR gives it
+there. For any other, ICU looks each mark and pattern up field by field:
+first what the locale says about that system, then the root's entry for it,
+then the locale's Latin data. cldr-json has the first only for the systems a
+locale lists, and has neither of the other two layers. Both come from ICU's
+sources in the pinned data archive instead. So Persian with Arabic digits
+writes "E" for the exponent where the root would write "اس", and English
+with Devanagari digits keeps its own separators.
+
+`testdata/numbering_node.js` records 38,318 cases: every system, by keyword
+and by option, in 14 locales, across NumberFormat's styles and notations,
+DateTimeFormat and RelativeTimeFormat. All but the 320 known gaps match.
+Those are the `fa` and `ps` dates, whose calendar is the unimplemented
+Persian one.
+
+That comparison also turned up two date-time glue bugs the corpus never
+reached; both are fixed (see the commit "Join dates to times with the glue
+ICU uses").
+
 ### 8. Segmenter
 
 Needs the LSTM models and the dictionaries for Chinese, Japanese, Thai, Khmer,
@@ -398,14 +424,15 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
-| 3c. Rest of the surface | corpus done; `numberingSystem`, decimal input and `formatRange` missing |
+| 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
 | 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
 | 5. DateTimeFormat | 1,230/1,230, Gregorian and Buddhist; surface incomplete, see below |
-| 6. RelativeTimeFormat | 1,260/1,260; lacks `numberingSystem` |
+| 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
 | 6d. Legacy `toLocale*` | **done** - 90/90; `Required` and `Defaults` on the date options |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
+| **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
 | 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
@@ -427,10 +454,10 @@ Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
 
 **Corpus parity is not eligibility.** An audit of go-quickjs's option reads
 (2026-09-24) found that an earlier version of this line, "all six finished
-services meet both gate conditions", was wrong: only **Collator, ListFormat
-and DisplayNames** implement every option go-quickjs does. NumberFormat,
-DateTimeFormat, PluralRules and RelativeTimeFormat match the corpus exactly and
-still lack options go-quickjs accepts; the next section lists them.
+services meet both gate conditions", was wrong. Now **Collator, ListFormat,
+DisplayNames and RelativeTimeFormat** implement every option go-quickjs does.
+NumberFormat, DateTimeFormat and PluralRules match the corpus exactly and still
+lack options go-quickjs accepts; the next section lists them.
 
 ## What is left
 
@@ -447,10 +474,9 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| NumberFormat | done | `numberingSystem` and `-u-nu`; exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
-| DateTimeFormat | done | `dayPeriod`; `fractionalSecondDigits`; `timeZoneName` as `shortOffset`, `longOffset`, `shortGeneric`, `longGeneric`; `numberingSystem` and `-u-nu`; offset time zones; `formatRange`, `formatRangeToParts`; 14 calendars |
+| NumberFormat | done | exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
+| DateTimeFormat | done | `dayPeriod`; `fractionalSecondDigits`; `timeZoneName` as `shortOffset`, `longOffset`, `shortGeneric`, `longGeneric`; offset time zones; `formatRange`, `formatRangeToParts`; 14 calendars |
 | PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
-| RelativeTimeFormat | done | `numberingSystem` |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 
@@ -459,7 +485,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
 | Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`; CLDR's alias data for `getCanonicalLocales` |
-| `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `NumberingSystems`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data |
+| `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization |
 | Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |

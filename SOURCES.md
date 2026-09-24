@@ -30,7 +30,7 @@ authority.
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
-| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`) | yes |
+| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue (`dategen`) | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
@@ -196,6 +196,20 @@ node: 779,392 normalizations, no differences.
 release.** Its content self-reports CLDR 48, which is correct for the anchor,
 but the provenance is unpinned. Re-fetch it from the CLDR 48.0 tag when that
 generator is brought over.
+
+## Where cldr-json is not all of CLDR
+
+CLDR's root uses locale-relative aliases: this value is whatever the *asking*
+locale has at that other path. cldr-json resolves such an alias as if it
+pointed at the root's own value, or leaves the path out. ICU's resource
+bundle sources keep the aliases, and ICU resolves them as CLDR means. Every
+place go-intl has met this is read from those sources, from the pinned data
+archive, through `internal/icusrc`:
+
+| What | cldr-json | ICU, and so go-intl |
+|---|---|---|
+| a numbering system a locale does not use | missing | the locale's own few fields, then the root's entry, then the locale's Latin data |
+| a non-Gregorian calendar's date-time glue | the root's | the locale's own for that calendar, else its Gregorian glue |
 
 ## One deliberate divergence from CLDR
 
