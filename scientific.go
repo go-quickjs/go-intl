@@ -1,6 +1,9 @@
 package intl
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 // Scientific and engineering notation: 1234.5 as "1.235E3", or "1.2345E3" as
 // engineering would write 123456789012, "123.457E9".
@@ -28,6 +31,26 @@ func (f *NumberFormat) exponentFor(magnitude float64) int {
 
 // scientificParts writes a number against a power of ten.
 func (f *NumberFormat) scientificParts(magnitude float64, negative bool) []Part {
+	exponent, integer, fraction := f.scientificDigits(magnitude, negative)
+
+	parts := f.groupedInteger(integer)
+	if fraction != "" {
+		parts = append(parts, Part{PartDecimal, f.decimalSep})
+		parts = append(parts, Part{PartFraction, f.digits(fraction)})
+	}
+
+	parts = append(parts, Part{PartExponentSeparator, f.data.Symbols.Exponential})
+	if exponent < 0 {
+		parts = append(parts, Part{PartExponentMinusSign, f.data.Symbols.MinusSign})
+		exponent = -exponent
+	}
+	parts = append(parts, Part{PartExponentInteger, f.digits(itoa(exponent))})
+	return parts
+}
+
+// scientificDigits is the exponent a number is written against and the
+// rounded digits of its mantissa.
+func (f *NumberFormat) scientificDigits(magnitude float64, negative bool) (int, string, string) {
 	exponent := f.exponentFor(magnitude)
 	mantissa := magnitude
 	if magnitude != 0 {
@@ -46,21 +69,50 @@ func (f *NumberFormat) scientificParts(magnitude float64, negative bool) []Part 
 		mantissa = magnitude / math.Pow(10, float64(exponent))
 		integer, fraction = f.round(mantissa, negative)
 	}
-	integer = padInteger(integer, f.minInt)
+	return exponent, padInteger(integer, f.minInt), fraction
+}
 
-	parts := f.groupedInteger(integer)
-	if fraction != "" {
-		parts = append(parts, Part{PartDecimal, f.decimalSep})
-		parts = append(parts, Part{PartFraction, f.digits(fraction)})
+// shiftDigits moves the decimal point of written digits by a power of ten:
+// ICU's plural operands for "1.5M" are those of 1500000, with the exponent
+// beside them, so that "1.5M" has no visible fraction.
+func shiftDigits(integer, fraction string, exponent int) (string, string) {
+	digits := integer + fraction
+	point := len(integer) + exponent
+	switch {
+	case point <= 0:
+		integer, fraction = "0", strings.Repeat("0", -point)+digits
+	case point >= len(digits):
+		integer, fraction = digits+strings.Repeat("0", point-len(digits)), ""
+	default:
+		integer, fraction = digits[:point], digits[point:]
 	}
+	if trimmed := strings.TrimLeft(integer, "0"); trimmed != "" {
+		integer = trimmed
+	} else {
+		integer = "0"
+	}
+	return integer, fraction
+}
 
-	parts = append(parts, Part{PartExponentSeparator, f.data.Symbols.Exponential})
-	if exponent < 0 {
-		parts = append(parts, Part{PartExponentMinusSign, f.data.Symbols.MinusSign})
-		exponent = -exponent
+// pluralOperands are what plural rules see of a number as this formatter
+// writes it: the digits after rounding, and in compact or scientific
+// notation the power of ten written apart, which French and others count.
+func (f *NumberFormat) pluralOperands(v float64) operands {
+	negative := v < 0 || v == 0 && math.Signbit(v)
+	magnitude := math.Abs(v)
+	switch f.opts.Notation {
+	case NotationCompact:
+		form := f.compactForm(magnitude, negative)
+		integer, fraction := f.round(magnitude/form.divisor, negative)
+		integer, fraction = shiftDigits(integer, fraction, form.exponent)
+		return operandsFor(integer, fraction, form.exponent)
+	case NotationScientific, NotationEngineering:
+		exponent, integer, fraction := f.scientificDigits(magnitude, negative)
+		integer, fraction = shiftDigits(integer, fraction, exponent)
+		return operandsFor(integer, fraction, exponent)
 	}
-	parts = append(parts, Part{PartExponentInteger, f.digits(itoa(exponent))})
-	return parts
+	integer, fraction := f.round(magnitude, negative)
+	return operandsFor(padInteger(integer, f.minInt), fraction, 0)
 }
 
 // itoa writes a non-negative number without pulling in strconv's formatting

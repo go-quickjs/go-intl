@@ -2,6 +2,8 @@ package intl
 
 import (
 	"fmt"
+	"math"
+	"sort"
 
 	"github.com/go-quickjs/go-intl/internal/plurdata"
 )
@@ -58,6 +60,10 @@ type PluralRulesOptions struct {
 	RoundingIncrement        int
 	TrailingZeroDisplay      TrailingZeroDisplay
 	Notation                 Notation
+	// CompactDisplay is how compact notation writes a magnitude, which
+	// decides the power of ten written apart: a locale may have a word for
+	// ten thousand in one width and not the other.
+	CompactDisplay CompactDisplay
 }
 
 // A PluralRules chooses the plural form for a number in one locale. It never
@@ -65,8 +71,16 @@ type PluralRulesOptions struct {
 type PluralRules struct {
 	locale Locale
 	opts   PluralRulesOptions
+	// rules are in CLDR's order, which Categories reports; tried are the
+	// same rules in the order ICU tries them.
 	rules  []compiledRule
+	tried  []compiledRule
+	ranges []plurdata.Range
 	digitPlan
+	// written is how a number is written in compact, scientific or
+	// engineering notation, whose power of ten the rules can count; nil in
+	// standard notation.
+	written *NumberFormat
 }
 
 type compiledRule struct {
@@ -90,7 +104,7 @@ func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*Plura
 		set = data.Ordinal
 	}
 
-	p := &PluralRules{locale: loc, opts: opts}
+	p := &PluralRules{locale: loc, opts: opts, ranges: data.Ranges}
 	for _, r := range set {
 		parsed, err := parsePluralRule(r.Condition)
 		if err != nil {
@@ -98,6 +112,18 @@ func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*Plura
 		}
 		p.rules = append(p.rules, compiledRule{PluralCategory(r.Category), parsed})
 	}
+	// ICU reads a language's rules out of a resource table, whose keys are
+	// sorted, and keeps "other" last: few, many, one, two, zero. Where rules
+	// overlap the first wins, and French's "many" -- any number with an
+	// exponent outside 0 to 5 -- then wins over its "one" for 5E-1.
+	p.tried = append([]compiledRule(nil), p.rules...)
+	sort.SliceStable(p.tried, func(i, j int) bool {
+		a, b := p.tried[i].category, p.tried[j].category
+		if (a == PluralOther) != (b == PluralOther) {
+			return b == PluralOther
+		}
+		return a < b
+	})
 
 	plan, err := digitRequest{
 		minInt:         opts.MinimumIntegerDigits,
@@ -116,6 +142,27 @@ func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*Plura
 		return nil, err
 	}
 	p.digitPlan = plan
+	if opts.Notation != NotationStandard {
+		// The operands are those of the number as ICU's number formatter
+		// writes it in the notation: "1.5M" is one and a half with an
+		// exponent of six, which French calls "many".
+		p.written, err = NewNumberFormatFrom(src, loc, NumberFormatOptions{
+			Notation:                 opts.Notation,
+			CompactDisplay:           opts.CompactDisplay,
+			MinimumIntegerDigits:     opts.MinimumIntegerDigits,
+			MinimumFractionDigits:    opts.MinimumFractionDigits,
+			MaximumFractionDigits:    opts.MaximumFractionDigits,
+			MinimumSignificantDigits: opts.MinimumSignificantDigits,
+			MaximumSignificantDigits: opts.MaximumSignificantDigits,
+			RoundingPriority:         opts.RoundingPriority,
+			RoundingMode:             opts.RoundingMode,
+			RoundingIncrement:        opts.RoundingIncrement,
+			TrailingZeroDisplay:      opts.TrailingZeroDisplay,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	return p, nil
 }
 
@@ -148,6 +195,10 @@ func loadPlurals(src Source, loc Locale) (*plurdata.Locale, error) {
 
 // Select returns the plural form a number calls for.
 func (p *PluralRules) Select(v float64) PluralCategory {
+	if p.written != nil {
+		o := p.written.pluralOperands(v)
+		return p.selectOperands(&o)
+	}
 	return p.selectWith(v, 0)
 }
 
@@ -155,19 +206,35 @@ func (p *PluralRules) Select(v float64) PluralCategory {
 // operand. A number written as "1.2M" has a different exponent from the same
 // value written out, and a few languages notice.
 func (p *PluralRules) selectWith(v float64, exponent int) PluralCategory {
-	if v < 0 {
+	// The number is rounded with its sign, as a directional rounding mode
+	// needs: to the floor, -1.5 is -2, which English calls "other".
+	negative := v < 0
+	if negative {
 		v = -v
 	}
-	integer, fraction := p.round(v, false)
+	integer, fraction := p.round(v, negative)
 	integer = padInteger(integer, p.minInt)
 
 	o := operandsFor(integer, fraction, exponent)
-	for _, r := range p.rules {
-		if r.rule.matches(&o) {
-			return r.category
+	return p.selectOperands(&o)
+}
+
+// SelectRange returns the plural form a range of numbers calls for, from
+// the forms of its ends as they are rounded: in English "1–2 days" is
+// "other" whatever "1" alone would be. It follows ICU's
+// StandardPluralRanges, which V8 uses for ordinal rules as well as cardinal
+// ones. Either end being NaN is an error, as ECMA-402 throws.
+func (p *PluralRules) SelectRange(start, end float64) (PluralCategory, error) {
+	if math.IsNaN(start) || math.IsNaN(end) {
+		return "", fmt.Errorf("intl: a plural range with an end that is not a number")
+	}
+	first, second := string(p.Select(start)), string(p.Select(end))
+	for _, r := range p.ranges {
+		if r.Start == first && r.End == second {
+			return PluralCategory(r.Result), nil
 		}
 	}
-	return PluralOther
+	return PluralOther, nil
 }
 
 // Categories returns the forms this locale distinguishes, in CLDR's order.
@@ -187,6 +254,10 @@ type ResolvedPluralRules struct {
 	MinimumFractionDigits int
 	MaximumFractionDigits int
 	PluralCategories      []PluralCategory
+	Notation              Notation
+	// CompactDisplay is meaningful only in compact notation, which is the
+	// only one ECMA-402 reports it for.
+	CompactDisplay CompactDisplay
 }
 
 // ResolvedOptions returns what the rules settled on.
@@ -198,5 +269,7 @@ func (p *PluralRules) ResolvedOptions() ResolvedPluralRules {
 		MinimumFractionDigits: p.minFrac,
 		MaximumFractionDigits: p.maxFrac,
 		PluralCategories:      p.Categories(),
+		Notation:              p.opts.Notation,
+		CompactDisplay:        p.opts.CompactDisplay,
 	}
 }

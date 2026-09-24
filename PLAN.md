@@ -271,8 +271,17 @@ rather than the corpus gate:
 - ~~`style: "unit"`~~ **done**
 - ~~`currencyDisplay: "name"`~~ **done**
 
-- ~~the digit options `PluralRules` is also given~~ **done**; `selectRange` is
-  still missing.
+- ~~the digit options `PluralRules` is also given~~ **done**
+- ~~`PluralRules.selectRange`~~ **done**: ICU's StandardPluralRanges, from
+  CLDR's plural ranges by language, over the ends as rounded. 145,340 cases
+  against node, all matching.
+- ~~`PluralRules` in compact and scientific notation~~ **done**: a number is
+  selected as ICU's number formatter writes it, with the power of ten apart
+  (`c`) and the digits of the whole value, so "1.5M" is French "many".
+  ICU tries a language's rules in its resource table's order -- few, many,
+  one, two, zero, then other -- which decides where rules overlap: French
+  5E-1 is "many", not "one". A negative number is rounded with its sign.
+  30,960 cases against node, all matching.
 
 The rounding was rewritten to do its work on the digits rather than on the
 float. Scaling a float by a power of ten to round it introduces error of its
@@ -293,8 +302,7 @@ the rule was wrong; Chinese is where it shows, composing to "987公里/小时"
 where ICU answers "987 km/h".
 
 *Gate:* every option `internal/icu` accepts is accepted here, and the corpus
-stays at 2,970/2,970. **Met**, apart from `PluralRules.selectRange`, which
-`internal/icu` does not implement either.
+stays at 2,970/2,970. **Met.**
 
 ### 5. DateTimeFormat (multi-session)
 
@@ -532,7 +540,7 @@ README's Intl section.
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
-| 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
+| 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
 | 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 14 calendars left |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
@@ -562,9 +570,9 @@ Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
 **Corpus parity is not eligibility.** An audit of go-quickjs's option reads
 (2026-09-24) found that an earlier version of this line, "all six finished
 services meet both gate conditions", was wrong. Now **Collator, ListFormat,
-DisplayNames and RelativeTimeFormat** implement every option go-quickjs does.
-NumberFormat, DateTimeFormat and PluralRules match the corpus exactly and still
-lack options go-quickjs accepts; the next section lists them.
+DisplayNames, RelativeTimeFormat and PluralRules** implement every option
+go-quickjs does. NumberFormat and DateTimeFormat match the corpus exactly and
+still lack options go-quickjs accepts; the next section lists them.
 
 ## What is left
 
@@ -583,7 +591,6 @@ What go-quickjs's VM accepts and go-intl does not yet:
 |---|---|---|
 | NumberFormat | done | exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
 | DateTimeFormat | done | 14 calendars |
-| PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 

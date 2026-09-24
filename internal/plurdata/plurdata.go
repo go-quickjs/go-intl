@@ -11,7 +11,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // A Rule is one category and the condition that chooses it.
 type Rule struct {
@@ -27,6 +27,14 @@ type Rule struct {
 type Locale struct {
 	Cardinal []Rule
 	Ordinal  []Rule
+	// Ranges say the category of a range from the categories of its ends,
+	// as CLDR gives them for the language. A pair not listed is "other".
+	Ranges []Range
+}
+
+// A Range is the category of a range whose ends are Start and End.
+type Range struct {
+	Start, End, Result string
 }
 
 // Encode writes a locale's rules.
@@ -38,6 +46,12 @@ func Encode(l *Locale) []byte {
 			w.String(r.Category)
 			w.String(r.Condition)
 		}
+	}
+	w.Uint(len(l.Ranges))
+	for _, r := range l.Ranges {
+		w.String(r.Start)
+		w.String(r.End)
+		w.String(r.Result)
 	}
 	return w.Bytes()
 }
@@ -61,6 +75,12 @@ func Decode(b []byte) (*Locale, error) {
 			rules = append(rules, Rule{Category: category, Condition: condition})
 		}
 		*set = rules
+	}
+	if n := r.Uint(); n >= 0 && n <= r.Left() {
+		l.Ranges = make([]Range, n)
+		for i := range l.Ranges {
+			l.Ranges[i] = Range{Start: r.String(), End: r.String(), Result: r.String()}
+		}
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

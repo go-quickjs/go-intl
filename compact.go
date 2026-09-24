@@ -98,34 +98,7 @@ func compactFor(patterns []numdata.CompactPattern, exponent int, count string) (
 
 // compactParts writes a number in compact notation.
 func (f *NumberFormat) compactParts(magnitude float64, negative bool) []Part {
-	patterns := f.data.CompactShort
-	if f.opts.CompactDisplay == CompactLong {
-		patterns = f.data.CompactLong
-	}
-
-	exponent, ok := chooseCompact(patterns, magnitude)
-	form := compactForm{divisor: 1, zeros: 1}
-	if ok {
-		// The plural category is that of the divided amount, so the amount has
-		// to be divided before the pattern can be chosen -- and the pattern is
-		// what says by how much. CLDR's patterns for one magnitude all divide
-		// by the same amount, so a first pass with the "other" category settles
-		// the divisor and a second picks the wording.
-		if first, ok := compactFor(patterns, exponent, "other"); ok {
-			divided := magnitude / first.divisor
-			category := string(PluralOther)
-			if f.plurals != nil {
-				integer, fraction := f.round(divided, negative)
-				o := operandsFor(integer, fraction, first.exponent)
-				category = string(f.plurals.selectOperands(&o))
-			}
-			if chosen, ok := compactFor(patterns, exponent, category); ok {
-				form = chosen
-			} else {
-				form = first
-			}
-		}
-	}
+	form := f.compactForm(magnitude, negative)
 
 	// The digit counts are settled once, when the formatter is built, so a
 	// compact number rounds the same way as any other: by whichever counting
@@ -150,10 +123,45 @@ func (f *NumberFormat) compactParts(magnitude float64, negative bool) []Part {
 	return parts
 }
 
+// compactForm chooses the compact pattern a magnitude is written with.
+func (f *NumberFormat) compactForm(magnitude float64, negative bool) compactForm {
+	patterns := f.data.CompactShort
+	if f.opts.CompactDisplay == CompactLong {
+		patterns = f.data.CompactLong
+	}
+
+	exponent, ok := chooseCompact(patterns, magnitude)
+	form := compactForm{divisor: 1, zeros: 1}
+	if ok {
+		// The plural category is that of the divided amount, so the amount has
+		// to be divided before the pattern can be chosen -- and the pattern is
+		// what says by how much. CLDR's patterns for one magnitude all divide
+		// by the same amount, so a first pass with the "other" category settles
+		// the divisor and a second picks the wording. ICU asks the plural
+		// rules about the divided amount alone, before it records the power
+		// of ten it divided by.
+		if first, ok := compactFor(patterns, exponent, "other"); ok {
+			divided := magnitude / first.divisor
+			category := string(PluralOther)
+			if f.plurals != nil {
+				integer, fraction := f.round(divided, negative)
+				o := operandsFor(integer, fraction, 0)
+				category = string(f.plurals.selectOperands(&o))
+			}
+			if chosen, ok := compactFor(patterns, exponent, category); ok {
+				form = chosen
+			} else {
+				form = first
+			}
+		}
+	}
+	return form
+}
+
 // selectOperands is Select for operands that have already been worked out,
 // which the compact path needs because it has the digits in hand.
 func (p *PluralRules) selectOperands(o *operands) PluralCategory {
-	for _, r := range p.rules {
+	for _, r := range p.tried {
 		if r.rule.matches(o) {
 			return r.category
 		}
