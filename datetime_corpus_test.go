@@ -64,10 +64,12 @@ func TestDateTimeFormatMatchesICU(t *testing.T) {
 	// checked too, so that finishing one of these or breaking something else
 	// is noticed. Both are stated in PLAN.md.
 	//
-	//	zh-Hant  uses the flexible day period -- the small hours are 凌晨
-	//	         rather than 上午 -- and joins a date to a time with a space
-	//	         that CLDR's own glue, "{1}{0}", does not contain.
-	const outstanding = 11
+	//	zh-Hant  joins a date to a time with a space that CLDR 48.0's glue,
+	//	         "{1}{0}", does not contain. CLDR 48.2 writes a thin space
+	//	         there and ICU 78.3 a plain one, so the ICU this is anchored
+	//	         to was built from a CLDR newer than the pin. SOURCES.md has
+	//	         the evidence; moving the pin is its own piece of work.
+	const outstanding = 9
 	var unexpected []string
 	for _, d := range differences {
 		if strings.Contains(d, `DateTimeFormat("zh-Hant"`) {

@@ -56,6 +56,25 @@ type Skeleton struct {
 	Pattern string
 }
 
+// A DayPeriod is one of the parts a language divides the day into, beyond the
+// two halves: morning, afternoon, evening, night, and the points noon and
+// midnight. ID is CLDR's name for it, "morning1".
+type DayPeriod struct {
+	ID   string
+	Text string
+}
+
+// A PeriodRule says which part of the day an hour falls in. From and Before
+// are minutes past midnight; a rule with At set names a single moment rather
+// than a range.
+type PeriodRule struct {
+	ID     string
+	From   int
+	Before int
+	At     int
+	Point  bool
+}
+
 // Names holds one set of names, indexed by the thing they name: months by
 // number less one, weekdays by day of the week with Sunday first.
 type Names struct {
@@ -70,6 +89,9 @@ type Calendar struct {
 	// DayPeriods are indexed by width and hold the two halves of the day.
 	AM [Widths]string
 	PM [Widths]string
+	// Periods are the finer parts of the day, indexed by width and sorted by
+	// name within each.
+	Periods [Widths][]DayPeriod
 	// Eras are indexed by width.
 	Eras [Widths]Names
 
@@ -136,11 +158,51 @@ func (c *Calendar) Skeleton(id string) (string, bool) {
 	return "", false
 }
 
-// Locale holds the calendars a locale has data for. Only the Gregorian one is
-// carried so far; the field is keyed so the rest can arrive without the
-// encoding changing shape.
+// Locale holds the calendars a locale has data for, keyed by name, and the
+// rules that say which part of the day an hour falls in -- which are the
+// language's rather than any one calendar's.
 type Locale struct {
 	Calendars []NamedCalendar
+	// PeriodRules are sorted so that the ranges come before the points: a
+	// language that names both a range covering midnight and the moment
+	// itself is written with the range, which is what ICU does.
+	PeriodRules []PeriodRule
+}
+
+// Period returns the part of the day a time falls in, as minutes past
+// midnight. It answers the empty string when the language has no rules.
+func (l *Locale) Period(minutes int) string {
+	for _, r := range l.PeriodRules {
+		if r.Point {
+			continue
+		}
+		// A range that wraps past midnight covers both ends of the day.
+		if r.From <= r.Before {
+			if minutes >= r.From && minutes < r.Before {
+				return r.ID
+			}
+			continue
+		}
+		if minutes >= r.From || minutes < r.Before {
+			return r.ID
+		}
+	}
+	return ""
+}
+
+// PeriodName returns what a calendar calls one part of the day.
+func (c *Calendar) PeriodName(width int, id string) string {
+	for w := width; w >= Wide; w-- {
+		for _, p := range c.Periods[w] {
+			if p.ID == id && p.Text != "" {
+				return p.Text
+			}
+		}
+		if w == Wide {
+			break
+		}
+	}
+	return ""
 }
 
 // A NamedCalendar is one calendar and which one it is, "gregory".
@@ -162,6 +224,18 @@ func (l *Locale) Calendar(name string) (*Calendar, bool) {
 // Encode writes a locale's calendars.
 func Encode(l *Locale) []byte {
 	b := blob.NewWriter(Version)
+	b.Uint(len(l.PeriodRules))
+	for _, r := range l.PeriodRules {
+		b.String(r.ID)
+		b.Uint(r.From)
+		b.Uint(r.Before)
+		b.Uint(r.At)
+		if r.Point {
+			b.Uint(1)
+		} else {
+			b.Uint(0)
+		}
+	}
 	b.Uint(len(l.Calendars))
 	for i := range l.Calendars {
 		b.String(l.Calendars[i].Name)
@@ -182,6 +256,11 @@ func encodeCalendar(b *blob.Writer, c *Calendar) {
 	for w := 0; w < Widths; w++ {
 		b.String(c.AM[w])
 		b.String(c.PM[w])
+		b.Uint(len(c.Periods[w]))
+		for _, p := range c.Periods[w] {
+			b.String(p.ID)
+			b.String(p.Text)
+		}
 	}
 	for _, n := range c.Eras {
 		b.Uint(len(n.Text))
@@ -209,6 +288,18 @@ func Decode(data []byte) (*Locale, error) {
 		return nil, err
 	}
 	var l Locale
+	if n := r.Uint(); n >= 0 && n <= r.Left() {
+		l.PeriodRules = make([]PeriodRule, 0, n)
+		for i := 0; i < n; i++ {
+			var rule PeriodRule
+			rule.ID = r.String()
+			rule.From = r.Uint()
+			rule.Before = r.Uint()
+			rule.At = r.Uint()
+			rule.Point = r.Uint() == 1
+			l.PeriodRules = append(l.PeriodRules, rule)
+		}
+	}
 	n := r.Uint()
 	if n < 0 || n > r.Left() {
 		n = 0
@@ -242,6 +333,17 @@ func decodeCalendar(r *blob.Reader, c *Calendar) {
 	for w := 0; w < Widths; w++ {
 		c.AM[w] = r.String()
 		c.PM[w] = r.String()
+		n := r.Uint()
+		if n < 0 || n > r.Left() {
+			return
+		}
+		periods := make([]DayPeriod, 0, n)
+		for i := 0; i < n; i++ {
+			id := r.String()
+			text := r.String()
+			periods = append(periods, DayPeriod{ID: id, Text: text})
+		}
+		c.Periods[w] = periods
 	}
 	for i := range c.Eras {
 		n := r.Uint()

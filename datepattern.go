@@ -215,16 +215,23 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		return cal.Day(context, width, p.weekday)
 
 	case 'a', 'b', 'B':
-		// B asks for the flexible day period -- morning, afternoon, evening,
-		// night -- which needs rules this does not carry yet. The two halves
-		// of the day are what it falls back to, which is right wherever the
-		// locale's flexible periods are just those two and close elsewhere.
 		width := datedata.Abbreviated
 		switch {
 		case fd.count == 4:
 			width = datedata.Wide
 		case fd.count >= 5:
 			width = datedata.Narrow
+		}
+		// B asks for the part of the day rather than which half it is: the
+		// small hours are 凌晨 in Chinese and neither morning nor afternoon.
+		// A language with no rule for the hour, or no word for the part it
+		// falls in, is written with the half instead.
+		if fd.letter == 'B' {
+			if id := f.data.Period(p.hour*60 + p.minute); id != "" {
+				if name := cal.PeriodName(width, id); name != "" {
+					return name
+				}
+			}
 		}
 		if p.afternoon {
 			if s := cal.PM[width]; s != "" {

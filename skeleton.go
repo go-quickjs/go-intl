@@ -115,7 +115,7 @@ func (f *DateTimeFormat) skeletonPattern() (string, error) {
 	}
 
 	if pattern, ok := f.calendar.Skeleton(want); ok {
-		return pattern, nil
+		return plainDayPeriod(pattern), nil
 	}
 
 	// A request that mixes date fields with time fields rarely has a skeleton
@@ -177,14 +177,39 @@ func glueLength(date string) int {
 // onePattern answers a request that is all date or all time.
 func (f *DateTimeFormat) onePattern(want string) (string, error) {
 	if pattern, ok := f.calendar.Skeleton(want); ok {
-		return pattern, nil
+		return plainDayPeriod(pattern), nil
 	}
 	best, found := f.closestSkeleton(want)
 	if !found {
 		return "", fmt.Errorf("intl: %s has no pattern for %q: %w",
 			f.locale, want, ErrNotFound)
 	}
-	return f.adjustWidths(best, want), nil
+	return plainDayPeriod(f.adjustWidths(best, want)), nil
+}
+
+// plainDayPeriod writes the two halves of the day where a pattern asks for the
+// finer parts.
+//
+// It applies only where the caller named the fields it wanted. ECMA-402 has no
+// option for the part of the day, so a request for an hour is answered with the
+// half: Chinese writes 上午 at midnight for a named hour and 凌晨 for a whole
+// time asked for by length, from the same "Bh:mm" the locale supplies.
+func plainDayPeriod(pattern string) string {
+	if !strings.ContainsRune(pattern, 'B') {
+		return pattern
+	}
+	var b strings.Builder
+	for _, fd := range parseDatePattern(pattern) {
+		switch {
+		case fd.letter == 0:
+			b.WriteString(quoteLiteral(fd.literal))
+		case fd.letter == 'B':
+			b.WriteString(strings.Repeat("a", fd.count))
+		default:
+			b.WriteString(strings.Repeat(string(fd.letter), fd.count))
+		}
+	}
+	return b.String()
 }
 
 // fieldCounts reduces a skeleton to how many times each letter appears.

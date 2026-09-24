@@ -76,6 +76,17 @@ carry **identical** likely subtags, 7,788 entries with no differences between
 them. If it ever does matter the corpus decides, since the corpus is the ground
 truth and the version string is only a label.
 
+**The pin is probably a release too old, and there is now evidence.** CLDR
+48.0 joins a date to a time in zh-Hant with nothing at all, `{1}{0}`; CLDR 48.2
+writes a thin space, `{1} {0}`; ICU 78.3 writes a plain space. So the ICU
+this is anchored to was built from a CLDR somewhere after 48.0. It costs nine
+corpus cases in one locale, which is the whole of what DateTimeFormat still
+misses.
+
+Moving the pin to 48.2.0 is its own piece of work: every table is regenerated
+and every service re-measured, which is the rule for changing a pin. It is not
+folded in here.
+
 One thing that looks like a contradiction and is not: CLDR 48 reports
 `_unicodeVersion: "16.0.0"` while ICU 78.3 reports Unicode 17.0. Those describe
 different things — CLDR's is the Unicode release its own data was built
@@ -151,8 +162,9 @@ generator is brought over.
 ## One deliberate divergence from CLDR
 
 CLDR separates a time from its day period with U+202F, a narrow no-break
-space, in 440 locales. **ICU 78.3 writes a plain space in all of them**, and
-the golden corpus agrees, so `dategen` replaces the character.
+space, in 440 locales, and joins a date to a time with U+2009, a thin space, in
+some. **ICU 78.3 writes a plain space for both**, and the golden corpus agrees,
+so `dategen` replaces them.
 
 CLDR offers "-alt-ascii" patterns that look like they say the same thing and do
 not: `en-GB`'s medium time is `HH:mm:ss` and its ascii alternate is

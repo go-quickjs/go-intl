@@ -32,6 +32,9 @@ import (
 //go:embed calendarPreferenceData.json
 var calendarPreferenceJSON []byte
 
+//go:embed dayPeriods.json
+var dayPeriodsJSON []byte
+
 // extras are the calendars beyond the Gregorian one, in the order their
 // packages are given. CLDR's name for a calendar is not always BCP-47's, which
 // is the name ECMA-402 uses and the one stored.
@@ -205,8 +208,72 @@ func read(main, name string) (*datedata.Locale, error) {
 		return nil, err
 	}
 	return &datedata.Locale{
-		Calendars: []datedata.NamedCalendar{{Name: "gregory", Calendar: *c}},
+		Calendars:   []datedata.NamedCalendar{{Name: "gregory", Calendar: *c}},
+		PeriodRules: periodRules(name),
 	}, nil
+}
+
+// periodRuleSets are CLDR's day-period rules, read once.
+var periodRuleSets = func() map[string]map[string]map[string]string {
+	var res struct {
+		Supplemental struct {
+			DayPeriodRuleSet map[string]map[string]map[string]string `json:"dayPeriodRuleSet"`
+		} `json:"supplemental"`
+	}
+	if err := json.Unmarshal(dayPeriodsJSON, &res); err != nil {
+		panic("dategen: dayPeriods.json: " + err.Error())
+	}
+	return res.Supplemental.DayPeriodRuleSet
+}()
+
+// periodRules returns the rules that say which part of the day an hour falls
+// in. CLDR keeps them per language rather than per locale, so a locale with no
+// rules of its own takes its language's.
+func periodRules(name string) []datedata.PeriodRule {
+	set, ok := periodRuleSets[name]
+	if !ok {
+		language, _, _ := strings.Cut(name, "-")
+		if set, ok = periodRuleSets[language]; !ok {
+			return nil
+		}
+	}
+	out := make([]datedata.PeriodRule, 0, len(set))
+	for id, rule := range set {
+		r := datedata.PeriodRule{ID: id}
+		if at, ok := rule["_at"]; ok {
+			r.At, r.Point = minutes(at), true
+		} else {
+			from, hasFrom := rule["_from"]
+			before, hasBefore := rule["_before"]
+			if !hasFrom || !hasBefore {
+				continue
+			}
+			r.From, r.Before = minutes(from), minutes(before)
+		}
+		out = append(out, r)
+	}
+	// The ranges come first so that a language naming both a range over
+	// midnight and the moment itself is written with the range, which is what
+	// ICU does.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Point != out[j].Point {
+			return !out[i].Point
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// minutes reads a time of day as minutes past midnight. CLDR writes the end of
+// the day as "24:00".
+func minutes(s string) int {
+	hour, minute, ok := strings.Cut(s, ":")
+	if !ok {
+		return 0
+	}
+	h, _ := strconv.Atoi(hour)
+	m, _ := strconv.Atoi(minute)
+	return h*60 + m
 }
 
 // readCalendar reads one calendar out of one package.
@@ -258,6 +325,19 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 	for w := 0; w < datedata.Widths; w++ {
 		if set, ok := source.DayPeriods["format"][widthNames[w]]; ok {
 			c.AM[w], c.PM[w] = ascii(set["am"]), ascii(set["pm"])
+			// The finer parts of the day are kept too, for the patterns that
+			// ask for them rather than for the two halves.
+			for id, text := range set {
+				if text == "" || strings.Contains(id, "-alt-") ||
+					id == "am" || id == "pm" {
+					continue
+				}
+				c.Periods[w] = append(c.Periods[w],
+					datedata.DayPeriod{ID: id, Text: ascii(text)})
+			}
+			sort.Slice(c.Periods[w], func(a, b int) bool {
+				return c.Periods[w][a].ID < c.Periods[w][b].ID
+			})
 		}
 		if set, ok := source.Eras[eraWidths[w]]; ok {
 			c.Eras[w].Text = []string{ascii(set["0"]), ascii(set["1"])}
@@ -328,5 +408,6 @@ func pattern(raw json.RawMessage) string {
 // alternate is "h:mm:ss a", which is a different clock rather than a different
 // space.
 func ascii(pattern string) string {
-	return strings.ReplaceAll(pattern, " ", " ")
+	pattern = strings.ReplaceAll(pattern, " ", " ")
+	return strings.ReplaceAll(pattern, " ", " ")
 }
