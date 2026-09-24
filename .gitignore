@@ -1,0 +1,5 @@
+# Build artefacts. The generators are run with "go run", which leaves
+# nothing behind; a stray binary here is from "go build" and is not the
+# library.
+*.exe
+*.test
