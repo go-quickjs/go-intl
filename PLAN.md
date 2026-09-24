@@ -393,3 +393,37 @@ wrote it.
   with one; split only if the file count forces it.
 - **API stability.** v0 until the services exist, then decide. go-quickjs is the
   only consumer until then.
+
+## Data size, measured
+
+Deferred, not dismissed. The numbers are here so the decision can be made
+without measuring again.
+
+**The repository is not the problem.** It is 9.7 MB, a 9.0 MiB packfile, because
+git already compresses its objects. An earlier note in this file claimed 48 MB
+of data in git; that was `du` counting filesystem block slack across 5,591 small
+files, and it was wrong.
+
+**The binary is the problem.** `go:embed` puts all 37.1 MB into any program that
+imports the package, so one formatting numbers in English builds to 21.4 MB.
+
+| Approach | Size | Ratio | Cost |
+|---|---|---|---|
+| raw | 37.1 MB | - | none |
+| flate per file | 11.8 MB | 3.13x | 48 µs a file, stdlib |
+| zstd per file | 11.9 MB | 3.12x | 17 µs a file |
+| **one zstd archive per marker** | **2.4 MB** | **15.7x** | 1-10 ms a marker, once |
+
+Per file, zstd is no smaller than the standard library's flate and about three
+times faster to decompress. The size only comes from compressing *across* the
+files, because the locales are nearly the same shape: numbers goes 11.95 MB to
+0.66 MB, names 9.87 MB to 1.00 MB.
+
+Per-marker is the right granularity because it matches the seam already there: a
+program that formats numbers inflates `numbers` once, in ten milliseconds, and
+never touches `names`. The binary would go from 21.4 MB to about 5 MB.
+
+The cost is a dependency. go-intl has none, which is worth something for a
+library; this would need `klauspost/compress`, which go-quickjs already carries.
+A directory source would stay uncompressed either way, so a caller supplying
+their own data is unaffected.
