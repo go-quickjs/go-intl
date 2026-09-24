@@ -398,10 +398,10 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
-| 3c. Rest of the surface | **done** except `selectRange` |
-| 4. PluralRules, ListFormat | **done** - 300/300 and 120/120 |
-| 5. DateTimeFormat | **done** - 1,230/1,230, Gregorian and Buddhist |
-| 6. RelativeTimeFormat | **done** - 1,260/1,260 |
+| 3c. Rest of the surface | corpus done; `numberingSystem`, decimal input and `formatRange` missing |
+| 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
+| 5. DateTimeFormat | 1,230/1,230, Gregorian and Buddhist; surface incomplete, see below |
+| 6. RelativeTimeFormat | 1,260/1,260; lacks `numberingSystem` |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
@@ -422,22 +422,53 @@ README's Intl section.
 | Collator | 1,805 | 1,805 |
 
 Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
-All seven finished services meet both gate conditions, which makes them
-**eligible, not scheduled**.
+
+**Corpus parity is not eligibility.** An audit of go-quickjs's option reads
+(2026-09-24) found that an earlier version of this line, "all six finished
+services meet both gate conditions", was wrong: only **Collator, ListFormat
+and DisplayNames** implement every option go-quickjs does. NumberFormat,
+DateTimeFormat, PluralRules and RelativeTimeFormat match the corpus exactly and
+still lack options go-quickjs accepts; the next section lists them.
 
 ## What is left
 
-| | Corpus cases | Needs |
-|---|---|---|
-| Segmenter | 140 | the LSTM models and the break dictionaries |
-| legacy `toLocale*` | 90 | thin wrappers over DateTimeFormat, no new data |
-| 14 more calendars | 0 | one CLDR package each, no new machinery |
-| DurationFormat | 0 | `cldr-units-full`, already pinned |
-| `PluralRules.selectRange` | 0 | CLDR's plural ranges |
+The first version of this table counted corpus cases, and so listed only what
+the corpus exercises. The real measure is everything go-quickjs gets from
+`internal/icu` today, because that is what a switch-over has to replace. This
+inventory was taken from go-quickjs's own code: the option names its VM reads
+for each service, and the `internal/icu` entry points it calls - about seventy.
+Much of `internal/icu` serves things that are not Intl formatters at all.
 
-The three with no corpus cases are the ones to be careful about. The corpus
-cannot grade them, so they need what DisplayNames and RelativeTimeFormat
-needed: expectations taken from node where the corpus does not reach.
+### Formatter surfaces
+
+What go-quickjs's VM accepts and go-intl does not yet:
+
+| Service | Corpus | Missing |
+|---|---|---|
+| NumberFormat | done | `numberingSystem` and `-u-nu`; exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
+| DateTimeFormat | done | `dayPeriod`; `fractionalSecondDigits`; `timeZoneName` as `shortOffset`, `longOffset`, `shortGeneric`, `longGeneric`; `numberingSystem` and `-u-nu`; offset time zones; the required and default fields of the `toLocale*` methods (90 corpus cases); `formatRange`, `formatRangeToParts`; 14 calendars |
+| PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
+| RelativeTimeFormat | done | `numberingSystem` |
+| Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
+| DurationFormat | none | the service |
+
+### Beyond the formatters
+
+| Area | What go-quickjs calls | What it needs |
+|---|---|---|
+| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`; CLDR's alias data for `getCanonicalLocales` |
+| `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `NumberingSystems`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data |
+| `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
+| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization |
+| Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
+
+The formatter surfaces come first: they are go-intl's own API, and each item
+is small beside the areas below them. Time zones and calendar arithmetic are
+the largest pieces left, and they are Temporal's as much as Intl's.
+
+Anything without corpus cases needs what DisplayNames and the Collator
+needed: expectations taken from node, recorded in `testdata`, where the corpus
+does not reach.
 
 ## Resuming cold
 
