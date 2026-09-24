@@ -32,8 +32,6 @@ package main
 import (
 	"archive/zip"
 	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,14 +45,10 @@ import (
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/internal/colldata"
+	"github.com/go-quickjs/go-intl/internal/icusrc"
 )
 
-// The pinned artifacts, from SOURCES.md.
-const (
-	exportSHA256 = "eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60"
-	dataSHA256   = "9d8b3899096aeb83e4e21ef8a40fec9e03b28db18c48452efac882ce25a91e27"
-	hanFlavor    = "unihan"
-)
+const hanFlavor = "unihan"
 
 func main() {
 	if len(os.Args) != 3 {
@@ -68,11 +62,11 @@ func main() {
 }
 
 func run(exportPath, dataPath string) error {
-	export, err := openPinned(exportPath, exportSHA256)
+	export, err := icusrc.Open(exportPath, icusrc.ExportSHA256)
 	if err != nil {
 		return err
 	}
-	sources, err := openPinned(dataPath, dataSHA256)
+	sources, err := icusrc.Open(dataPath, icusrc.DataSHA256)
 	if err != nil {
 		return err
 	}
@@ -189,25 +183,6 @@ func run(exportPath, dataPath string) error {
 	fmt.Fprintf(os.Stderr, "collgen: %d locales, %d installed, %d aliases, %d parents\n",
 		len(tags), len(bcp.Installed), len(bcp.Aliases), len(bcp.Parents))
 	return nil
-}
-
-// openPinned opens a zip archive after checking it is the one SOURCES.md
-// names.
-func openPinned(name, want string) (*zip.ReadCloser, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	h := sha256.New()
-	_, err = io.Copy(h, f)
-	f.Close()
-	if err != nil {
-		return nil, err
-	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != want {
-		return nil, fmt.Errorf("%s has sha256 %s, but SOURCES.md pins %s", name, got, want)
-	}
-	return zip.OpenReader(name)
 }
 
 // A tomlFile is one of the export's files, taken apart into its keys. A table
