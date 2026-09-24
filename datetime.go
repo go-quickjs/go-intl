@@ -172,8 +172,10 @@ type DateTimeFormat struct {
 	zoneName string
 	zoneID   string
 
-	// fields is the pattern this formatter writes, already taken apart.
-	fields []dateField
+	// pattern is the pattern this formatter writes, already taken apart.
+	pattern datePattern
+	// ranges writes a range of two moments, as ICU's interval formatter.
+	ranges *rangeFormat
 	// hourCycle is the cycle resolvedOptions reports, unset unless an hour
 	// or a time style was asked for.
 	hourCycle HourCycle
@@ -188,9 +190,6 @@ type DateTimeFormat struct {
 	// they see it.
 	zones *zoneNames
 	zone  zoneInfo
-	// hasMinute and hasSecond say whether the pattern writes them, which
-	// decides whether a time is written as exactly noon.
-	hasMinute, hasSecond bool
 }
 
 // numberDigits is the little a date formatter needs from the number data: the
@@ -245,16 +244,17 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		f.decimal = chosen.Symbols.Decimal
 	}
 
-	pattern, cycle, err := f.choosePattern(src, f.decimal)
+	pattern, cycle, g, err := f.choosePattern(src, f.decimal)
 	if err != nil {
 		return nil, err
 	}
 	f.hourCycle = cycle
-	f.fields = parseDatePattern(pattern)
+	f.pattern = compileDatePattern(pattern, f.overrides)
+	if f.ranges, err = f.newRangeFormat(src, g, pattern); err != nil {
+		return nil, err
+	}
 	hasZone := false
-	for _, fd := range f.fields {
-		f.hasMinute = f.hasMinute || fd.letter == 'm'
-		f.hasSecond = f.hasSecond || fd.letter == 's'
+	for _, fd := range f.pattern.fields {
 		hasZone = hasZone || datePartKind(fd.letter) == PartTimeZoneName
 	}
 	// Most patterns write no zone, and the zone names are much the largest
@@ -425,8 +425,8 @@ func quoteLiteral(s string) string {
 // digits writes ASCII digits in the locale's own, where they differ.
 // number writes a numeric field, in the numbering system an override gives
 // its letter or else the formatter's.
-func (f *DateTimeFormat) number(letter byte, v, width int) string {
-	if system, ok := f.overrides[letter]; ok {
+func (f *DateTimeFormat) number(p *dateParts, letter byte, v, width int) string {
+	if system, ok := p.overrides[letter]; ok {
 		switch system {
 		case "romanlow":
 			return roman(v, true)
@@ -517,22 +517,13 @@ func (f *DateTimeFormat) Format(t time.Time) string {
 
 // FormatToParts writes an instant as the pieces it is made of.
 func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
-	local := t.In(f.location)
-	p := reckon(local, f.system)
-	_, p.zoneOffset = local.Zone()
-	p.instant = local
-
 	var out []Part
-	for _, fd := range f.fields {
-		if fd.letter == 0 {
-			if fd.literal != "" {
-				out = append(out, Part{PartLiteral, fd.literal})
-			}
-			continue
+	for _, seg := range f.render(&f.pattern, f.instant(t)) {
+		kind := PartLiteral
+		if seg.letter != 0 {
+			kind = datePartKind(seg.letter)
 		}
-		if value := f.writeField(fd, &p); value != "" {
-			out = append(out, Part{datePartKind(fd.letter), value})
-		}
+		out = append(out, Part{kind, seg.value})
 	}
 	if f.opts.Compat == NodeICU {
 		// V8 writes a plain space wherever ICU writes a narrow no-break

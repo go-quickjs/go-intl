@@ -128,6 +128,10 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		return fmt.Errorf("reading %s: %w", main, err)
 	}
 
+	fb, err := icusrc.ICUFallback()
+	if err != nil {
+		return err
+	}
 	built := map[string][]byte{}
 	for _, e := range entries {
 		if !e.IsDir() {
@@ -144,6 +148,16 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		if greg.AtTimeFormats, err = atTimeFromICU(icu, e.Name(), "gregorian"); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		chain, err := icuChain(icu, fb, e.Name())
+		if err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
+		if l.DateTimeGlue, err = dateTimeGlue(chain); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
+		if greg.IntervalFallback, greg.Intervals, err = intervalsFromICU(chain, "gregorian"); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		for i, other := range others {
 			if i >= len(extras) {
 				break
@@ -157,6 +171,9 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 				continue
 			}
 			if c.AtTimeFormats, err = atTimeFromICU(icu, e.Name(), extras[i].cldr); err != nil {
+				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
+			}
+			if c.IntervalFallback, c.Intervals, err = intervalsFromICU(chain, extras[i].cldr); err != nil {
 				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
 			}
 			l.Calendars = append(l.Calendars, datedata.NamedCalendar{

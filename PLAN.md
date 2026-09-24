@@ -465,6 +465,27 @@ Mean Time". The fix is to take offsets and seasons from ICU's own
 `zoneinfo64` rather than Go's zone data, which is part of the time-zone work
 below.
 
+### Ranges
+
+**Done.** `FormatRange` and `FormatRangeToParts` are ICU's DateIntervalFormat,
+ported from dtitvfmt.cpp and dtitvinf.cpp and driven as V8 drives it: made
+from the skeleton of the formatter's own pattern, in the locale with the
+resolved hour cycle, and with a range whose ends differ in nothing shown
+written once by the formatter itself. The parts' sources come from ICU's
+spans, the extent of the fields written twice.
+`testdata/datetime_range_node.js` records 92,304 ranges over every locale
+Node supports, eighteen option sets and eight pairs of moments, strings and
+parts both; all match.
+
+Two things in it are ICU's implementation rather than its data. Of two
+equally near interval skeletons ICU takes the one its hash table reaches
+first, so the data keeps the order ICU stores them in and go-intl walks them
+as ICU's uhash would. And ICU passes skeletons by pointer, so once the month's
+pattern is found by extending the skeleton, the year's is looked for in the
+extended one. The interval patterns come from ICU's sources, merged along
+ICU's chain and following its calendar aliases, as DateIntervalInfo loads
+them.
+
 ### Numbering systems
 
 **Done.** NumberFormat, DateTimeFormat and RelativeTimeFormat take the
@@ -512,7 +533,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
 | 4. PluralRules, ListFormat | 300/300 and 120/120; ListFormat **done**, PluralRules lacks `selectRange` |
-| 5. DateTimeFormat | 1,230/1,230, and 145,253 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName` and offset zones done; `formatRange` and 14 calendars left |
+| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 14 calendars left |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -561,7 +582,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Service | Corpus | Missing |
 |---|---|---|
 | NumberFormat | done | exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
-| DateTimeFormat | done | `formatRange`, `formatRangeToParts`; 14 calendars |
+| DateTimeFormat | done | 14 calendars |
 | PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |

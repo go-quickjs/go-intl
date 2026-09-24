@@ -14,7 +14,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 2
+const Version = 3
 
 // The widths a name may be written at, in the order they are stored.
 const (
@@ -120,6 +120,39 @@ type Calendar struct {
 	// zone, by pattern-generator field; see Fields. {0} is the pattern, {1}
 	// the field and {2} the field's name.
 	AppendItems [Fields]string
+
+	// IntervalFallback joins the two ends of a range no interval pattern
+	// covers, "{0} – {1}".
+	IntervalFallback string
+	// Intervals are the locale's interval patterns, in the order ICU's
+	// DateIntervalInfo first stores each skeleton: the locale's own before
+	// its parents', sorted within each bundle. The order decides which of
+	// two equally good skeletons ICU picks.
+	Intervals []Interval
+}
+
+// IntervalFields is how many fields an interval pattern can be keyed by:
+// the largest field that differs between the two ends of the range.
+const IntervalFields = 9
+
+// The interval fields, in ICU's order.
+const (
+	IntervalEra = iota
+	IntervalYear
+	IntervalMonth
+	IntervalDay
+	IntervalDayPeriod
+	IntervalHour
+	IntervalMinute
+	IntervalSecond
+	IntervalMillisecond
+)
+
+// An Interval is the patterns of one skeleton, by the largest field that
+// differs; empty where the locale gives none.
+type Interval struct {
+	Skeleton string
+	Patterns [IntervalFields]string
 }
 
 // Fields is how many fields ICU's pattern generator distinguishes: era, year,
@@ -188,6 +221,11 @@ type Locale struct {
 	// FieldNames are what the locale calls each field, by pattern-generator
 	// field, for an append item that names the field it adds.
 	FieldNames [Fields]string
+
+	// DateTimeGlue is the Gregorian calendar's default date-time glue,
+	// which ICU's interval formatter joins a date to a time range with
+	// whatever the calendar.
+	DateTimeGlue string
 }
 
 // Period returns the part of the day a time falls in, as minutes past
@@ -271,6 +309,7 @@ func Encode(l *Locale) []byte {
 	for _, name := range l.FieldNames {
 		b.String(name)
 	}
+	b.String(l.DateTimeGlue)
 	b.Uint(len(l.Calendars))
 	for i := range l.Calendars {
 		b.String(l.Calendars[i].Name)
@@ -322,6 +361,14 @@ func encodeCalendar(b *blob.Writer, c *Calendar) {
 			b.String(s)
 		}
 	}
+	b.String(c.IntervalFallback)
+	b.Uint(len(c.Intervals))
+	for _, iv := range c.Intervals {
+		b.String(iv.Skeleton)
+		for _, p := range iv.Patterns {
+			b.String(p)
+		}
+	}
 }
 
 // Decode reads what Encode wrote.
@@ -346,6 +393,7 @@ func Decode(data []byte) (*Locale, error) {
 	for i := range l.FieldNames {
 		l.FieldNames[i] = r.String()
 	}
+	l.DateTimeGlue = r.String()
 	n := r.Uint()
 	if n < 0 || n > r.Left() {
 		n = 0
@@ -424,6 +472,18 @@ func decodeCalendar(r *blob.Reader, c *Calendar) {
 	for _, set := range []*[Lengths]string{&c.DateNumbers, &c.TimeNumbers} {
 		for i := range set {
 			set[i] = r.String()
+		}
+	}
+	c.IntervalFallback = r.String()
+	n = r.Uint()
+	if n < 0 || n > r.Left() {
+		return
+	}
+	c.Intervals = make([]Interval, n)
+	for i := range c.Intervals {
+		c.Intervals[i].Skeleton = r.String()
+		for j := range c.Intervals[i].Patterns {
+			c.Intervals[i].Patterns[j] = r.String()
 		}
 	}
 }

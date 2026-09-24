@@ -87,6 +87,11 @@ type dateParts struct {
 	// depends on, and zoneOffset its distance from UTC in seconds.
 	instant    time.Time
 	zoneOffset int
+	// hasMinute and hasSecond say whether the pattern being written has
+	// them, which decides whether a time is written as exactly noon, and
+	// overrides are its numbering overrides, by letter.
+	hasMinute, hasSecond bool
+	overrides            map[byte]string
 	// hour12 and dayPeriod are worked out once rather than per field.
 	hour12    int
 	afternoon bool
@@ -174,9 +179,9 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 
 	case 'y', 'Y', 'u', 'r':
 		if fd.count == 2 {
-			return f.number(fd.letter, p.year%100, 2)
+			return f.number(p, fd.letter, p.year%100, 2)
 		}
-		return f.number(fd.letter, p.year, fd.count)
+		return f.number(p, fd.letter, p.year, fd.count)
 
 	case 'M', 'L':
 		context := datedata.Format
@@ -185,7 +190,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		}
 		switch {
 		case fd.count <= 2:
-			return f.number(fd.letter, p.month, fd.count)
+			return f.number(p, fd.letter, p.month, fd.count)
 		case fd.count == 3:
 			return cal.Month(context, datedata.Abbreviated, p.month)
 		case fd.count == 4:
@@ -195,7 +200,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		}
 
 	case 'd':
-		return f.number('d', p.day, fd.count)
+		return f.number(p, 'd', p.day, fd.count)
 
 	case 'E', 'e', 'c':
 		context := datedata.Format
@@ -231,7 +236,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		// What has no name falls back: noon to the part of the day, the
 		// part of the day to which half it is.
 		if fd.letter != 'a' {
-			noon := p.hour == 12 && (!f.hasMinute || p.minute == 0) && (!f.hasSecond || p.second == 0)
+			noon := p.hour == 12 && (!p.hasMinute || p.minute == 0) && (!p.hasSecond || p.second == 0)
 			if noon && (fd.letter == 'b' || f.data.HasPoint("noon")) {
 				if name := cal.PeriodName(width, "noon"); name != "" {
 					return name
@@ -388,4 +393,58 @@ func truncateOffsetPattern(hm string) string {
 		return hm[:h+1]
 	}
 	return hm
+}
+
+// A datePattern is a pattern taken apart, with what writing it needs to know
+// about the whole of it.
+type datePattern struct {
+	fields []dateField
+	// hasMinute and hasSecond say whether the pattern writes them.
+	hasMinute, hasSecond bool
+	// overrides are the numbering systems some fields are written in, by
+	// letter; nil for most.
+	overrides map[byte]string
+}
+
+func compileDatePattern(pattern string, overrides map[byte]string) datePattern {
+	dp := datePattern{fields: parseDatePattern(pattern), overrides: overrides}
+	for _, fd := range dp.fields {
+		dp.hasMinute = dp.hasMinute || fd.letter == 'm'
+		dp.hasSecond = dp.hasSecond || fd.letter == 's'
+	}
+	return dp
+}
+
+// A dateSeg is one piece of written text: a field, by its pattern letter, or
+// a literal, whose letter is zero.
+type dateSeg struct {
+	letter byte
+	value  string
+}
+
+// instant reckons a moment in the formatter's zone and calendar.
+func (f *DateTimeFormat) instant(t time.Time) dateParts {
+	local := t.In(f.location)
+	p := reckon(local, f.system)
+	_, p.zoneOffset = local.Zone()
+	p.instant = local
+	return p
+}
+
+// render writes a moment in a pattern, as pieces.
+func (f *DateTimeFormat) render(dp *datePattern, p dateParts) []dateSeg {
+	p.hasMinute, p.hasSecond, p.overrides = dp.hasMinute, dp.hasSecond, dp.overrides
+	var out []dateSeg
+	for _, fd := range dp.fields {
+		if fd.letter == 0 {
+			if fd.literal != "" {
+				out = append(out, dateSeg{0, fd.literal})
+			}
+			continue
+		}
+		if value := f.writeField(fd, &p); value != "" {
+			out = append(out, dateSeg{fd.letter, value})
+		}
+	}
+	return out
 }

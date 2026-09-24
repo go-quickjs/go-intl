@@ -25,10 +25,10 @@ var hourLetters = map[HourCycle]byte{H11: 'K', H12: 'h', H23: 'H', H24: 'k'}
 // choosePattern settles on the formatter's pattern and the hour cycle
 // resolvedOptions reports, which is unset unless an hour or a time style was
 // asked for.
-func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, HourCycle, error) {
+func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, HourCycle, *dtpg, error) {
 	hourChar, allowed, err := allowedHourFormats(src, f.locale)
 	if err != nil {
-		return "", HourCycleAuto, err
+		return "", HourCycleAuto, nil, err
 	}
 	g := newDTPG(f.calendar, f.data.FieldNames, decimal, hourChar, allowed)
 	hc := f.resolveHourCycle(g.defaultHourCycle())
@@ -39,27 +39,27 @@ func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, Hour
 		pattern := f.stylePattern()
 		if o.TimeStyle == LengthNone {
 			f.styleOverrides(src)
-			return pattern, HourCycleAuto, nil
+			return pattern, HourCycleAuto, g, nil
 		}
 		if hourCycleFromPattern(pattern) == hc {
 			f.styleOverrides(src)
-			return pattern, hc, nil
+			return pattern, hc, g, nil
 		}
 		// A regenerated pattern is a new one, with no overrides.
 		pattern = g.bestPattern(replaceSkeleton(staticSkeleton(pattern), hc), matchHourFieldLength)
-		return replaceHourCycleInPattern(pattern, hc), hc, nil
+		return replaceHourCycleInPattern(pattern, hc), hc, g, nil
 	}
 
 	skeleton := v8Skeleton(o, hc)
 	if skeleton == "" {
-		return "", HourCycleAuto, fmt.Errorf("intl: nothing to format: %w", ErrNotFound)
+		return "", HourCycleAuto, nil, fmt.Errorf("intl: nothing to format: %w", ErrNotFound)
 	}
 	patternCycle := HourCycleAuto
 	if o.Hour != WidthNone {
 		patternCycle = hc
 	}
 	pattern := g.bestPattern(skeleton, matchHourFieldLength)
-	return replaceHourCycleInPattern(pattern, patternCycle), patternCycle, nil
+	return replaceHourCycleInPattern(pattern, patternCycle), patternCycle, g, nil
 }
 
 // resolveHourCycle is V8's: hour12 wins over hourCycle, which wins over the
