@@ -107,12 +107,9 @@ func (f *DateTimeFormat) requestedSkeleton() string {
 
 // skeletonPattern finds the pattern for what the options asked for.
 func (f *DateTimeFormat) skeletonPattern() (string, error) {
+	// The constructor has supplied the default fields, so something is
+	// always asked for.
 	want := f.requestedSkeleton()
-	if want == "" {
-		// ECMA-402 answers a request for nothing with the year, month and day.
-		f.opts.Year, f.opts.Month, f.opts.Day = WidthNumeric, WidthNumeric, WidthNumeric
-		want = f.requestedSkeleton()
-	}
 
 	if pattern, ok := f.calendar.Skeleton(want); ok {
 		return plainDayPeriod(pattern), nil

@@ -404,12 +404,13 @@ README's Intl section.
 | 6. RelativeTimeFormat | 1,260/1,260; lacks `numberingSystem` |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
+| 6d. Legacy `toLocale*` | **done** - 90/90; `Required` and `Defaults` on the date options |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
 | 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
 | 8. Segmenter | not started |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 7,719 of 7,949 cases, every one of them exact.**
+**Corpus coverage so far: 7,809 of 7,949 cases, every one of them exact.** Only the Segmenter's 140 are left.
 
 | Service | Cases | Matching |
 |---|---|---|
@@ -420,6 +421,7 @@ README's Intl section.
 | DateTimeFormat | 1,230 | 1,230 |
 | DisplayNames | 34 | 34 |
 | Collator | 1,805 | 1,805 |
+| legacy `toLocale*` | 90 | 90 |
 
 Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
 
@@ -446,7 +448,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Service | Corpus | Missing |
 |---|---|---|
 | NumberFormat | done | `numberingSystem` and `-u-nu`; exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
-| DateTimeFormat | done | `dayPeriod`; `fractionalSecondDigits`; `timeZoneName` as `shortOffset`, `longOffset`, `shortGeneric`, `longGeneric`; `numberingSystem` and `-u-nu`; offset time zones; the required and default fields of the `toLocale*` methods (90 corpus cases); `formatRange`, `formatRangeToParts`; 14 calendars |
+| DateTimeFormat | done | `dayPeriod`; `fractionalSecondDigits`; `timeZoneName` as `shortOffset`, `longOffset`, `shortGeneric`, `longGeneric`; `numberingSystem` and `-u-nu`; offset time zones; `formatRange`, `formatRangeToParts`; 14 calendars |
 | PluralRules | done | `selectRange`; `compactDisplay` beside `notation` |
 | RelativeTimeFormat | done | `numberingSystem` |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |

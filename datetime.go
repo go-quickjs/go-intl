@@ -60,6 +60,25 @@ const (
 	H24
 )
 
+// DateTimeComponents names a group of fields, for ECMA-402's "required" and
+// "defaults": which fields a formatter must be asked for before it stops
+// supplying its own, and which it supplies.
+type DateTimeComponents int
+
+const (
+	// ComponentsUnset takes Intl.DateTimeFormat's: any field is enough, and
+	// the date is the default.
+	ComponentsUnset DateTimeComponents = iota
+	// ComponentsDate is the weekday, year, month and day.
+	ComponentsDate
+	// ComponentsTime is the day period, hour, minute, second and fraction.
+	ComponentsTime
+	// ComponentsAny is either, and is only something required.
+	ComponentsAny
+	// ComponentsAll is both, and is only a default.
+	ComponentsAll
+)
+
 // DateTimeFormatOptions mirrors the option bag of Intl.DateTimeFormat. Its
 // zero value asks for nothing, which ECMA-402 answers with the year, month and
 // day.
@@ -89,6 +108,16 @@ type DateTimeFormatOptions struct {
 	// Calendar is the calendar to reckon in. Empty means the locale's own,
 	// which so far is always the Gregorian one.
 	Calendar string
+
+	// Required and Defaults are what the legacy methods differ in, and are
+	// the arguments ECMA-402 passes to CreateDateTimeFormat:
+	//
+	//	Intl.DateTimeFormat            any   date   (the zero values)
+	//	Date.prototype.toLocaleString  any   all
+	//	toLocaleDateString             date  date
+	//	toLocaleTimeString             time  time
+	Required DateTimeComponents
+	Defaults DateTimeComponents
 
 	Compat Compat
 }
@@ -138,6 +167,9 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	if (opts.DateStyle != LengthNone || opts.TimeStyle != LengthNone) && opts.hasFields() {
 		return nil, fmt.Errorf("intl: a date style cannot be combined with named fields")
 	}
+	if err := opts.applyDefaults(); err != nil {
+		return nil, err
+	}
 	data, err := loadDates(src, loc)
 	if err != nil {
 		return nil, err
@@ -179,6 +211,51 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 	f.fields = parseDatePattern(pattern)
 	return f, nil
+}
+
+// applyDefaults supplies the fields nobody asked for, as ECMA-402's
+// CreateDateTimeFormat does with its required and defaults arguments.
+func (o *DateTimeFormatOptions) applyDefaults() error {
+	required, defaults := o.Required, o.Defaults
+	if required == ComponentsUnset {
+		required = ComponentsAny
+	}
+	if defaults == ComponentsUnset {
+		defaults = ComponentsDate
+	}
+	if required == ComponentsAll || defaults == ComponentsAny {
+		return fmt.Errorf("intl: %d cannot be required, nor %d a default", required, defaults)
+	}
+	// A method that writes only a date refuses a time style, and the other
+	// way about.
+	if required == ComponentsDate && o.TimeStyle != LengthNone {
+		return fmt.Errorf("intl: a time style where only a date is written")
+	}
+	if required == ComponentsTime && o.DateStyle != LengthNone {
+		return fmt.Errorf("intl: a date style where only a time is written")
+	}
+
+	need := o.DateStyle == LengthNone && o.TimeStyle == LengthNone
+	if required == ComponentsDate || required == ComponentsAny {
+		if o.Weekday != WidthNone || o.Year != WidthNone || o.Month != WidthNone || o.Day != WidthNone {
+			need = false
+		}
+	}
+	if required == ComponentsTime || required == ComponentsAny {
+		if o.Hour != WidthNone || o.Minute != WidthNone || o.Second != WidthNone {
+			need = false
+		}
+	}
+	if !need {
+		return nil
+	}
+	if defaults == ComponentsDate || defaults == ComponentsAll {
+		o.Year, o.Month, o.Day = WidthNumeric, WidthNumeric, WidthNumeric
+	}
+	if defaults == ComponentsTime || defaults == ComponentsAll {
+		o.Hour, o.Minute, o.Second = WidthNumeric, WidthNumeric, WidthNumeric
+	}
+	return nil
 }
 
 func (o *DateTimeFormatOptions) hasFields() bool {
