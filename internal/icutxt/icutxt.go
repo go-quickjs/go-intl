@@ -145,6 +145,14 @@ func (p *parser) item() (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	return p.typed(key)
+}
+
+// typed reads [:type]{...}, the part of a resource after its key. An array's
+// elements have no key and may still have a type: zoneinfo64.txt's zones
+// are ":int" links and ":table"s.
+func (p *parser) typed(key string) (*Node, error) {
+	var err error
 	p.skip()
 	kind := ""
 	if p.peek() == ':' {
@@ -187,7 +195,16 @@ func (p *parser) item() (*Node, error) {
 		if len(n.Values) == 1 && kind == "int" {
 			n.Value = n.Values[0]
 		}
-	case "", "table", "array", "string", "process(uca_rules)", "process(collation)", "process(transliterator)", "process(dependency)":
+	case "bin":
+		// Binary data, kept as its hex digits.
+		if n.Value, err = p.strings(); err != nil {
+			return nil, err
+		}
+	case "array":
+		if err := p.array(n); err != nil {
+			return nil, err
+		}
+	case "", "table", "table(nofallback)", "string", "process(uca_rules)", "process(collation)", "process(transliterator)", "process(dependency)":
 		// A process type is a string ICU's build does something with; the
 		// text is still a string.
 		if err := p.body(n); err != nil {
@@ -272,6 +289,12 @@ func (p *parser) array(n *Node) error {
 				return fmt.Errorf("an element of %s is not closed", n.Key)
 			}
 			p.i++
+		case ':':
+			typed, err := p.typed(el.Key)
+			if err != nil {
+				return err
+			}
+			el = typed
 		default:
 			return fmt.Errorf("an element of %s is neither a string nor a body", n.Key)
 		}

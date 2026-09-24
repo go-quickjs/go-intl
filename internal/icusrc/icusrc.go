@@ -59,8 +59,8 @@ func ReadFile(z *zip.ReadCloser, name string) ([]byte, error) {
 	return nil, fmt.Errorf("%s is not in the archive", name)
 }
 
-// Locales reads ICU's locale bundles, data/locales/*.txt, from the data
-// archive, each once.
+// Locales reads one tree of ICU's locale bundles -- data/locales/*.txt, or
+// data/zone/*.txt -- from the data archive, each once.
 type Locales struct {
 	z     *zip.ReadCloser
 	files map[string]*zip.File
@@ -69,17 +69,140 @@ type Locales struct {
 
 // OpenLocales opens the data archive for its locale bundles.
 func OpenLocales(zipPath string) (*Locales, error) {
+	return OpenTree(zipPath, "locales")
+}
+
+// OpenTree opens the data archive for one tree of bundles: "locales", "zone",
+// "region" and so on.
+func OpenTree(zipPath, tree string) (*Locales, error) {
 	z, err := Open(zipPath, DataSHA256)
 	if err != nil {
 		return nil, err
 	}
 	out := &Locales{z: z, files: map[string]*zip.File{}, cache: map[string]*icutxt.Node{}}
 	for _, f := range z.File {
-		if name, ok := strings.CutPrefix(f.Name, "data/locales/"); ok && strings.HasSuffix(name, ".txt") {
+		if name, ok := strings.CutPrefix(f.Name, "data/"+tree+"/"); ok && strings.HasSuffix(name, ".txt") {
 			out.files[strings.TrimSuffix(name, ".txt")] = f
 		}
 	}
 	return out, nil
+}
+
+// Has reports whether the tree has a bundle of this name.
+func (c *Locales) Has(name string) bool {
+	_, ok := c.files[name]
+	return ok
+}
+
+// A Fallback is what ICU's getParentLocaleID consults when a bundle a locale
+// asks for does not exist: CLDR's parent locales, and the script a language
+// is written in by default, in a region or anywhere.
+type Fallback struct {
+	Parent        func(name string) (string, bool)
+	DefaultScript func(language, region string) string
+}
+
+// Resolve is the whole of what ICU's ures_open reads for a locale, the most
+// specific bundle first and the root last. ICU first finds a bundle that
+// exists, asking getParentLocaleID for the next name to try, and then follows
+// that bundle's %%Parent or truncates its name. The two walks differ, which is
+// why "sr_Cyrl_ME", which has no bundle of its own, reads "sr_Cyrl" and not
+// "sr_Latn".
+func (c *Locales) Resolve(name string, fb Fallback) ([]*icutxt.Node, error) {
+	orig := name
+	for i := 0; !c.Has(name) && i < 16; i++ {
+		next, ok := fb.parent(name, orig)
+		if !ok {
+			name = "root"
+			break
+		}
+		name = next
+	}
+	var out []*icutxt.Node
+	for i := 0; name != "" && i < 16; i++ {
+		n, err := c.Get(name)
+		if err != nil {
+			return nil, err
+		}
+		// A bundle that is only an alias is read as the bundle it names,
+		// whose parents then follow: sr_ME is sr_Latn_ME.
+		if n != nil {
+			if a := n.Get("%%ALIAS"); a != nil && a.Value != "" {
+				name = a.Value
+				continue
+			}
+		}
+		if n != nil {
+			out = append(out, n)
+		}
+		if name == "root" {
+			return out, nil
+		}
+		next := ""
+		if n != nil {
+			if p := n.Get("%%Parent"); p != nil {
+				next = p.Value
+			}
+		}
+		if next == "" {
+			if cut := strings.LastIndex(name, "_"); cut > 0 {
+				next = name[:cut]
+			} else {
+				next = "root"
+			}
+		}
+		name = next
+	}
+	return out, nil
+}
+
+// parent is ICU's getParentLocaleID for a bundle that does not exist.
+func (fb Fallback) parent(name, orig string) (string, bool) {
+	language, script, region, variant := splitName(name)
+	if variant {
+		if cut := strings.LastIndex(name, "_"); cut > 0 {
+			return name[:cut], true
+		}
+		return "", false
+	}
+	if p, ok := fb.Parent(name); ok {
+		return p, true
+	}
+	switch {
+	case script != "" && region != "":
+		if fb.DefaultScript(language, region) == script {
+			return language + "_" + region, true
+		}
+		return language + "_" + script, true
+	case region != "":
+		if _, origScript, _, _ := splitName(orig); origScript != "" {
+			return language + "_" + origScript, true
+		}
+		return language + "_" + fb.DefaultScript(language, region), true
+	case script != "":
+		if fb.DefaultScript(language, "") == script {
+			return language, true
+		}
+		return "", false
+	}
+	return "", false
+}
+
+// splitName takes an ICU locale name apart.
+func splitName(name string) (language, script, region string, variant bool) {
+	parts := strings.Split(name, "_")
+	language = parts[0]
+	for _, p := range parts[1:] {
+		switch {
+		case script == "" && region == "" && len(p) == 4:
+			script = p
+		case region == "" && (len(p) == 2 || len(p) == 3 && p[0] >= '0' && p[0] <= '9'):
+			region = p
+		default:
+			variant = true
+		}
+	}
+	return language, script, region, variant
 }
 
 // Close closes the archive.
