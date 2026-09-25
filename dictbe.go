@@ -1,9 +1,13 @@
 package intl
 
 import (
+	"encoding/binary"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // ICU's dictionary break engines (dictbe.cpp): Thai, Lao, Burmese and
@@ -25,7 +29,7 @@ type breakEngines struct {
 	engines []breakEngine
 	// byScript is the engine for each script with a dictionary.
 	byScript map[string]breakEngine
-	scripts  map[string]codeRanges
+	scripts  scriptTable
 }
 
 // forChar is the factory's engine for a character: the one whose set has
@@ -41,13 +45,31 @@ func (e *breakEngines) forChar(c rune) breakEngine {
 
 // script is uscript_getScript, by the short names ICU keeps dictionaries
 // under where it has them.
-func (e *breakEngines) script(c rune) string {
-	for name, set := range e.scripts {
-		if set.contains(c) {
-			return name
-		}
+func (e *breakEngines) script(c rune) string { return e.scripts.script(c) }
+
+// scriptTable is the Script property, read where it lies: every script's
+// ranges, sorted, each the first and last code point and the script's
+// number, which counts the names.
+type scriptTable struct {
+	ranges []byte // twelve bytes a range
+	names  []string
+}
+
+func (t scriptTable) script(c rune) string {
+	at := func(i, field int) rune { return rune(binary.LittleEndian.Uint32(t.ranges[12*i+4*field:])) }
+	n := len(t.ranges) / 12
+	i := sort.Search(n, func(i int) bool { return at(i, 1) >= c })
+	if i == n || at(i, 0) > c {
+		return "Unknown"
 	}
-	return "Unknown"
+	id := int(at(i, 2))
+	if id >= len(t.names) {
+		return "Unknown"
+	}
+	if code, ok := scriptCodes[t.names[id]]; ok {
+		return code
+	}
+	return t.names[id]
 }
 
 // scriptCodes are the ISO 15924 codes ICU names dictionaries by, for the
@@ -58,28 +80,33 @@ var scriptCodes = map[string]string{
 }
 
 func loadBreakEngines(src Source, norm *Normalizer) (*breakEngines, error) {
-	sets := map[string]codeRanges{}
-	scripts := map[string]codeRanges{}
 	b, err := src.Open(Marker("brkitr/sets"), DataLocale{})
 	if err != nil {
 		return nil, fmt.Errorf("intl: the break engines' sets: %w", err)
 	}
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) < 2 {
-			continue
-		}
-		s, err := parseCodeRanges(f[2:])
-		if err != nil {
-			return nil, fmt.Errorf("intl: the break engines' sets: %w", err)
-		}
-		switch f[0] {
-		case "set":
-			sets[f[1]] = s
-		case "script":
-			scripts[f[1]] = s
-		}
+	index, err := blob.ReadIndex(b)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the break engines' sets: %w", err)
 	}
+	sets := map[string]codeRanges{}
+	for _, name := range []string{"thai", "thaimarks", "lao", "laomarks", "khmer", "khmermarks",
+		"myanmar", "myanmarmarks", "cj"} {
+		v, _ := index.Find("set " + name)
+		if len(v)%8 != 0 {
+			return nil, fmt.Errorf("intl: the break engines' set %s is %d bytes", name, len(v))
+		}
+		set := make(codeRanges, len(v)/8)
+		for i := range set {
+			set[i] = [2]rune{rune(binary.LittleEndian.Uint32(v[8*i:])), rune(binary.LittleEndian.Uint32(v[8*i+4:]))}
+		}
+		sets[name] = set
+	}
+	ranges, _ := index.Find("script ranges")
+	names, _ := index.Find("script names")
+	if len(ranges)%12 != 0 {
+		return nil, fmt.Errorf("intl: the script table is %d bytes", len(ranges))
+	}
+	scripts := scriptTable{ranges: ranges, names: strings.Split(string(names), "\n")}
 	dicts := map[string]string{}
 	if b, err = src.Open(Marker("brkitr/boundaries"), DataLocale{}); err != nil {
 		return nil, fmt.Errorf("intl: the break rules: %w", err)
@@ -100,13 +127,7 @@ func loadBreakEngines(src Source, norm *Normalizer) (*breakEngines, error) {
 		}
 		return decodeBreakDictionary(b)
 	}
-	out := &breakEngines{byScript: map[string]breakEngine{}, scripts: map[string]codeRanges{}}
-	for name, s := range scripts {
-		if code, ok := scriptCodes[name]; ok {
-			name = code
-		}
-		out.scripts[name] = s
-	}
+	out := &breakEngines{byScript: map[string]breakEngine{}, scripts: scripts}
 	space := func(s codeRanges) codeRanges { return s.with(0x20, 0x20) }
 	add := func(script string, make func(d *breakDictionary) breakEngine) error {
 		d, err := load(script)
@@ -410,20 +431,13 @@ func (e *southeastAsianEngine) divide(t *utext, rangeStart, rangeEnd int, breaks
 // of least cost, each word costing what the dictionary says, and a run of
 // katakana what its length does.
 type cjkEngine struct {
-	dict         *breakDictionary
-	set          codeRanges
-	norm         *Normalizer
-	combinesBack map[rune]bool
+	dict *breakDictionary
+	set  codeRanges
+	norm *Normalizer
 }
 
 func newCJKEngine(d *breakDictionary, set codeRanges, norm *Normalizer) *cjkEngine {
-	e := &cjkEngine{dict: d, set: set, norm: norm, combinesBack: map[rune]bool{}}
-	for _, c := range norm.tables.Compositions {
-		if !norm.tables.IsExcluded(c.To) {
-			e.combinesBack[c.Second] = true
-		}
-	}
-	return e
+	return &cjkEngine{dict: d, set: set, norm: norm}
 }
 
 func (e *cjkEngine) handles(c rune) bool { return e.set.contains(c) }
@@ -458,7 +472,7 @@ func (e *cjkEngine) hasBoundaryBefore(c rune) bool {
 		first > hangulTBase && first < hangulTBase+hangulTCount {
 		return false
 	}
-	return !e.combinesBack[first]
+	return !e.norm.tables.CombinesBack(first)
 }
 
 const (

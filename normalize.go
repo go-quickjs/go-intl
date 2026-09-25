@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/go-quickjs/go-intl/internal/normdata"
 )
@@ -75,13 +74,12 @@ func NewNormalizerFrom(src Source) (*Normalizer, error) {
 	return &Normalizer{tables: tables}, nil
 }
 
-// defaultNormalizer is the one the package-level helpers use, built once.
-var defaultNormalizer = sync.OnceValues(NewNormalizer)
-
 // Normalize puts a string into one of Unicode's forms, using the data built
 // into the package.
 func Normalize(s string, form NormalizationForm) (string, error) {
-	n, err := defaultNormalizer()
+	// Building one reads the tables where they lie, which costs nothing
+	// worth keeping it for.
+	n, err := NewNormalizer()
 	if err != nil {
 		return "", err
 	}

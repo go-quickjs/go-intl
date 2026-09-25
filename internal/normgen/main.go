@@ -144,7 +144,7 @@ func run() error {
 		}
 	}
 
-	var tables normdata.Tables
+	var tables normdata.Built
 	tables.Canonical = sortedDecompositions(full)
 	tables.Compatibility = sortedDecompositions(fullCompat)
 	for r, class := range classes {
@@ -182,7 +182,10 @@ func run() error {
 		return a.Second < b.Second
 	})
 
-	out := normdata.Encode(&tables)
+	out, err := normdata.Encode(&tables)
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join("data", "normalization.bin"), out, 0o644); err != nil {
 		return err
 	}

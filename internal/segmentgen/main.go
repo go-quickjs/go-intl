@@ -28,18 +28,23 @@
 // data/brkitr/sets.bin has the Unicode sets ICU's break engines build from
 // property patterns, and the Script property they choose an engine by,
 // from the Unicode Character Database 17.0.0 (Scripts.txt, LineBreak.txt,
-// extracted/DerivedGeneralCategory.txt), as ranges of hexadecimal code
-// points:
+// extracted/DerivedGeneralCategory.txt). It is an index (blob.Index), read
+// where it lies, of ranges of code points, each two little-endian uint32s,
+// the first and the last:
 //
-//	set thai 0E01-0E3A 0E40-0E4E       [[:Thai:]&[:LineBreak=SA:]]
-//	set thaimarks 0E31 0E34-0E3A ...   [[:Thai:]&[:LineBreak=SA:]&[:M:]]
-//	set cj 3041-3096 ...               [[:Han:][:Hiragana:][:Katakana:]] and U+30FC U+FF70 U+FF9E U+FF9F
-//	script Thai 0E01-0E3A 0E40-0E5B
+//	set thai        [[:Thai:]&[:LineBreak=SA:]]
+//	set thaimarks   [[:Thai:]&[:LineBreak=SA:]&[:M:]]
+//	set cj          [[:Han:][:Hiragana:][:Katakana:]] and U+30FC U+FF70 U+FF9E U+FF9F
+//
+// and the Script property as one table, "script ranges": the ranges of
+// every script, sorted, each two uint32s and the script's number, which
+// counts the lines of "script names", the scripts' names in order.
 package main
 
 import (
 	"archive/zip"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -48,6 +53,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
@@ -232,9 +238,14 @@ func buildSets(dir string) ([]byte, error) {
 		return nil, err
 	}
 	mark := func(r rune) bool { v := gc[r]; return v == "Mn" || v == "Mc" || v == "Me" }
-	var out strings.Builder
+	records := map[string][]byte{}
 	set := func(name string, in func(r rune) bool) {
-		out.WriteString("set " + name + ranges(in) + "\n")
+		var b []byte
+		for _, r := range ranges(in) {
+			b = binary.LittleEndian.AppendUint32(b, uint32(r[0]))
+			b = binary.LittleEndian.AppendUint32(b, uint32(r[1]))
+		}
+		records["set "+name] = b
 	}
 	for _, s := range []struct{ name, script string }{
 		{"thai", thai}, {"lao", lao}, {"khmer", khmer}, {"myanmar", myanmar},
@@ -261,15 +272,31 @@ func buildSets(dir string) ([]byte, error) {
 		sorted = append(sorted, n)
 	}
 	sort.Strings(sorted)
-	for _, n := range sorted {
-		out.WriteString("script " + n + ranges(func(r rune) bool { return scripts[r] == n }) + "\n")
+	type scriptRange struct {
+		lo, hi rune
+		id     int
 	}
-	return []byte(out.String()), nil
+	var table []scriptRange
+	for id, n := range sorted {
+		for _, r := range ranges(func(r rune) bool { return scripts[r] == n }) {
+			table = append(table, scriptRange{r[0], r[1], id})
+		}
+	}
+	sort.Slice(table, func(i, j int) bool { return table[i].lo < table[j].lo })
+	var b []byte
+	for _, r := range table {
+		b = binary.LittleEndian.AppendUint32(b, uint32(r.lo))
+		b = binary.LittleEndian.AppendUint32(b, uint32(r.hi))
+		b = binary.LittleEndian.AppendUint32(b, uint32(r.id))
+	}
+	records["script ranges"] = b
+	records["script names"] = []byte(strings.Join(sorted, "\n"))
+	return blob.BuildIndex(records)
 }
 
-// ranges writes the code points a predicate holds for as " lo-hi" ranges.
-func ranges(in func(r rune) bool) string {
-	var b strings.Builder
+// ranges is the code points a predicate holds for, as first-last ranges.
+func ranges(in func(r rune) bool) [][2]rune {
+	var out [][2]rune
 	for r := rune(0); r <= 0x10ffff; r++ {
 		if !in(r) {
 			continue
@@ -278,13 +305,9 @@ func ranges(in func(r rune) bool) string {
 		for r+1 <= 0x10ffff && in(r+1) {
 			r++
 		}
-		if lo == r {
-			fmt.Fprintf(&b, " %04X", lo)
-		} else {
-			fmt.Fprintf(&b, " %04X-%04X", lo, r)
-		}
+		out = append(out, [2]rune{lo, r})
 	}
-	return b.String()
+	return out
 }
 
 // write replaces data/brkitr, all built before any is written.

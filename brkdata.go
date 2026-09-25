@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
-	"strconv"
-	"strings"
 )
 
 // The data ICU's break iterators read, as segmentgen copies it out of
@@ -812,21 +810,4 @@ func (s codeRanges) without(lo, hi rune) codeRanges {
 		}
 	}
 	return out
-}
-
-func parseCodeRanges(fields []string) (codeRanges, error) {
-	var s codeRanges
-	for _, f := range fields {
-		lo, hi, ok := strings.Cut(f, "-")
-		if !ok {
-			hi = lo
-		}
-		a, err1 := strconv.ParseUint(lo, 16, 32)
-		z, err2 := strconv.ParseUint(hi, 16, 32)
-		if err1 != nil || err2 != nil {
-			return nil, fmt.Errorf("range %q", f)
-		}
-		s = append(s, [2]rune{rune(a), rune(z)})
-	}
-	return s, nil
 }

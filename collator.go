@@ -192,13 +192,7 @@ func NewCollatorFrom(src Source, loc Locale, opts CollatorOptions) (*Collator, e
 	if coll.Meta&colldata.TailoredDiacriticsBit != 0 && coll.Diacritics != nil {
 		c.diacritics = coll.Diacritics
 	}
-	// The embedded normalizer is built once and shared; it never changes.
-	if src == Embedded {
-		c.normalizer, err = defaultNormalizer()
-	} else {
-		c.normalizer, err = NewNormalizerFrom(src)
-	}
-	if err != nil {
+	if c.normalizer, err = NewNormalizerFrom(src); err != nil {
 		return nil, err
 	}
 

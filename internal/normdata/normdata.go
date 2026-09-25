@@ -13,13 +13,15 @@
 package normdata
 
 import (
+	"encoding/binary"
+	"fmt"
 	"sort"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // A Decomposition is one character and what it comes apart into.
 type Decomposition struct {
@@ -41,8 +43,8 @@ type Composition struct {
 	First, Second, To rune
 }
 
-// Tables are everything normalization needs.
-type Tables struct {
+// Built is the tables as a generator builds them, which Encode writes.
+type Built struct {
 	// Canonical and Compatibility are sorted by rune. Canonical mappings are
 	// stored fully worked out, so nothing has to be applied twice.
 	Canonical     []Decomposition
@@ -61,129 +63,142 @@ type Tables struct {
 	Compositions []Composition
 }
 
-// Compose returns what two characters make together.
-func (t *Tables) Compose(first, second rune) (rune, bool) {
-	i := sort.Search(len(t.Compositions), func(i int) bool {
-		c := t.Compositions[i]
-		return c.First > first || (c.First == first && c.Second >= second)
-	})
-	if i < len(t.Compositions) &&
-		t.Compositions[i].First == first && t.Compositions[i].Second == second {
-		return t.Compositions[i].To, true
-	}
-	return 0, false
+// Tables are everything normalization needs, read where they lie: sorted
+// arrays of fixed-width records, and the decompositions as indexes keyed by
+// the rune's four bytes, big-endian, so that their order is the runes'.
+// Building a normalizer decodes nothing.
+type Tables struct {
+	canonical, compatibility blob.Index
+	classes                  []byte // rune<<8 | class, four bytes each
+	excluded                 []byte // runes, four bytes each
+	compositions             []byte // first, second, to: twelve bytes each
+	combinesBack             []byte // runes, four bytes each
 }
+
+func runeKey(r rune) string {
+	return string([]byte{byte(r >> 24), byte(r >> 16), byte(r >> 8), byte(r)})
+}
+
+func u32(b []byte, i int) uint32 { return binary.LittleEndian.Uint32(b[4*i:]) }
 
 // Decompose finds a character's canonical decomposition.
 func (t *Tables) Decompose(r rune) (string, bool) {
-	return find(t.Canonical, r)
+	v, ok := t.canonical.Find(runeKey(r))
+	return string(v), ok
 }
 
 // DecomposeCompatibility finds a character's compatibility decomposition,
 // which is the canonical one where it has no other.
 func (t *Tables) DecomposeCompatibility(r rune) (string, bool) {
-	if s, ok := find(t.Compatibility, r); ok {
-		return s, true
+	if v, ok := t.compatibility.Find(runeKey(r)); ok {
+		return string(v), true
 	}
-	return find(t.Canonical, r)
-}
-
-func find(set []Decomposition, r rune) (string, bool) {
-	i := sort.Search(len(set), func(i int) bool { return set[i].Rune >= r })
-	if i < len(set) && set[i].Rune == r {
-		return set[i].To, true
-	}
-	return "", false
+	return t.Decompose(r)
 }
 
 // Class returns a character's canonical combining class.
 func (t *Tables) Class(r rune) uint8 {
-	i := sort.Search(len(t.Classes), func(i int) bool { return t.Classes[i].Rune >= r })
-	if i < len(t.Classes) && t.Classes[i].Rune == r {
-		return t.Classes[i].Class
+	n := len(t.classes) / 4
+	i := sort.Search(n, func(i int) bool { return rune(u32(t.classes, i)>>8) >= r })
+	if i < n && rune(u32(t.classes, i)>>8) == r {
+		return uint8(u32(t.classes, i))
 	}
 	return 0
 }
 
 // IsExcluded reports whether a character must not be composed back together.
-func (t *Tables) IsExcluded(r rune) bool {
-	i := sort.Search(len(t.Excluded), func(i int) bool { return t.Excluded[i] >= r })
-	return i < len(t.Excluded) && t.Excluded[i] == r
+func (t *Tables) IsExcluded(r rune) bool { return inRunes(t.excluded, r) }
+
+// CombinesBack reports whether a character composes with one before it:
+// whether it is the second of some composition.
+func (t *Tables) CombinesBack(r rune) bool { return inRunes(t.combinesBack, r) }
+
+func inRunes(b []byte, r rune) bool {
+	n := len(b) / 4
+	i := sort.Search(n, func(i int) bool { return rune(u32(b, i)) >= r })
+	return i < n && rune(u32(b, i)) == r
+}
+
+// Compose returns what two characters make together.
+func (t *Tables) Compose(first, second rune) (rune, bool) {
+	n := len(t.compositions) / 12
+	at := func(i int) (rune, rune) {
+		return rune(u32(t.compositions, 3*i)), rune(u32(t.compositions, 3*i+1))
+	}
+	i := sort.Search(n, func(i int) bool {
+		f, s := at(i)
+		return f > first || f == first && s >= second
+	})
+	if i < n {
+		if f, s := at(i); f == first && s == second {
+			return rune(u32(t.compositions, 3*i+2)), true
+		}
+	}
+	return 0, false
 }
 
 // Encode writes the tables.
-func Encode(t *Tables) []byte {
+func Encode(t *Built) ([]byte, error) {
 	b := blob.NewWriter(Version)
 	for _, set := range [][]Decomposition{t.Canonical, t.Compatibility} {
-		b.Uint(len(set))
+		records := map[string][]byte{}
 		for _, d := range set {
-			b.Uint(int(d.Rune))
-			b.String(d.To)
+			records[runeKey(d.Rune)] = []byte(d.To)
 		}
+		index, err := blob.BuildIndex(records)
+		if err != nil {
+			return nil, err
+		}
+		b.String(string(index))
 	}
-	b.Uint(len(t.Classes))
+	var classes, excluded, compositions []byte
 	for _, c := range t.Classes {
-		b.Uint(int(c.Rune))
-		b.Uint(int(c.Class))
+		classes = binary.LittleEndian.AppendUint32(classes, uint32(c.Rune)<<8|uint32(c.Class))
 	}
-	b.Uint(len(t.Excluded))
 	for _, r := range t.Excluded {
-		b.Uint(int(r))
+		excluded = binary.LittleEndian.AppendUint32(excluded, uint32(r))
 	}
-	b.Uint(len(t.Compositions))
+	seconds := map[rune]bool{}
 	for _, c := range t.Compositions {
-		b.Uint(int(c.First))
-		b.Uint(int(c.Second))
-		b.Uint(int(c.To))
+		compositions = binary.LittleEndian.AppendUint32(compositions, uint32(c.First))
+		compositions = binary.LittleEndian.AppendUint32(compositions, uint32(c.Second))
+		compositions = binary.LittleEndian.AppendUint32(compositions, uint32(c.To))
+		seconds[c.Second] = true
 	}
-	return b.Bytes()
+	back := make([]rune, 0, len(seconds))
+	for r := range seconds {
+		back = append(back, r)
+	}
+	sort.Slice(back, func(i, j int) bool { return back[i] < back[j] })
+	var combinesBack []byte
+	for _, r := range back {
+		combinesBack = binary.LittleEndian.AppendUint32(combinesBack, uint32(r))
+	}
+	for _, part := range [][]byte{classes, excluded, compositions, combinesBack} {
+		b.String(string(part))
+	}
+	return b.Bytes(), nil
 }
 
-// Decode reads what Encode wrote.
+// Decode reads what Encode wrote, where it lies.
 func Decode(data []byte) (*Tables, error) {
 	r, err := blob.NewReader(data, Version)
 	if err != nil {
 		return nil, err
 	}
 	var t Tables
-	for _, set := range []*[]Decomposition{&t.Canonical, &t.Compatibility} {
-		n := r.Uint()
-		if n < 0 || n > r.Left() {
-			break
-		}
-		out := make([]Decomposition, 0, n)
-		for i := 0; i < n; i++ {
-			code := rune(r.Uint())
-			to := r.String()
-			out = append(out, Decomposition{Rune: code, To: to})
-		}
-		*set = out
-	}
-	if n := r.Uint(); n >= 0 && n <= r.Left() {
-		t.Classes = make([]Combining, 0, n)
-		for i := 0; i < n; i++ {
-			code := rune(r.Uint())
-			class := uint8(r.Uint())
-			t.Classes = append(t.Classes, Combining{Rune: code, Class: class})
+	for _, index := range []*blob.Index{&t.canonical, &t.compatibility} {
+		if *index, err = blob.ReadIndex(r.Bytes()); err != nil {
+			return nil, err
 		}
 	}
-	if n := r.Uint(); n >= 0 && n <= r.Left() {
-		t.Excluded = make([]rune, 0, n)
-		for i := 0; i < n; i++ {
-			t.Excluded = append(t.Excluded, rune(r.Uint()))
-		}
-	}
-	if n := r.Uint(); n >= 0 && n <= r.Left() {
-		t.Compositions = make([]Composition, 0, n)
-		for i := 0; i < n; i++ {
-			first := rune(r.Uint())
-			second := rune(r.Uint())
-			to := rune(r.Uint())
-			t.Compositions = append(t.Compositions, Composition{first, second, to})
-		}
-	}
+	t.classes, t.excluded, t.compositions, t.combinesBack = r.Bytes(), r.Bytes(), r.Bytes(), r.Bytes()
 	if err := r.Err(); err != nil {
 		return nil, err
+	}
+	if len(t.classes)%4 != 0 || len(t.excluded)%4 != 0 || len(t.compositions)%12 != 0 || len(t.combinesBack)%4 != 0 {
+		return nil, fmt.Errorf("normdata: tables of %d, %d, %d and %d bytes", len(t.classes),
+			len(t.excluded), len(t.compositions), len(t.combinesBack))
 	}
 	return &t, nil
 }
