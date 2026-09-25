@@ -21,10 +21,28 @@ import (
 
 // A DataLocale is the language, script and region a table is stored under. It
 // holds no slices, so it is comparable and can be a map key.
+//
+// Variant is set for one variant alone, "posix": ICU's en_US_POSIX is the
+// only data it keeps under a variant, and "-u-va-posix", which ICU turns into
+// that variant, is how ECMA-402 asks for it. Its collation, number patterns
+// and word breaks differ from en-US's; a table without a POSIX bundle falls
+// back to the locale without the variant.
 type DataLocale struct {
 	Language Language
 	Script   Script
 	Region   Region
+	Variant  Variant
+}
+
+// posixVariant is the one variant a data locale holds.
+var posixVariant = mustVariant("posix")
+
+func mustVariant(s string) Variant {
+	v, err := ParseVariant(s)
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
 
 // A Keyword is one setting from the Unicode extension: "ca" and "buddhist".
@@ -61,9 +79,18 @@ type Locale struct {
 	Private    string
 }
 
-// Data returns the part of the identifier that data is keyed by.
+// Data returns the part of the identifier that data is keyed by: the
+// language, script and region, and the variant POSIX where the identifier
+// asks for it, by "-u-va-posix" or by the variant itself, as ICU reads both.
 func (l Locale) Data() DataLocale {
-	return DataLocale{Language: l.Language, Script: l.Script, Region: l.Region}
+	d := DataLocale{Language: l.Language, Script: l.Script, Region: l.Region}
+	if v, ok := l.Keyword("va"); ok && v == "posix" {
+		d.Variant = posixVariant
+	}
+	if len(l.Variants) == 1 && l.Variants[0] == posixVariant {
+		d.Variant = posixVariant
+	}
+	return d
 }
 
 // Keyword returns the value of one Unicode extension setting.
@@ -280,7 +307,7 @@ func (l Locale) writeUnicode(b *strings.Builder) {
 }
 
 // String writes the data locale, which is an identifier with nothing but the
-// language, script and region.
+// language, script and region, and the variant where there is one.
 func (d DataLocale) String() string {
 	out := d.Language.String()
 	if !d.Script.IsZero() {
@@ -288,6 +315,9 @@ func (d DataLocale) String() string {
 	}
 	if !d.Region.IsZero() {
 		out += "-" + d.Region.String()
+	}
+	if !d.Variant.IsZero() {
+		out += "-" + d.Variant.String()
 	}
 	return out
 }
@@ -297,7 +327,9 @@ func (d DataLocale) String() string {
 func (d DataLocale) IsRoot() bool { return d == DataLocale{} }
 
 // DataLocaleSize is how many bytes a data locale takes when written out: its
-// three subtags, each in its own fixed-width field.
+// three subtags, each in its own fixed-width field. The tables written so --
+// likely subtags, parent locales -- know no variants, and a variant is not
+// written.
 //
 // Generated tables are records of this size laid end to end and sorted, so a
 // lookup is a binary search over the bytes with nothing decoded on the way.

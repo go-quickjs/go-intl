@@ -143,16 +143,20 @@ func (i *LocaleInfo) Collations(l Locale) ([]string, error) {
 }
 
 // HourCycles is getHourCycles: the "-u-hc-" keyword's cycle, else the
-// pattern generator's default for the locale.
+// pattern generator's default for the locale, whose region is the "-u-rg-"
+// keyword's where there is one. A DateTimeFormat does not answer this: V8
+// drops "-u-rg-" before building one, and Node's formats 12-hour time for
+// "en-US-u-rg-dezzzz", whose Intl.Locale says h23.
 func (i *LocaleInfo) HourCycles(l Locale) ([]string, error) {
 	if hc, ok := l.Keyword("hc"); ok && hc != "" {
 		return []string{hc}, nil
 	}
-	f, err := NewDateTimeFormatFrom(i.src, l, DateTimeFormatOptions{Hour: WidthNumeric, TimeZone: "UTC"})
+	hourChar, _, err := allowedHourFormats(i.src, l)
 	if err != nil {
 		return nil, err
 	}
-	name := map[HourCycle]string{H11: "h11", H12: "h12", H23: "h23", H24: "h24"}[f.ResolvedOptions().HourCycle]
+	g := &dtpg{defaultHourChar: hourChar}
+	name := map[HourCycle]string{H11: "h11", H12: "h12", H23: "h23", H24: "h24"}[g.defaultHourCycle()]
 	return []string{name}, nil
 }
 

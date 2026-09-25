@@ -92,8 +92,9 @@ for (const loc of locales) {
     if (new Intl.Collator(loc, { collation: co }).resolvedOptions().collation === co) {
       configs.push([loc, { collation: co }]);
     }
-    if (new Intl.Collator(loc + "-u-co-" + co).resolvedOptions().collation === co) {
-      configs.push([loc + "-u-co-" + co, {}]);
+    const withCo = loc + (loc.includes("-u-") ? "-co-" : "-u-co-") + co;
+    if (new Intl.Collator(withCo).resolvedOptions().collation === co) {
+      configs.push([withCo, {}]);
     }
   }
   for (const [tag, opts] of configs) {

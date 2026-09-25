@@ -15,13 +15,7 @@ import (
 
 // The collation gaps: what go-intl does not do, each with the reason, so that
 // the test says exactly what it does not hold go-intl to. See PLAN.md.
-var collatorGaps = map[string]string{
-	// Korean's searchjl collation gives jamo secondary weights of its own and
-	// prefix contexts, which the export leaves out and only ICU's rule
-	// compiler can allocate.
-	"ko-u-co-searchjl":            "searchjl",
-	`ko {"collation":"searchjl"}`: "searchjl",
-}
+var collatorGaps = map[string]string{}
 
 // TestCollatorMatchesNode holds every collation locale, under every option and
 // collation type, to the order Node puts a word list in. The expectations are

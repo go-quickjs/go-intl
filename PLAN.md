@@ -372,10 +372,12 @@ numbergen now carries it (`TimeSeparators`, only where it is not a colon).
 
 `testdata/duration_node.js` records 21,882 cases: seventeen option bags and
 twenty-four durations in forty locales, three of each in every other
-locale. All match but named gaps. One is V8's: it sums a fraction of a
-second in an int64 of nanoseconds, and 1e20 of them converts to INT64_MIN,
-a result C++ leaves undefined; go-intl sums exactly, as the proposal does.
-The others are locale negotiation's: ICU has no data at all for 21 of
+locale. All match. V8 sums a fraction of a second in a double converted to
+an int64 of nanoseconds, and 1e20 of them converts to INT64_MIN, a result
+C++ leaves undefined and x86-64 fixes; the NodeICU profile does the same
+(a named divergence, tested under both profiles), the standard one sums
+exactly, as the proposal does. Other differences had been locale
+negotiation's: ICU has no data at all for 21 of
 CLDR's locales (az-Arab, en-Dsrt, zh-Latn, ...), so V8 resolves them by
 truncation, az-Arab to az; and ICU's unit tree has no sr_Cyrl_ME, whose
 fallback reads sr_Latn_ME, so Node writes its units in Latin beside
@@ -419,10 +421,16 @@ found by the differential below rather than guessed:
   The export keeps them in tables of their own (`dia`, `jamo`), and a collator
   that reads only the trie gives U+0308 an unassigned weight.
 - **A tailoring's jamo are lost entirely.** The search collations make a
-  trailing consonant equal to the leading one, and the export drops that; ICU4X
-  lives without it. Those rules have one shape, `&ᄀᄀ =ᄁ`, so `collgen` reads
-  them from ICU's rule sources as runs of jamo - inputs, weighed at run time -
-  and refuses any jamo rule of another shape.
+  trailing consonant equal to the leading one, and Korean's `searchjl` gives
+  the leading consonants prefix contexts and weights of their own; the export
+  drops all of it, and ICU4X lives without it. Those weights are allocated by
+  ICU's rule compiler, so a collation type whose compiled trie tailors any
+  conjoining jamo is taken whole from ICU's compiled data (`icudt78l.dat` in
+  the source release, read by `internal/icudat`): its `%%CollationBin`
+  trie, rebuilt as the code point trie the collator reads and checked against
+  ICU's at every code point, and the arrays it points into, which the export
+  renumbers. Its settings, reordering and diacritics still come from the
+  export. This replaced reading the search rules as runs of jamo.
 - **How collation locales inherit is not in the export.** ICU's collation tree
   differs from the ordinary one: Bokmål collates as Norwegian, Cantonese as
   traditional Chinese, and simplified and traditional Chinese default to
@@ -437,16 +445,11 @@ found by the differential below rather than guessed:
 Beyond the corpus, `testdata/collator_node.js` records the order node puts
 1,113 words in - every script the tailorings touch, kana, Hangul, Han, digits,
 text out of canonical order - for **every installed collation locale under
-every option set and every collation type it supports: 2,903 cases, 2,901 of
-them exact.** The other two are one known gap:
-
-- **`ko-u-co-searchjl`** gives jamo secondary weights of its own and prefix
-  contexts. Its weights exist only in ICU's compiled data and allocating them
-  is the rule compiler's job. Nothing in go-quickjs or test262 reaches it.
-- **`en-US-POSIX`** (`en-US-u-va-posix`) carries a variant, which a data
-  locale cannot hold, so its ASCII-order collation is not generated and the
-  locale sorts as English. Node supports it; test262 and go-quickjs only
-  canonicalize the tag, never collate with it.
+every option set and every collation type it supports, `en-US-u-va-posix`
+and `en-u-va-posix` among them: 2,941 cases, all exact.** `ko-u-co-searchjl`
+had been a gap until its jamo came from ICU's compiled data, and
+`en-US-POSIX` until a data locale could hold its variant (see "The POSIX
+variant").
 
 One compat-profile entry: node writes an option-chosen collation into the
 resolved locale (`de` with `{collation: "eor"}` resolves to `de-u-co-eor`);
@@ -503,7 +506,7 @@ six `timeZoneName` styles. `testdata/datetime_features_node.js` records
 66,023 cases over every locale Node supports, and
 `testdata/datetime_zones_node.js` 45,900 more: every zone Node knows and
 offsets in each form ECMA-402 accepts, in every style, in nine locales. All
-match but 36, a named gap.
+match.
 
 An offset zone ("+05:30", "+0530", "-08") is reported as `±HH:MM`, minus
 zero as plus, and written as its offset. V8 hands ICU a custom zone, and ICU
@@ -938,14 +941,14 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 286,519 cases against node, all match; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
-| 6c. DurationFormat | **done** - not in the corpus; 20,514 cases against node all match, and two named gaps cover 688 more |
+| 6c. DurationFormat | **done** - not in the corpus; 21,202 cases against node, all match; V8's int64 overflow is a named NodeICU divergence |
 | 6d. Legacy `toLocale*` | **done** - 90/90; `Required` and `Defaults` on the date options |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
 | **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
-| 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
+| 7. Collator | **done** - 1,805/1,805, and 2,941/2,941 orders against node, `searchjl` and POSIX included |
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
@@ -972,8 +975,8 @@ Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
 (2026-09-24) found that an earlier version of this line, "all six finished
 services meet both gate conditions", was wrong. Now **Collator, ListFormat,
 DisplayNames, RelativeTimeFormat, PluralRules and NumberFormat** implement
-every option go-quickjs does. DateTimeFormat matches the corpus exactly and
-still lacks the non-Gregorian calendars; the next section lists them.
+every option go-quickjs does, and so does DateTimeFormat, all eighteen
+calendars included.
 
 ## What is left
 
@@ -1024,6 +1027,38 @@ tags: all 11,139 match.
 One divergence, in the compatibility profile: V8 answers two lowercase
 letters alone without consulting ICU, so "bh" stays "bh" where the standard
 makes it "bho".
+
+### The POSIX variant
+
+ICU reads "-u-va-posix" as the locale's variant POSIX, not as a keyword, and
+keeps data under one variant alone: `en_US_POSIX`, whose collation sorts in
+ASCII order, whose numbers are written without grouping ("0.######") and
+infinity as "INF", and whose words break at colons. So a `DataLocale` holds
+that one variant (`Locale.Data` sets it from the keyword or the bare
+variant), the fallback chains drop it first (`en-US-posix`, `en-US`, `en`,
+the root; `en-posix` to `en`), `collgen` writes the POSIX tailoring the
+export has, and `numbergen` writes `en-US-posix` as en-US with
+`en_US_POSIX`'s own patterns and marks from ICU's sources, cldr-json having
+no such locale. The segmenter's special case gave way to the chain.
+
+V8's ResolveLocale rebuilds the extension from the keywords a service uses,
+but ICU's variant is not a keyword, so the resolved locale keeps
+"-u-va-posix" in every service: `en-US-u-va-posix` for NumberFormat,
+`en-u-va-posix` for PluralRules, which has no en-US. `withKeywords` keeps it
+whatever else is dropped. That pass also found services keeping keywords V8
+drops: PluralRules, ListFormat and DisplayNames keep none now, and
+DateTimeFormat only "ca", "hc" and "nu" -- a "-u-rg-" that DateTimeFormat
+had been honouring, and that Node's does not. LocaleInfo's hour cycles,
+which do honour it, now come from the region's time data rather than from a
+DateTimeFormat. `testdata/variant_node.js` records all nine services with
+eleven tags: all 242 match.
+
+Two NumberFormat bugs it turned up: a pattern without grouping is grouped by
+threes under `useGrouping: "always"`, as ICU's Grouper does, and the unit
+"percent", short or narrow and not compact, is written with the percent
+pattern, unscaled, its sign typed as the unit ("0,5 %" in German, "%5" in
+Turkish), as ICU does. `useGrouping: "min2"` was missing and is added.
+`number_decimal_node.js` now records both: 10,824 cases, all match.
 
 ### Negotiation
 

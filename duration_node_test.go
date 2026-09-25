@@ -32,7 +32,8 @@ var durationDisplays = map[string]intl.DurationDisplay{
 // durationOptions reads a JavaScript option bag.
 func durationOptions(t *testing.T, raw map[string]any) intl.DurationFormatOptions {
 	t.Helper()
-	var o intl.DurationFormatOptions
+	// Node's expectations hold Node's arithmetic, overflow and all.
+	o := intl.DurationFormatOptions{Compat: intl.NodeICU}
 	for key, v := range raw {
 		switch key {
 		case "style":
@@ -88,11 +89,7 @@ func resolvedDuration(r intl.ResolvedDurationFormat) map[string]any {
 
 // durationGaps are durations Node writes differently for a reason go-intl
 // does not copy, each with the reason.
-var durationGaps = []struct{ duration, why string }{
-	{`{"nanoseconds":100000000000000000000}`, "V8 sums a fraction of a second in an int64 of " +
-		"nanoseconds, and 1e20 of them converts to INT64_MIN, a result C++ leaves undefined; " +
-		"go-intl sums exactly, as the proposal does"},
-}
+var durationGaps = []struct{ duration, why string }{}
 
 // durationLocaleGaps are locales Node writes otherwise, for reasons that
 // belong to the data rather than to DurationFormat.

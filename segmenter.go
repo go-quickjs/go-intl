@@ -92,25 +92,10 @@ func breakRulesName(src Source, loc Locale, g Granularity) (string, error) {
 			named[f[1]] = strings.TrimSuffix(f[3], ".brk")
 		}
 	}
-	icuName := func(d DataLocale) string {
-		if d.IsRoot() {
-			return "root"
-		}
-		return strings.ReplaceAll(d.String(), "-", "_")
-	}
 	var names []string
-	// "-u-va-posix" is ICU's variant POSIX: en_US_POSIX, which falls back
-	// to en_US.
-	for _, k := range loc.Keywords {
-		if k.Key == "va" && k.Value == "posix" {
-			sep := "_"
-			if loc.Region.IsZero() {
-				sep = "__"
-			}
-			names = append(names, icuName(loc.Data())+sep+"POSIX")
-		}
-	}
-	chain := []DataLocale{loc.Data(), {}}
+	// "-u-va-posix" is ICU's variant POSIX, which the data locale holds:
+	// en_US_POSIX, which falls back to en_US.
+	chain := loc.Data().Fallback()
 	if fb, err := NewFallbacker(src); err == nil {
 		chain = fb.ChainIn(treeBrkitr, loc.Data())
 	}

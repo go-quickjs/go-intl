@@ -105,16 +105,6 @@ func (c *Collator) elements(s string) []uint64 {
 			i = w.next(i)
 			continue
 		}
-		// A jamo the collation makes equal to a run of jamo weighs as the
-		// run does. Jamo have no contexts, so the run is weighed alone.
-		if run, ok := c.jamoRuns[r]; ok {
-			for _, x := range run {
-				d, ce32 := c.lookup(x)
-				w.appendJamo(d, ce32, x)
-			}
-			i = w.next(i)
-			continue
-		}
 		d, ce32 := c.lookup(r)
 		i = w.appendCE32(d, ce32, i)
 	}
@@ -123,8 +113,8 @@ func (c *Collator) elements(s string) []uint64 {
 
 // lookup finds a character's element in the tailoring, falling back to the
 // root. The root's conjoining jamo are kept apart by the export, in a table
-// of their own; a tailoring that changes them -- the search collations make
-// a leading and a trailing consonant equal -- still has them in its trie.
+// of their own; a tailoring that changes them -- the search collations,
+// Korean's searchjl -- is ICU's compiled one, which has them in its trie.
 func (c *Collator) lookup(r rune) (*colldata.Data, uint32) {
 	if c.tailoring != nil {
 		if ce32 := c.tailoring.Trie.Get(r); ce32 != fallbackCE32 {
@@ -234,32 +224,6 @@ func (w *elementWriter) appendCE32(d *colldata.Data, ce32 uint32, i int) int {
 			w.out = append(w.out, primaryCE(0xfffd0000))
 			return next
 		}
-	}
-}
-
-// appendJamo appends one jamo's elements, which in the root are always one
-// element or a computed one.
-func (w *elementWriter) appendJamo(d *colldata.Data, ce32 uint32, r rune) {
-	if ce, ok := simpleCE(ce32); ok {
-		w.out = append(w.out, ce)
-		return
-	}
-	switch tagOf(ce32) {
-	case tagOffset:
-		w.out = append(w.out, primaryCE(offsetPrimary(d.CEs.At(int(ce32>>13)), r)))
-	case tagExpansion32:
-		index, length := int(ce32>>13), int(ce32>>8&31)
-		for k := index; k < index+length; k++ {
-			ce, _ := simpleCE(d.CE32s.At(k))
-			w.out = append(w.out, ce)
-		}
-	case tagExpansion:
-		index, length := int(ce32>>13), int(ce32>>8&31)
-		for k := index; k < index+length; k++ {
-			w.out = append(w.out, d.CEs.At(k))
-		}
-	default:
-		w.out = append(w.out, primaryCE(0xfffd0000))
 	}
 }
 

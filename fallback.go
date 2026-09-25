@@ -26,7 +26,11 @@ package intl
 func (d DataLocale) Fallback() []DataLocale {
 	chain := []DataLocale{d}
 	next := d
-	// The region is the most specific part, so it goes first, then the script.
+	// A variant is the most specific part, then the region, then the script.
+	if !next.Variant.IsZero() {
+		next.Variant = Variant{}
+		chain = append(chain, next)
+	}
 	if !next.Region.IsZero() {
 		next.Region = Region{}
 		chain = append(chain, next)

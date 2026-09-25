@@ -80,7 +80,8 @@ func NewListFormatFrom(src Source, loc Locale, opts ListFormatOptions) (*ListFor
 	if p.Empty() {
 		return nil, fmt.Errorf("intl: %s has no list patterns: %w", loc, ErrNotFound)
 	}
-	return &ListFormat{locale: loc, opts: opts, patterns: p}, nil
+	// ListFormat uses nothing of the Unicode extension.
+	return &ListFormat{locale: loc.onlyKeywords(), opts: opts, patterns: p}, nil
 }
 
 func loadLists(src Source, loc Locale) (*listdata.Locale, error) {

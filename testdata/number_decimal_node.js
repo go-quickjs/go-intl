@@ -31,8 +31,13 @@ const configs = [
   { roundingIncrement: 5, maximumFractionDigits: 2, minimumFractionDigits: 2 },
   { signDisplay: "exceptZero" }, { style: "unit", unit: "kilometer", unitDisplay: "long" },
   { useGrouping: false }, { roundingPriority: "lessPrecision", maximumFractionDigits: 3, maximumSignificantDigits: 3 },
+  // The unit percent is written with the percent pattern, unscaled, except
+  // spelled out or compact.
+  { style: "unit", unit: "percent" }, { style: "unit", unit: "percent", unitDisplay: "narrow" },
+  { style: "unit", unit: "percent", unitDisplay: "long" }, { style: "unit", unit: "percent", notation: "compact" },
+  { useGrouping: "min2" }, { useGrouping: "always", notation: "compact" }, { useGrouping: true },
 ];
-const locales = ["en", "de", "fr", "ar", "hi", "ja", "ru", "es", "bn", "fa"];
+const locales = ["en", "de", "fr", "ar", "hi", "ja", "ru", "es", "bn", "fa", "tr"];
 
 const lines = [];
 for (const loc of locales) {

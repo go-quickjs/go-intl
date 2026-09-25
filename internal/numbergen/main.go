@@ -108,6 +108,7 @@ func run(root, icuData string) error {
 	// Everything is built before anything is written, so a failure partway
 	// leaves the tracked tables as a matched set.
 	built := map[string][]byte{}
+	locales := map[string]*numdata.Locale{}
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -126,10 +127,16 @@ func run(root, icuData string) error {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
 		built[e.Name()] = numdata.Encode(l)
+		locales[e.Name()] = l
 	}
 	if len(built) == 0 {
 		return fmt.Errorf("no locales found under %s", main)
 	}
+	posix, err := posixLocale(icu, locales)
+	if err != nil {
+		return fmt.Errorf("en-US-posix: %w", err)
+	}
+	built["en-US-posix"] = numdata.Encode(posix)
 
 	fractions, err := currencyDigitsTable()
 	if err != nil {
@@ -657,6 +664,58 @@ func timeSeparators(c *icusrc.Locales, name string, digits map[string]string) ([
 		}
 	}
 	return out, nil
+}
+
+// posixLocale is ICU's one variant locale, en_US_POSIX, which cldr-json
+// does not carry and "-u-va-posix" asks for: what en-US resolves to, with
+// the Latin patterns and marks ICU's en_US_POSIX gives on top -- numbers
+// written without grouping, "INF" for infinity. What it does not give is
+// en-US's, as ICU inherits it.
+func posixLocale(c *icusrc.Locales, locales map[string]*numdata.Locale) (*numdata.Locale, error) {
+	base := locales["en-US"]
+	if base == nil {
+		base = locales["en"]
+	}
+	if base == nil {
+		return nil, fmt.Errorf("no en-US or en to build on")
+	}
+	if base.NumberingSystem != "latn" {
+		return nil, fmt.Errorf("en writes %s digits", base.NumberingSystem)
+	}
+	own, err := c.Get("en_US_POSIX")
+	if err != nil {
+		return nil, err
+	}
+	if own == nil {
+		return nil, fmt.Errorf("ICU has no en_US_POSIX")
+	}
+	out := *base
+	fields := map[string]*string{
+		"symbols/decimal":           &out.Symbols.Decimal,
+		"symbols/group":             &out.Symbols.Group,
+		"symbols/percentSign":       &out.Symbols.PercentSign,
+		"symbols/plusSign":          &out.Symbols.PlusSign,
+		"symbols/minusSign":         &out.Symbols.MinusSign,
+		"symbols/exponential":       &out.Symbols.Exponential,
+		"symbols/nan":               &out.Symbols.NaN,
+		"symbols/infinity":          &out.Symbols.Infinity,
+		"symbols/currencyDecimal":   &out.Symbols.CurrencyDecimal,
+		"symbols/currencyGroup":     &out.Symbols.CurrencyGroup,
+		"patterns/decimalFormat":    &out.DecimalPattern,
+		"patterns/percentFormat":    &out.PercentPattern,
+		"patterns/currencyFormat":   &out.CurrencyPattern,
+		"patterns/accountingFormat": &out.AccountingPattern,
+	}
+	for key, field := range fields {
+		part, name, _ := strings.Cut(key, "/")
+		if v := own.Get("NumberElements", "latn", part, name); v != nil {
+			if v.Alias {
+				return nil, fmt.Errorf("%s is an alias", key)
+			}
+			*field = v.Value
+		}
+	}
+	return &out, nil
 }
 
 // partials finds what a locale's ICU files say about numbering systems its

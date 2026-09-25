@@ -38,12 +38,8 @@
 package main
 
 import (
-	"archive/tar"
 	"archive/zip"
-	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -52,12 +48,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 )
-
-// sourcesSHA256 is icu4c-78.3-sources.tgz.
-const sourcesSHA256 = "3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0"
 
 // ucdSHA256 are the Unicode Character Database 17.0.0's files read.
 var ucdSHA256 = map[string]string{
@@ -89,7 +83,7 @@ func main() {
 }
 
 func build(sources, dataZip, ucdDir string) (map[string][]byte, error) {
-	dat, err := readDat(sources)
+	dat, err := icudat.Read(sources)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +93,7 @@ func build(sources, dataZip, ucdDir string) (map[string][]byte, error) {
 		if !ok {
 			return nil, fmt.Errorf("icudt78l.dat has no brkitr/%s", name)
 		}
-		body, err := stripHeader(b)
+		body, err := icudat.StripHeader(b)
 		if err != nil {
 			return nil, fmt.Errorf("brkitr/%s: %w", name, err)
 		}
@@ -116,87 +110,6 @@ func build(sources, dataZip, ucdDir string) (map[string][]byte, error) {
 	}
 	files["sets.bin"] = sets
 	return files, nil
-}
-
-// readDat reads icudt78l.dat out of the source release and returns its
-// items by name.
-func readDat(sources string) (map[string][]byte, error) {
-	raw, err := os.ReadFile(sources)
-	if err != nil {
-		return nil, err
-	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != sourcesSHA256 {
-		return nil, fmt.Errorf("%s has checksum %s, want %s", sources, got, sourcesSHA256)
-	}
-	z, err := gzip.NewReader(bytes.NewReader(raw))
-	if err != nil {
-		return nil, err
-	}
-	r := tar.NewReader(z)
-	var dat []byte
-	for {
-		h, err := r.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		if h.Name == "icu/source/data/in/icudt78l.dat" {
-			if dat, err = io.ReadAll(r); err != nil {
-				return nil, err
-			}
-			break
-		}
-	}
-	if dat == nil {
-		return nil, fmt.Errorf("%s has no icu/source/data/in/icudt78l.dat", sources)
-	}
-	// A common data file: its header, then a table of contents of name
-	// and data offsets from the table's start.
-	toc := int(binary.LittleEndian.Uint16(dat))
-	if toc+4 > len(dat) {
-		return nil, fmt.Errorf("icudt78l.dat is truncated")
-	}
-	n := int(binary.LittleEndian.Uint32(dat[toc:]))
-	type entry struct {
-		name  string
-		start int
-	}
-	entries := make([]entry, n)
-	for i := 0; i < n; i++ {
-		at := toc + 4 + 8*i
-		nameOff := toc + int(binary.LittleEndian.Uint32(dat[at:]))
-		dataOff := toc + int(binary.LittleEndian.Uint32(dat[at+4:]))
-		end := bytes.IndexByte(dat[nameOff:], 0)
-		if end < 0 || dataOff > len(dat) {
-			return nil, fmt.Errorf("icudt78l.dat's table of contents is broken")
-		}
-		entries[i] = entry{string(dat[nameOff : nameOff+end]), dataOff}
-	}
-	out := map[string][]byte{}
-	for i, e := range entries {
-		limit := len(dat)
-		if i+1 < n {
-			limit = entries[i+1].start
-		}
-		if strings.Contains(e.name, "/brkitr/") {
-			out[e.name] = dat[e.start:limit]
-		}
-	}
-	return out, nil
-}
-
-// stripHeader drops ICU's data header, whose first two bytes are its size.
-func stripHeader(b []byte) ([]byte, error) {
-	if len(b) < 4 || b[2] != 0xda || b[3] != 0x27 {
-		return nil, fmt.Errorf("not ICU data")
-	}
-	size := int(binary.LittleEndian.Uint16(b))
-	if size > len(b) {
-		return nil, fmt.Errorf("a header of %d bytes in %d", size, len(b))
-	}
-	return b[size:], nil
 }
 
 // readBoundaries reads which rules each brkitr bundle names, and which

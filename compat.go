@@ -67,6 +67,15 @@ var Divergences = []Divergence{
 			"for the option: new Intl.Collator(\"de\", {collation: \"eor\"}) resolves " +
 			"to \"de-u-co-eor\"",
 	},
+	{
+		Area: "DurationFormat",
+		What: "a fraction of a second summed past 2**63 nanoseconds",
+		Standard: "the sum is exact, as the proposal's arithmetic is: 1e20 nanoseconds in " +
+			"digital style are 0:00:100000000000",
+		Node: "V8 sums the smaller units in a double and converts it to an int64, which C++ " +
+			"leaves undefined past 2**63 and x86-64 makes INT64_MIN: " +
+			"0:00:9223372036.854775808, with a minus sign where it is the first unit written",
+	},
 }
 
 // A Divergence is one named difference between the profiles.

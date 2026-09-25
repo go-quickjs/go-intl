@@ -61,6 +61,10 @@ const (
 	GroupingAuto Grouping = iota
 	GroupingNever
 	GroupingAlways
+	// GroupingMin2 writes a separator only where the leading group has at
+	// least two digits: "1234" but "12,345". It is what compact notation
+	// does by default.
+	GroupingMin2
 )
 
 // Notation is how the magnitude is written.
@@ -156,6 +160,8 @@ type NumberFormat struct {
 	digitPlan
 	currencyText   string
 	grouping       bool
+	primaryGroup   int
+	secondaryGroup int
 	decimalSep     string
 	groupSep       string
 	minGrouping    int
@@ -164,6 +170,11 @@ type NumberFormat struct {
 	plurals        *PluralRules
 	units          *unitdata.Locale
 	unitWidth      int
+	// percentUnit is the unit "percent" at a short or narrow width and not
+	// compact, which ICU writes with the locale's percent pattern, unscaled,
+	// and the sign as the unit, rather than with the unit's own pattern
+	// (number_formatimpl.cpp: isPercent, isCldrUnit).
+	percentUnit bool
 }
 
 // NewNumberFormat builds a formatter from the data built into the package.
@@ -238,10 +249,12 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 
 	// Of the Unicode extension, NumberFormat uses only the numbering system.
 	f := &NumberFormat{locale: loc.onlyKeywords().withKeyword("nu", s.nu), data: data, opts: opts}
-	switch opts.Style {
-	case StylePercent:
+	f.percentUnit = opts.Style == StyleUnit && opts.Unit == "percent" && opts.UnitDisplay != UnitLong &&
+		opts.Notation != NotationCompact
+	switch {
+	case opts.Style == StylePercent || f.percentUnit:
 		f.pattern, err = parsePattern(data.PercentPattern)
-	case StyleCurrency:
+	case opts.Style == StyleCurrency:
 		p := data.CurrencyPattern
 		switch {
 		case opts.CurrencyDisplay == CurrencyName:
@@ -277,7 +290,7 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 		}
 	}
 
-	if opts.Style == StyleUnit {
+	if opts.Style == StyleUnit && !f.percentUnit {
 		if s.units == nil {
 			if s.units, err = loadUnits(src, loc); err != nil {
 				return nil, err
@@ -307,12 +320,20 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 		f.plurals = s.plurals
 	}
 
-	f.grouping = opts.UseGrouping != GroupingNever && f.pattern.primaryGroup > 0
+	f.primaryGroup, f.secondaryGroup = f.pattern.primaryGroup, f.pattern.secondaryGroup
+	if opts.UseGrouping == GroupingAlways && f.primaryGroup <= 0 {
+		// A pattern that does not group is grouped by threes when grouping
+		// is asked for always, as ICU's Grouper does for ON_ALIGNED: POSIX's
+		// "0.######".
+		f.primaryGroup, f.secondaryGroup = 3, 3
+	}
+	f.grouping = opts.UseGrouping != GroupingNever && f.primaryGroup > 0
 	f.minGrouping = data.MinimumGroupingDigits
 	switch {
 	case opts.UseGrouping == GroupingAlways:
 		f.minGrouping = 1
-	case opts.Notation == NotationCompact && opts.UseGrouping == GroupingAuto:
+	case opts.UseGrouping == GroupingMin2,
+		opts.Notation == NotationCompact && opts.UseGrouping == GroupingAuto:
 		// ECMA-402 groups a compact number only when the leading group has two
 		// digits of its own, so 1235 thousand is "1235" and not "1,235". It
 		// calls that "min2".
@@ -621,7 +642,7 @@ func (f *NumberFormat) layers(d Decimal, approximately bool) numberLayers {
 	// NaN and the infinities are "other" in every language, as ICU's plural
 	// rules answer for them.
 	finite := d.kind == decimalFinite
-	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName || f.opts.Style == StyleUnit {
+	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName || f.opts.Style == StyleUnit && !f.percentUnit {
 		l.outer = true
 		l.count = f.outerCount(magnitude, finite)
 	}
@@ -862,8 +883,7 @@ func (f *NumberFormat) numberParts(magnitude mag, negative bool) []Part {
 func (f *NumberFormat) groupedInteger(integer string) []Part {
 	var at []int
 	if f.grouping {
-		at = groupPositions(len(integer), f.pattern.primaryGroup,
-			f.pattern.secondaryGroup, f.minGrouping)
+		at = groupPositions(len(integer), f.primaryGroup, f.secondaryGroup, f.minGrouping)
 	}
 	var parts []Part
 	last := 0
@@ -900,7 +920,11 @@ func (f *NumberFormat) affixParts(affix string, signSymbols []Part) []Part {
 			parts = append(parts, Part{PartCurrency, f.currencyText})
 		case '%':
 			flush()
-			parts = append(parts, Part{PartPercentSign, f.data.Symbols.PercentSign})
+			kind := PartPercentSign
+			if f.percentUnit {
+				kind = PartUnit
+			}
+			parts = append(parts, Part{kind, f.data.Symbols.PercentSign})
 		case '-':
 			// The pattern's sign, which is whatever the number shows there.
 			flush()

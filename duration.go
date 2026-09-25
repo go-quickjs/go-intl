@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 	"strings"
 )
 
@@ -101,6 +102,9 @@ type DurationFormatOptions struct {
 	// FractionalDigits is how many digits a fraction of a second keeps,
 	// from 0 to 9; nil keeps as many as there are, up to nine.
 	FractionalDigits *int
+
+	// Compat chooses between the standard and Node's observable behavior.
+	Compat Compat
 }
 
 // A DurationFormat writes durations in one locale. It never changes after it
@@ -416,7 +420,7 @@ func (f *DurationFormat) FormatToParts(d Duration) ([]DurationPart, error) {
 	for i := DurationSeconds; i < DurationUnits; i++ {
 		if f.takesFraction(i) {
 			// OutputFractional: the unit and those after it, in nanoseconds.
-			value, zero := fractionOf(d, i)
+			value, zero := fractionOf(d, i, f.opts.Compat)
 			if zero && auto(i) {
 				break
 			}
@@ -491,10 +495,12 @@ func (w *durationWriter) write(i int, value Decimal, join, negativeZero bool) {
 }
 
 // fractionOf is a unit with the smaller ones written as its fraction, summed
-// exactly in nanoseconds, as V8 sums them in an int64. V8's int64 overflows
-// past 2**63 nanoseconds, which the proposal's exact arithmetic does not;
-// go-intl keeps the arithmetic exact. It reports whether the sum is zero.
-func fractionOf(d Duration, from int) (Decimal, bool) {
+// exactly in nanoseconds, as the proposal sums them; NodeICU sums them as V8
+// does (v8FractionOf). It reports whether the sum is zero.
+func fractionOf(d Duration, from int, compat Compat) (Decimal, bool) {
+	if compat == NodeICU {
+		return v8FractionOf(d, from)
+	}
 	exponent := 9 - 3*(from-DurationSeconds)
 	scale := [...]int64{1e9, 1e6, 1e3, 1}
 	total := new(big.Int)
@@ -545,4 +551,82 @@ func (f *DurationFormat) ResolvedOptions() ResolvedDurationFormat {
 		r.FractionalDigits = &v
 	}
 	return r
+}
+
+// v8FractionOf is V8's OutputFractional and the sums before it
+// (js-duration-format.cc): the smaller units summed in a double, converted
+// to an int64 of nanoseconds and carried into the unit, then written as
+// the unit's integer scaled by a power of ten plus the nanoseconds.
+//
+// A sum past 2**63 nanoseconds does not fit. C++ leaves converting it
+// undefined; x86-64, where Node runs, gives INT64_MIN, so Node writes 1e20
+// nanoseconds as 9223372036.854775808 seconds, negative.
+func v8FractionOf(d Duration, from int) (Decimal, bool) {
+	var integer, nanos int64
+	power := 3
+	switch from {
+	case DurationSeconds:
+		// Each product is rounded before it is added, as C++ rounds it,
+		// rather than fused.
+		ns := x86Int64(d[DurationNanoseconds] + float64(d[DurationMicroseconds]*1000) +
+			float64(d[DurationMilliseconds]*1000000))
+		integer = x86Int64(d[DurationSeconds] + float64(ns/1000000000))
+		nanos, power = ns%1000000000, 9
+	case DurationMilliseconds:
+		ns := x86Int64(d[DurationNanoseconds] + float64(d[DurationMicroseconds]*1000))
+		integer = x86Int64(d[DurationMilliseconds] + float64(ns/1000000))
+		nanos, power = ns%1000000, 6
+	default:
+		ns := x86Int64(d[DurationNanoseconds])
+		integer = x86Int64(d[DurationMicroseconds] + float64(ns/1000))
+		nanos = ns % 1000
+	}
+	if integer == 0 && nanos == 0 {
+		return DecimalFromFloat(0), true
+	}
+	factor := int64(1)
+	for i := 0; i < power; i++ {
+		factor *= 10
+	}
+	var digits string
+	// llabs(INT64_MIN) is INT64_MIN on x86-64, which is below the bound.
+	abs := integer
+	if abs < 0 {
+		abs = -abs
+	}
+	if abs < math.MaxInt64/factor-1 {
+		// formatInt, in int64 arithmetic, which wraps as x86-64's does.
+		digits = strconv.FormatInt(nanos+integer*factor, 10)
+	} else {
+		// formatDecimal of the integer and the nanoseconds' magnitude,
+		// padded to the power.
+		n := nanos
+		if n < 0 {
+			n = -n
+		}
+		fraction := strconv.FormatInt(n, 10)
+		digits = strconv.FormatInt(integer, 10)
+		if len(fraction) < power {
+			digits += strings.Repeat("0", power-len(fraction))
+		}
+		digits += fraction
+	}
+	sign := ""
+	if strings.HasPrefix(digits, "-") {
+		sign, digits = "-", digits[1:]
+	}
+	if len(digits) <= power {
+		digits = strings.Repeat("0", power-len(digits)+1) + digits
+	}
+	return ParseDecimal(sign + digits[:len(digits)-power] + "." + digits[len(digits)-power:]), false
+}
+
+// x86Int64 converts a double to an int64 as x86-64's cvttsd2si does:
+// truncated, and INT64_MIN for NaN and anything out of range, which C++
+// leaves undefined.
+func x86Int64(f float64) int64 {
+	if math.IsNaN(f) || f >= 0x1p63 || f < -0x1p63 {
+		return math.MinInt64
+	}
+	return int64(f)
 }

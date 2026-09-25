@@ -126,8 +126,14 @@ func numberOptions(in map[string]any) (intl.NumberFormatOptions, error) {
 				return out, fmt.Errorf("signDisplay %v", value)
 			}
 		case "useGrouping":
-			if on, ok := value.(bool); ok && !on {
+			// ECMA-402 reads true as "always" and false as never.
+			switch value {
+			case false:
 				out.UseGrouping = intl.GroupingNever
+			case true, "always":
+				out.UseGrouping = intl.GroupingAlways
+			case "min2":
+				out.UseGrouping = intl.GroupingMin2
 			}
 		case "notation":
 			switch value {

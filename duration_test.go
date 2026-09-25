@@ -59,3 +59,41 @@ func BenchmarkNewDurationFormat(b *testing.B) {
 		}
 	}
 }
+
+// TestDurationOverflowProfiles holds both profiles to what they say of a
+// fraction of a second past 2**63 nanoseconds: the exact sum, and V8's
+// int64 overflowed to INT64_MIN.
+func TestDurationOverflowProfiles(t *testing.T) {
+	en, _ := intl.ParseLocale("en")
+	for _, c := range []struct {
+		compat intl.Compat
+		opts   intl.DurationFormatOptions
+		d      intl.Duration
+		want   string
+	}{
+		{intl.Standard, intl.DurationFormatOptions{Style: intl.DurationDigital},
+			intl.Duration{intl.DurationNanoseconds: 1e20}, "0:00:100000000000"},
+		{intl.NodeICU, intl.DurationFormatOptions{Style: intl.DurationDigital},
+			intl.Duration{intl.DurationNanoseconds: 1e20}, "0:00:9223372036.854775808"},
+		{intl.Standard, intl.DurationFormatOptions{Units: [intl.DurationUnits]intl.DurationUnitStyle{intl.DurationSeconds: intl.DurationUnitNumeric}},
+			intl.Duration{intl.DurationNanoseconds: 1e20}, "100000000000"},
+		{intl.NodeICU, intl.DurationFormatOptions{Units: [intl.DurationUnits]intl.DurationUnitStyle{intl.DurationSeconds: intl.DurationUnitNumeric}},
+			intl.Duration{intl.DurationNanoseconds: 1e20}, "-9223372036.854775808"},
+		// Within range the profiles agree.
+		{intl.NodeICU, intl.DurationFormatOptions{Style: intl.DurationDigital},
+			intl.Duration{intl.DurationSeconds: 5, intl.DurationMilliseconds: 250, intl.DurationNanoseconds: 7}, "0:00:05.250000007"},
+	} {
+		c.opts.Compat = c.compat
+		f, err := intl.NewDurationFormat(en, c.opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.Format(c.d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("%v: got %q, want %q", c.compat, got, c.want)
+		}
+	}
+}

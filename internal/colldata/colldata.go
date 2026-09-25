@@ -24,7 +24,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // Data is the table of one collation: the root, or one language's changes to
 // it.
@@ -123,16 +123,6 @@ type Collation struct {
 	Reordering *Reordering
 	// Diacritics, when the type tailors them, replaces the root's.
 	Diacritics []uint16
-	// JamoRuns are the conjoining jamo the type makes weigh exactly as a run
-	// of other jamo, sorted by jamo. The export leaves tailored jamo out of
-	// the trie, so these come from the type's rules.
-	JamoRuns []JamoRun
-}
-
-// A JamoRun says a jamo weighs what a run of jamo weighs.
-type JamoRun struct {
-	Jamo rune
-	Run  string
 }
 
 // A Locale is the collations one locale defines.
@@ -217,11 +207,6 @@ func EncodeLocale(l *Locale) []byte {
 			w.String(u32s(c.Reordering.Ranges))
 		}
 		w.String(u16s(c.Diacritics))
-		w.Uint(len(c.JamoRuns))
-		for _, j := range c.JamoRuns {
-			w.Uint(int(j.Jamo))
-			w.String(j.Run)
-		}
 	}
 	return w.Bytes()
 }
@@ -262,14 +247,6 @@ func DecodeLocale(b []byte) (*Locale, error) {
 		}
 		if dia := toU16s(r.String()); len(dia) > 0 {
 			c.Diacritics = dia
-		}
-		runs := r.Uint()
-		if runs > r.Left() {
-			return nil, fmt.Errorf("colldata: %d jamo runs with %d bytes left", runs, r.Left())
-		}
-		for j := 0; j < runs; j++ {
-			jamo := rune(r.Uint())
-			c.JamoRuns = append(c.JamoRuns, JamoRun{Jamo: jamo, Run: r.String()})
 		}
 		l.Collations = append(l.Collations, c)
 	}

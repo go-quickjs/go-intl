@@ -120,7 +120,6 @@ type Collator struct {
 	tailoring  *colldata.Data
 	reordering *colldata.Reordering
 	diacritics []uint16
-	jamoRuns   map[rune]string
 	normalizer *Normalizer
 
 	strength           int
@@ -190,12 +189,6 @@ func NewCollatorFrom(src Source, loc Locale, opts CollatorOptions) (*Collator, e
 	c.tailoring = coll.Data
 	c.reordering = coll.Reordering
 	c.diacritics = c.root.Diacritics
-	if len(coll.JamoRuns) > 0 {
-		c.jamoRuns = map[rune]string{}
-		for _, j := range coll.JamoRuns {
-			c.jamoRuns[j.Jamo] = j.Run
-		}
-	}
 	if coll.Meta&colldata.TailoredDiacriticsBit != 0 && coll.Diacritics != nil {
 		c.diacritics = coll.Diacritics
 	}
@@ -479,10 +472,24 @@ func (l Locale) keywordValue(key string) (string, bool) {
 
 // withKeywords returns the locale with its Unicode extension replaced by the
 // keywords given, in key order as a canonical tag has them.
+//
+// "-u-va-posix" stays whatever is kept: ICU reads it as the locale's
+// variant POSIX, not as a keyword, so V8's ResolveLocale, which rebuilds the
+// extension from the keywords a service uses, never drops it, and writes it
+// back when it writes the locale.
 func (l Locale) withKeywords(keep map[string]string) Locale {
 	out := l
 	out.Attributes = nil
 	out.Keywords = nil
+	if v, ok := l.Keyword("va"); ok && v == "posix" {
+		if _, set := keep["va"]; !set {
+			withVariant := map[string]string{"va": v}
+			for key, value := range keep {
+				withVariant[key] = value
+			}
+			keep = withVariant
+		}
+	}
 	for key, value := range keep {
 		out.Keywords = append(out.Keywords, Keyword{Key: key, Value: value})
 	}

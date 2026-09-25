@@ -155,3 +155,7 @@ pt-BR
 es-MX
 ja-JP
 ko-KR
+# ICU's one variant locale, en_US_POSIX, which -u-va-posix asks for; "en"
+# with it has no POSIX collation and sorts as English.
+en-US-u-va-posix
+en-u-va-posix

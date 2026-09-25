@@ -132,8 +132,8 @@ func (f *Fallbacker) ChainIn(tree string, d DataLocale) []DataLocale {
 			break
 		}
 		l, err := ParseLocale(strings.ReplaceAll(name, "_", "-"))
-		if err != nil || len(l.Variants) > 0 {
-			// A bundle with a variant, which a data locale cannot hold.
+		if err != nil || len(l.Variants) > 0 && l.Data().Variant.IsZero() {
+			// A bundle with a variant a data locale does not hold.
 			continue
 		}
 		chain = append(chain, l.Data())
@@ -153,6 +153,12 @@ func icuName(d DataLocale) string {
 	}
 	if !d.Region.IsZero() {
 		name += "_" + d.Region.String()
+	}
+	if !d.Variant.IsZero() {
+		if d.Region.IsZero() {
+			name += "_"
+		}
+		name += "_" + strings.ToUpper(d.Variant.String())
 	}
 	return name
 }
@@ -279,7 +285,11 @@ func (f *Fallbacker) Chain(d DataLocale) []DataLocale {
 	chain := []DataLocale{d}
 	seen := map[DataLocale]bool{d: true}
 	for cur := d; !cur.IsRoot() && len(chain) < maxChain; {
-		next, ok := f.parents.lookup(cur)
+		// The parent table knows no variants: a variant goes first.
+		next, ok := DataLocale{}, false
+		if cur.Variant.IsZero() {
+			next, ok = f.parents.lookup(cur)
+		}
 		if !ok {
 			next = truncate(cur)
 		}
@@ -301,6 +311,8 @@ func (f *Fallbacker) Chain(d DataLocale) []DataLocale {
 // truncate drops the most specific part that is still there.
 func truncate(d DataLocale) DataLocale {
 	switch {
+	case !d.Variant.IsZero():
+		d.Variant = Variant{}
 	case !d.Region.IsZero():
 		d.Region = Region{}
 	case !d.Script.IsZero():

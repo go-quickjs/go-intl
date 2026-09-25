@@ -114,7 +114,8 @@ func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*Dis
 	if err != nil {
 		return nil, err
 	}
-	d := &DisplayNames{locale: loc, opts: opts, data: data}
+	// DisplayNames uses nothing of the Unicode extension.
+	d := &DisplayNames{locale: loc.onlyKeywords(), opts: opts, data: data}
 	switch opts.Style {
 	case DisplayShort:
 		d.width = namedata.Short

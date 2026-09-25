@@ -238,7 +238,9 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		system, keep = Gregory, ""
 	}
 
-	f := &DateTimeFormat{locale: loc.withKeyword("ca", keep), opts: opts, data: data, calendar: cal, system: system}
+	// Of the Unicode extension, DateTimeFormat uses the calendar, the hour
+	// cycle and the numbering system.
+	f := &DateTimeFormat{locale: loc.onlyKeywords("hc", "nu").withKeyword("ca", keep), opts: opts, data: data, calendar: cal, system: system}
 	if system == Japanese {
 		if f.rules.eras, err = loadJapaneseEras(src); err != nil {
 			return nil, err

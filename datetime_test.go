@@ -126,3 +126,19 @@ func TestDateTimeParts(t *testing.T) {
 		}
 	}
 }
+
+// TestDateTimeFormatIgnoresRegionOverride holds DateTimeFormat to V8, which
+// keeps only "ca", "hc" and "nu" of the Unicode extension: "-u-rg-" plays
+// no part, so English in the United States with Germany's region
+// preferences still writes 12-hour time, and resolves to "en-US".
+func TestDateTimeFormatIgnoresRegionOverride(t *testing.T) {
+	f := newDateTime(t, "en-US-u-rg-dezzzz", intl.DateTimeFormatOptions{Hour: intl.WidthNumeric, TimeZone: "UTC"})
+	r := f.ResolvedOptions()
+	if r.Locale != "en-US" || r.HourCycle != intl.H12 {
+		t.Errorf("resolved %s %v, want en-US h12", r.Locale, r.HourCycle)
+	}
+	// The standard profile keeps CLDR's narrow no-break space.
+	if got, want := f.Format(time.Unix(0, 0)), "12 AM"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

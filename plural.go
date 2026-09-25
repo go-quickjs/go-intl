@@ -104,7 +104,8 @@ func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*Plura
 		set = data.Ordinal
 	}
 
-	p := &PluralRules{locale: loc, opts: opts, ranges: data.Ranges}
+	// PluralRules uses nothing of the Unicode extension.
+	p := &PluralRules{locale: loc.onlyKeywords(), opts: opts, ranges: data.Ranges}
 	for _, r := range set {
 		parsed, err := parsePluralRule(r.Condition)
 		if err != nil {

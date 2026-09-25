@@ -1,11 +1,12 @@
 // Command collgen writes the collation tables the intl package carries.
 //
-// It reads two artifacts of the ICU 78.3 release, neither vendored, each
+// It reads three artifacts of the ICU 78.3 release, none vendored, each
 // checked against the checksum SOURCES.md pins:
 //
 //	curl -sLO https://github.com/unicode-org/icu/releases/download/release-78.3/icu4x-icuexportdata-78.3.zip
 //	curl -sLO https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-data.zip
-//	go run ./internal/collgen icu4x-icuexportdata-78.3.zip icu4c-78.3-data.zip
+//	curl -sLO https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz
+//	go run ./internal/collgen icu4x-icuexportdata-78.3.zip icu4c-78.3-data.zip icu4c-78.3-sources.tgz
 //
 // The export holds the collation tables themselves, as ICU builds them from
 // CLDR's rules: a trie from each character to its collation element, the
@@ -21,6 +22,10 @@
 // collation sources, data/coll in the data archive -- a LOCALE_DEPS.json of
 // aliases and parents, and a default type in the few locales that name one --
 // and it is read from there.
+//
+// The collation types that tailor the conjoining Hangul jamo -- the search
+// collations, Korean's searchjl -- are taken from ICU's compiled data
+// instead, where the export leaves them incomplete: see compiled.go.
 //
 // Han characters are ordered by radical and stroke, which is the "unihan"
 // flavor of the export. The "implicithan" flavor orders them by code point
@@ -45,23 +50,24 @@ import (
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/internal/colldata"
+	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 )
 
 const hanFlavor = "unihan"
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/collgen <icu4x-icuexportdata-78.3.zip> <icu4c-78.3-data.zip>")
+	if len(os.Args) != 4 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/collgen <icu4x-icuexportdata-78.3.zip> <icu4c-78.3-data.zip> <icu4c-78.3-sources.tgz>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2]); err != nil {
+	if err := run(os.Args[1], os.Args[2], os.Args[3]); err != nil {
 		fmt.Fprintln(os.Stderr, "collgen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(exportPath, dataPath string) error {
+func run(exportPath, dataPath, sourcesPath string) error {
 	export, err := icusrc.Open(exportPath, icusrc.ExportSHA256)
 	if err != nil {
 		return err
@@ -79,7 +85,7 @@ func run(exportPath, dataPath string) error {
 	if err != nil {
 		return err
 	}
-	rules, err := readRuleSources(sources)
+	dat, err := icudat.Read(sourcesPath)
 	if err != nil {
 		return err
 	}
@@ -110,7 +116,11 @@ func run(exportPath, dataPath string) error {
 		if name != "root" && !installed[name] {
 			return fmt.Errorf("the export has %s, which ICU's collation sources do not", name)
 		}
-		loc, err := buildLocale(name, tables[name], defaults[name], rules)
+		compiled, err := compiledCollations(dat, name)
+		if err != nil {
+			return err
+		}
+		loc, err := buildLocale(name, tables[name], defaults[name], compiled)
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
@@ -390,7 +400,7 @@ func buildRoot(files exportFiles) (*colldata.Root, error) {
 	return root, nil
 }
 
-func buildLocale(name string, files exportFiles, def string, rules map[string]string) (*colldata.Locale, error) {
+func buildLocale(name string, files exportFiles, def string, compiled map[string]*colldata.Data) (*colldata.Locale, error) {
 	loc := &colldata.Locale{Default: def}
 	kinds := make([]string, 0, len(files))
 	for kind := range files {
@@ -416,6 +426,9 @@ func buildLocale(name string, files exportFiles, def string, rules map[string]st
 			}
 			c.Data = d
 		}
+		if d, ok := compiled[kind]; ok {
+			c.Data = d
+		}
 		if parts["reord"] != nil {
 			o, err := buildReordering(parts["reord"])
 			if err != nil {
@@ -429,16 +442,6 @@ func buildLocale(name string, files exportFiles, def string, rules map[string]st
 			if c.Diacritics, err = diacritics(parts["dia"]); err != nil {
 				return nil, fmt.Errorf("%s: %w", kind, err)
 			}
-		}
-		if kind == "search" {
-			runs, err := searchJamo(rules, name, kind)
-			if err != nil {
-				return nil, err
-			}
-			for jamo, run := range runs {
-				c.JamoRuns = append(c.JamoRuns, colldata.JamoRun{Jamo: jamo, Run: run})
-			}
-			sort.Slice(c.JamoRuns, func(i, j int) bool { return c.JamoRuns[i].Jamo < c.JamoRuns[j].Jamo })
 		}
 		loc.Collations = append(loc.Collations, c)
 	}
