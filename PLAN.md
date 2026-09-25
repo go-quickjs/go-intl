@@ -799,6 +799,24 @@ current time the names are chosen at, the system's by default. Expectations
 come from Node run under each zone (`process.env.TZ`); a default locale
 other than the host's needs Node on Linux, where `LANG` sets it.
 
+V8 reads local time through `DateCache`, which keeps segments of constant
+offset and assumes a zone changes at most once in 19 days. Where a zone
+changed twice in less, it answers with an offset the zone did not have at
+the instant asked about, and what it answers depends on what it was asked
+before: in Africa/El_Aaiun, Node calls 1976-04-14T01:00Z UTC+1 after being
+asked about the millisecond before it, and UTC when asked first. So the
+`Environment` carries the cache, ported, behind a mutex, and is the one
+stateful thing in go-intl: it is safe for concurrent use, but its answers
+are history-dependent as V8's are. A Date object is a `Date` made through
+the `Environment`, because V8's `JSDate` asks the cache whenever its value
+is set and answers its year-to-second getters from what it read then; an
+engine that makes its Date objects here asks the cache what Node's does.
+`testdata/date_node.js` records `toString`, `toDateString`, `toTimeString`
+and `getTimezoneOffset` about the first 40 transitions from 1965 of every
+zone, and at the ends of time; dates from local fields either side of and
+inside each transition; `Date.parse` of 133 strings in four zones; and
+`toUTCString` and `toISOString`, in the order the replay asks them.
+
 ### 8c. `temporal`: Temporal
 
 A supplementary package, `github.com/go-quickjs/go-intl/temporal`, with
@@ -886,7 +904,7 @@ README's Intl section.
 | 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
-| 8b. `date` package | not started |
+| 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | calendars done: all 16, 96,659 years, and fields, adding and differencing, 311,526 cases, against node; the rest of Temporal left |
 | 9. Retire internal/icu | not started |
 

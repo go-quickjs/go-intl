@@ -34,6 +34,7 @@ authority.
 | ICU's compiled data | `icudt78l.dat` in `icu4c-78.3-sources.tgz` | the break rules and dictionaries (`segmentgen`) | yes: Node carries this data |
 | Unicode (UCD) properties | 17.0.0 `Scripts.txt`, `LineBreak.txt`, `extracted/DerivedGeneralCategory.txt` | the break engines' sets and the Script property (`segmentgen`) | yes, from node |
 | Temporal's crates | `temporal_rs` 0.2.3, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0 | the `temporal` package: Temporal's calendars and arithmetic | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
+| V8 | as Node v26.10.0 vendors it, `deps/v8` | the `date` package: Date's offset cache, parser and strings, ported; no data | yes, from node |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
 the release page offers. `cldr-core` is 200 KB and carries all of the
@@ -120,6 +121,14 @@ Other URLs:
   newer. `temporalgen` reads `icu_calendar`'s crate, after checking its
   checksum, for the four source files that are data: the Chinese, Korean
   and Qing years and the Umm al-Qura years.
+- V8 as Node v26.10.0 vendors it, `https://github.com/nodejs/node/tree/v26.10.0/deps/v8`:
+  `src/date/date.{h,cc}` (the offset cache, `ToDateString`, the day and
+  year arithmetic), `src/date/dateparser*` (`Date.parse`),
+  `src/builtins/builtins-date.cc` (the constructor and setters),
+  `src/objects/js-objects.cc` (`JSDate`, which reads local time whenever
+  its value is set) and `src/objects/intl-objects.cc`
+  (`ICUTimezoneCache`). The `date` package is ported from these and reads
+  no data of its own: zones and zone names are go-intl's.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
   Five files are read, and all are vendored in `internal/icusrc`:
