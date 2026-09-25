@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/numdata"
 )
@@ -160,24 +161,10 @@ func run(root, icuData string) error {
 	}
 	// Anything left from a previous run for a locale CLDR no longer has would
 	// otherwise be served forever.
-	old, _ := filepath.Glob(filepath.Join(out, "*.bin"))
-	for _, name := range old {
-		if err := os.Remove(name); err != nil {
-			return err
-		}
+	if err := datawrite.Locales(out, built); err != nil {
+		return err
 	}
-	names := make([]string, 0, len(built))
-	for name := range built {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		target := filepath.Join(out, name+".bin")
-		if err := os.WriteFile(target, built[name], 0o644); err != nil {
-			return err
-		}
-	}
-	fmt.Fprintf(os.Stderr, "numbergen: %d locales\n", len(names))
+	fmt.Fprintf(os.Stderr, "numbergen: %d locales\n", len(built))
 	return nil
 }
 

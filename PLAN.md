@@ -953,6 +953,269 @@ README's Intl section.
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
+| **Data size** | files written once, 105 MB to 57.1 MB; sharing lists and strings next |
+| 9. Retire internal/icu | not started |
+
+**Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
+
+| Service | Cases | Matching |
+|---|---|---|
+| NumberFormat | 2,970 | 2,970 |
+| PluralRules | 300 | 300 |
+| RelativeTimeFormat | 1,260 | 1,260 |
+| ListFormat | 120 | 120 |
+| DateTimeFormat | 1,230 | 1,230 |
+| DisplayNames | 34 | 34 |
+| Collator | 1,805 | 1,805 |
+| legacy `toLocale*` | 90 | 90 |
+| Segmenter | 140 | 140 |
+
+Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
+
+**Corpus parity is not eligibility.** An audit of go-quickjs's option reads
+(2026-09-24) found that an earlier version of this line, "all six finished
+services meet both gate conditions", was wrong. Now **Collator, ListFormat,
+DisplayNames, RelativeTimeFormat, PluralRules and NumberFormat** implement
+every option go-quickjs does, and so does DateTimeFormat, all eighteen
+calendars included.
+
+## What is left
+
+The first version of this table counted corpus cases, and so listed only what
+the corpus exercises. The real measure is everything go-quickjs gets from
+`internal/icu` today, because that is what a switch-over has to replace. This
+inventory was taken from go-quickjs's own code: the option names its VM reads
+for each service, and the `internal/icu` entry points it calls - about seventy.
+Much of `internal/icu` serves things that are not Intl formatters at all.
+
+### Formatter surfaces
+
+What go-quickjs's VM accepts and go-intl does not yet:
+
+None: the Segmenter, the last, is done.
+
+### Beyond the formatters
+
+| Area | What go-quickjs calls | What it needs |
+|---|---|---|
+| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | done (see Time zones): `TimeZone`, `HostTimeZone`, `DefaultTimeZone`, `TimeZones`; Temporal's possible instants belong to the `temporal` stage, and `LegacyZoneNameAt` to `date` |
+| Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars, as ICU4X's `icu_calendar` 2.2.1 reckons them (see 8c): part of the `temporal` package |
+
+The formatter surfaces come first: they are go-intl's own API, and each item
+is small beside the areas below them. Time zones and calendar arithmetic are
+the largest pieces left, and they are Temporal's as much as Intl's.
+
+Anything without corpus cases needs what DisplayNames and the Collator
+needed: expectations taken from node, recorded in `testdata`, where the corpus
+does not reach.
+
+### Canonicalization
+
+`Canonicalizer` gives a tag the form `Intl.getCanonicalLocales` gives it,
+as V8 and ICU 78.3 give it: V8's check of the language identifier, then the
+legacy and redundant tags ICU's parser rewrites first ("zh-hakka" to
+"hak", "sgn-no" to "nsl", from uloc_tag.cpp, vendored), then ICU's strict
+parse, then ICU's AliasReplacer over CLDR's language, region, script,
+variant and subdivision aliases, and every spelling of a Unicode extension
+type written as its BCP 47 id (`data/aliases.bin`, from ICU's metadata and
+keyTypeData, by `aliasgen`). A replacement fills only the fields a tag
+leaves empty, so "cnr-BA" is "sr-BA"; a region that split becomes the one
+the language most likely means, "hy-SU" "hy-AM"; the extensions are
+written in singleton order. `testdata/canonical_node.js` records every
+alias ICU knows in a few surroundings, every extension type and test262's
+tags: all 11,139 match.
+
+One divergence, in the compatibility profile: V8 answers two lowercase
+letters alone without consulting ICU, so "bh" stays "bh" where the standard
+makes it "bho".
+
+### The POSIX variant
+
+ICU reads "-u-va-posix" as the locale's variant POSIX, not as a keyword, and
+keeps data under one variant alone: `en_US_POSIX`, whose collation sorts in
+ASCII order, whose numbers are written without grouping ("0.######") and
+infinity as "INF", and whose words break at colons. So a `DataLocale` holds
+that one variant (`Locale.Data` sets it from the keyword or the bare
+variant), the fallback chains drop it first (`en-US-posix`, `en-US`, `en`,
+the root; `en-posix` to `en`), `collgen` writes the POSIX tailoring the
+export has, and `numbergen` writes `en-US-posix` as en-US with
+`en_US_POSIX`'s own patterns and marks from ICU's sources, cldr-json having
+no such locale. The segmenter's special case gave way to the chain.
+
+V8's ResolveLocale rebuilds the extension from the keywords a service uses,
+but ICU's variant is not a keyword, so the resolved locale keeps
+"-u-va-posix" in every service: `en-US-u-va-posix` for NumberFormat,
+`en-u-va-posix` for PluralRules, which has no en-US. `withKeywords` keeps it
+whatever else is dropped. That pass also found services keeping keywords V8
+drops: PluralRules, ListFormat and DisplayNames keep none now, and
+DateTimeFormat only "ca", "hc" and "nu" -- a "-u-rg-" that DateTimeFormat
+had been honouring, and that Node's does not. LocaleInfo's hour cycles,
+which do honour it, now come from the region's time data rather than from a
+DateTimeFormat. `testdata/variant_node.js` records all nine services with
+eleven tags: all 242 match.
+
+Two NumberFormat bugs it turned up: a pattern without grouping is grouped by
+threes under `useGrouping: "always"`, as ICU's Grouper does, and the unit
+"percent", short or narrow and not compact, is written with the percent
+pattern, unscaled, its sign typed as the unit ("0,5 %" in German, "%5" in
+Turkish), as ICU does. `useGrouping: "min2"` was missing and is added.
+`number_decimal_node.js` now records both: 10,824 cases, all match.
+
+### Negotiation
+
+`LocaleMatcher` is ECMA-402's ResolveLocale and SupportedLocales for one
+service, over that service's available locales as V8 builds them from
+ICU's (`data/available.bin`, by `availgen`): ICU's installed locales, as
+its build indexes them, kept where the bundle or its language's holds what
+the service reads ("NumberElements", "calendar", "listPattern"), each also
+without its script; the Collator's from the collation tree, PluralRules'
+from plurals.txt. 21 of CLDR's locales have no ICU data and so are not
+available: "az-Arab" resolves as "az", "ht" as the default.
+`testdata/available_node.js` checks every name ICU has a bundle for, cut
+short and without its script, in nine services: all 9,747 agree.
+
+"Best fit" matches by lookup, as V8's does: its LocaleMatcher-based best
+fit is behind a flag Node leaves off, and across every available locale,
+alone and in pairs, Node's two matchers answer alike. With negotiation the
+DurationFormat sweep's 21 locale gaps close.
+
+Data is read along the chain ICU reads, per tree of ICU's data:
+`Fallbacker.ChainIn` resolves a locale as `ures_open` does, in ICU's own
+index of the tree (`data/icutree-<tree>.bin`: its bundles, aliases and
+parents) and, for a bundle that does not exist, ICU's default scripts and
+parent locales (`data/icufallback.bin`), all written by `availgen`. ICU
+opens an alias bundle as the one it names and otherwise drops a default
+script, where CLDR's chain truncates: "zh-TW" had been written in
+simplified Chinese from "zh", and is now "zh-Hant-TW"'s traditional; "sr-ME"
+is Serbian in Latin and "uz-AF" Uzbek in Arabic; "sr-Cyrl-ME" keeps its
+Cyrillic dates and names but writes Latin units and currency names, ICU's
+unit and currency trees having no bundle of its own; and "az-Arab", which
+ICU has no data for, is the root's, as it is for a service that is handed
+it without negotiation. The collator reads the collation tree the same way.
+Zone names are the exception: zonegen already resolves ICU's zone and
+region trees for each locale it writes, so only a locale without a file is
+resolved at run time. The index is read by the resolution that needs it,
+one tree's file of about 10 KB, so building a formatter costs no more than
+it did.
+
+The root's data had never been read: a root data locale opened the
+marker's shared file, `dates.bin`, which a per-locale marker has none of,
+so a chain that ran out of locales failed rather than ending at the root.
+It now opens `<marker>/und.bin`, and "und", "und-TW" and the like format.
+
+### Locale info
+
+`LocaleInfo` answers what `Intl.Locale` says beyond a locale's subtags, as
+V8 answers it from ICU (js-locale.cc): `Maximize` and `Minimize`; the
+calendars the region reckons in, most preferred first (calendarprefs.bin
+now keeps the whole list); the collations along the collation tree's
+chain, in BCP 47's spelling; the pattern generator's default hour cycle;
+the default numbering system; the canonical zones of the region subtag,
+SystemV's among them for 001, as ICU counts a zone canonical when it is
+neither an alias nor a tz link; the direction of the locale's, or its
+likely, script, from ICU's script properties (uscript_props.cpp, vendored)
+and uloc_isRightToLeft's shortcut for common languages; and the first day
+of the week and the weekend. Each takes its keyword ("-u-ca-", "-u-co-",
+"-u-hc-", "-u-nu-", "-u-fw-") where one is given, and the region for
+supplemental data as ICU finds it: "-u-rg-", the region, "-u-sd-", the
+likely region. `Minimize` had tried the request's own region and script
+rather than the maximized ones; it now gives "zh-TW" for "zh-Hant", as ICU
+does. `testdata/localeinfo_node.js` records 690 locales: all nine answers
+match for every one.
+
+### Supported values
+
+`Calendars`, `Collations`, `Currencies`, `NumberingSystems`, `TimeZones`
+and `SanctionedUnits` are the lists `Intl.supportedValuesOf` answers with.
+The collations, currencies and time zones are V8's, built from ICU's
+(`data/values.bin`, by `availgen`): every collation the collation tree
+names, in BCP 47 spelling, but "standard" and "search"; ICU's common,
+current ISO currencies, a list compiled into ucurr.cpp (vendored), with an
+English name, V8's four additions and without VEF; and ICU's canonical
+zones in a region. `testdata/values_node.js` records all six: identical,
+order included.
+
+## Resuming cold
+
+A session starting with no memory of the previous one reads, in order:
+
+1. `DESIGN.md` - the architecture and the invariant.
+2. This file's **Status** table - where the work stopped.
+3. `AGENTS.md` - working rules and the verification commands.
+
+Then re-measure the four gates before changing anything, because a gate that
+was not re-measured is not a gate.
+
+Update the Status table in the same commit as the work it describes. A plan
+whose state lives only in someone's head does not survive the session that
+wrote it.
+
+## Open questions
+
+- **Reference platform for the gate.** Recommend Linux and Windows both, given
+  the timezone bug only appeared on one.
+- **Package layout.** One `intl` package, or sub-packages per service? Start
+  with one; split only if the file count forces it.
+- **API stability.** v0 until the services exist, then decide. go-quickjs is the
+  only consumer until then.
+
+## Data size
+
+**Decided: remove the redundancy, not compress it.** Before go-quickjs is
+wired to go-intl the data has to come down: `go:embed` puts all of it into
+any program that imports the package, and go-quickjs's `internal/icu` carries
+about 14 MB. The data had grown to 105 MB, 55.6 MB of it dates. Compressing
+each file would give about 14 MB, but every formatter built would inflate its
+locale again, with no cache allowed; so the maintainer chose to take the
+redundancy out of the data instead, keeping every table read where it lies.
+
+Measured on 2026-09-25, the redundancy is of two kinds:
+
+- **Whole files that are another's.** CLDR's locales are written resolved,
+  so en-AG writes what en-001 writes: 103.9 MB of files hold 56.1 MB that is
+  distinct.
+- **The same text over and over inside them.** The dates files hold 21.9 MB
+  of strings of which 0.24 MB are distinct, and of 7,506 calendars' lists
+  only 640 skeleton lists, 444 interval lists and 2,001 name lists differ.
+  Dates would be about 1.5 MB with each list and string stored once.
+
+**Files written once: done.** `internal/datawrite` writes every data set kept
+per locale, for the nine generators that write one: a locale whose data is
+another's byte for byte has no file, and the set's `same.bin`, a table of data
+locales read in place, names the locale that has it; the Source follows it.
+Every locale reads what it read before, byte for byte (checked against the
+data as it was), and nothing reading the data changed. CLDR's be-tarask,
+ca-ES-valencia and el-polyton, which a data locale cannot address and ICU has
+no data for, are no longer written. The collation root moved from
+`collation.bin` to `collation/und.bin`, where every other set keeps its root.
+105 MB became 57.1 MB.
+
+**Lists and strings shared: next,** dates first, then the other large sets.
+
+## Status
+
+| Stage | State |
+|---|---|
+| 0. Bootstrap | **done** — module, pins resolved, corpus parsed |
+| 1. Locale | **done** - types, parser, canonicalization, fallback |
+| 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
+| 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
+| 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
+| 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
+| 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
+| 5. DateTimeFormat | 1,230/1,230, and 286,519 cases against node, all match; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
+| 6. RelativeTimeFormat | **done** - 1,260/1,260 |
+| 6b. DisplayNames | **done** - 34/34 |
+| 6c. DurationFormat | **done** - not in the corpus; 21,202 cases against node, all match; V8's int64 overflow is a named NodeICU divergence |
+| 6d. Legacy `toLocale*` | **done** - 90/90; `Required` and `Defaults` on the date options |
+| **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
+| **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
+| 7. Collator | **done** - 1,805/1,805, and 2,941/2,941 orders against node, `searchjl` and POSIX included |
+| **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
+| 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
+| 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
+| 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
+| **Data size** | files written once, 105 MB to 57.1 MB; sharing lists and strings next |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**

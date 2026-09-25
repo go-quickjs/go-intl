@@ -50,6 +50,7 @@ import (
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/internal/colldata"
+	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 )
@@ -164,34 +165,22 @@ func run(exportPath, dataPath, sourcesPath string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	old, _ := filepath.Glob(filepath.Join(out, "*.bin"))
-	for _, name := range old {
-		if err := os.Remove(name); err != nil {
-			return err
-		}
-	}
 	if err := write(filepath.Join("data", "collationroot.bin"), colldata.EncodeRoot(root)); err != nil {
 		return err
 	}
 	if err := write(filepath.Join("data", "collationtree.bin"), colldata.EncodeTree(&bcp)); err != nil {
 		return err
 	}
-	tags := make([]string, 0, len(built))
-	for tag := range built {
-		tags = append(tags, tag)
+	// The root's collations are "und", where every data set kept per locale
+	// has its root.
+	if err := datawrite.Locales(out, built); err != nil {
+		return err
 	}
-	sort.Strings(tags)
-	for _, tag := range tags {
-		target := filepath.Join(out, tag+".bin")
-		if tag == "und" {
-			target = filepath.Join("data", "collation.bin")
-		}
-		if err := write(target, built[tag]); err != nil {
-			return err
-		}
+	if err := os.Remove(filepath.Join("data", "collation.bin")); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	fmt.Fprintf(os.Stderr, "collgen: %d locales, %d installed, %d aliases, %d parents\n",
-		len(tags), len(bcp.Installed), len(bcp.Aliases), len(bcp.Parents))
+		len(built), len(bcp.Installed), len(bcp.Aliases), len(bcp.Parents))
 	return nil
 }
 

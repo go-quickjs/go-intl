@@ -163,6 +163,14 @@ func (s fsSource) Open(m Marker, d DataLocale) ([]byte, error) {
 		name = path.Join(string(m), "und.bin")
 	}
 	b, err := fs.ReadFile(s.fsys, name)
+	if errors.Is(err, fs.ErrNotExist) && !d.IsRoot() && d.Variant.IsZero() {
+		// A locale whose data is byte for byte another's has no file of its
+		// own; the data set's same.bin names the locale whose it is.
+		if to, ok := s.same(m, d); ok {
+			// The root is written "und", as its String is.
+			b, err = fs.ReadFile(s.fsys, path.Join(string(m), to.String()+".bin"))
+		}
+	}
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("%w: %s for %s", ErrNotFound, m, d)
@@ -170,6 +178,20 @@ func (s fsSource) Open(m Marker, d DataLocale) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// same looks a locale up in a data set's table of locales whose data is
+// another's, written by the generators (internal/datawrite).
+func (s fsSource) same(m Marker, d DataLocale) (DataLocale, bool) {
+	b, err := fs.ReadFile(s.fsys, path.Join(string(m), "same.bin"))
+	if err != nil {
+		return DataLocale{}, false
+	}
+	t, err := newPairTable(b)
+	if err != nil {
+		return DataLocale{}, false
+	}
+	return t.lookup(d)
 }
 
 // pairTable is a generated table of data locales mapped to data locales, laid

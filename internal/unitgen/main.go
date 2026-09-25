@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/unitdata"
 )
 
@@ -111,23 +112,10 @@ func run(root string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	old, _ := filepath.Glob(filepath.Join(out, "*.bin"))
-	for _, name := range old {
-		if err := os.Remove(name); err != nil {
-			return err
-		}
+	if err := datawrite.Locales(out, built); err != nil {
+		return err
 	}
-	names := make([]string, 0, len(built))
-	for name := range built {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if err := os.WriteFile(filepath.Join(out, name+".bin"), built[name], 0o644); err != nil {
-			return err
-		}
-	}
-	fmt.Fprintf(os.Stderr, "unitgen: %d locales, %d units each\n", len(names), len(sanctioned))
+	fmt.Fprintf(os.Stderr, "unitgen: %d locales, %d units each\n", len(built), len(sanctioned))
 	return nil
 }
 

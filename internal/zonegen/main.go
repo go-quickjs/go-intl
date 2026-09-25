@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 	"github.com/go-quickjs/go-intl/internal/zonedata"
@@ -77,7 +78,9 @@ func run(zipPath, tzDir string) error {
 		}
 	}
 
-	dates, err := filepath.Glob(filepath.Join("data", "dates", "*.bin"))
+	// The locales are the date data's, each written once with what it
+	// shares with another named in its same.bin.
+	dates, err := datawrite.Tags(filepath.Join("data", "dates"))
 	if err != nil {
 		return err
 	}
@@ -85,8 +88,7 @@ func run(zipPath, tzDir string) error {
 		return fmt.Errorf("no locales under data/dates; run dategen first")
 	}
 	built := map[string][]byte{}
-	for _, path := range dates {
-		tag := strings.TrimSuffix(filepath.Base(path), ".bin")
+	for _, tag := range dates {
 		name := strings.ReplaceAll(tag, "-", "_")
 		if tag == "und" {
 			name = "root"
@@ -102,26 +104,13 @@ func run(zipPath, tzDir string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	old, _ := filepath.Glob(filepath.Join(out, "*.bin"))
-	for _, name := range old {
-		if err := os.Remove(name); err != nil {
-			return err
-		}
-	}
-	tags := make([]string, 0, len(built))
-	for tag := range built {
-		tags = append(tags, tag)
-	}
-	sort.Strings(tags)
-	for _, tag := range tags {
-		if err := os.WriteFile(filepath.Join(out, tag+".bin"), built[tag], 0o644); err != nil {
-			return err
-		}
+	if err := datawrite.Locales(out, built); err != nil {
+		return err
 	}
 	if err := os.WriteFile(filepath.Join("data", "metazones.bin"), zonedata.EncodeMeta(meta), 0o644); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "zonegen: %d locales, %d zones, %d aliases\n", len(tags), len(meta.Zones), len(meta.Aliases))
+	fmt.Fprintf(os.Stderr, "zonegen: %d locales, %d zones, %d aliases\n", len(built), len(meta.Zones), len(meta.Aliases))
 	return nil
 }
 
