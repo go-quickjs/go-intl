@@ -1,12 +1,12 @@
 package intl
 
 import (
-	"embed"
+	_ "embed"
 	"errors"
 	"fmt"
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/datapack"
 	"io/fs"
-	"path"
 	"unsafe"
 )
 
@@ -147,72 +147,40 @@ type Source interface {
 	Open(m Marker, d DataLocale) ([]byte, error)
 }
 
-//go:embed data
-var embeddedData embed.FS
-
-// The shared parts of the data sets kept per locale, which every formatter
-// of a kind reads, are embedded as strings as well, so that they are read
-// in place rather than copied out of the file system on every Open.
+// The data directory is embedded packed into one file, data.pack, which
+// internal/packgen writes, so that it is read where it lies: an embed.FS
+// copies a file out on every read, and building a formatter reads a dozen.
 //
-//go:embed data/datesshared.bin
-var embeddedDatesShared string
-
-//go:embed data/numbersshared.bin
-var embeddedNumbersShared string
-
-//go:embed data/zonenamesshared.bin
-var embeddedZoneNamesShared string
-
-//go:embed data/namesshared.bin
-var embeddedNamesShared string
-
-//go:embed data/unitsshared.bin
-var embeddedUnitsShared string
-
-//go:embed data/reltimeshared.bin
-var embeddedRelativeTimeShared string
+//go:embed data.pack
+var embeddedPack string
 
 // Embedded is the data built into this package. It is the default, so that the
 // simple path needs no setting up, and it is only a default: anything taking a
 // Source can be given another.
-var Embedded Source = &embeddedSource{
-	fsSource: mustSub(embeddedData, "data").(fsSource),
-	shared: map[Marker]string{
-		MarkerDatesShared:        embeddedDatesShared,
-		MarkerNumbersShared:      embeddedNumbersShared,
-		MarkerZoneNamesShared:    embeddedZoneNamesShared,
-		MarkerNamesShared:        embeddedNamesShared,
-		MarkerUnitsShared:        embeddedUnitsShared,
-		MarkerRelativeTimeShared: embeddedRelativeTimeShared,
-	},
+var Embedded Source = packSource{embeddedPack}
+
+// packSource serves a pack in place.
+type packSource struct{ pack string }
+
+func (s packSource) Open(m Marker, d DataLocale) ([]byte, error) {
+	return openFiles(s, m, d)
 }
 
-// embeddedSource serves the embedded data, the shared parts in place.
-type embeddedSource struct {
-	fsSource
-	shared map[Marker]string
-}
-
-func (s *embeddedSource) Open(m Marker, d DataLocale) ([]byte, error) {
-	if text, ok := s.shared[m]; ok && d.IsRoot() {
-		// The string's own memory, which is read-only: Source's bytes are
-		// never changed.
-		return unsafe.Slice(unsafe.StringData(text), len(text)), nil
+func (s packSource) readFile(name string) ([]byte, error) {
+	start, end, ok := datapack.Find(s.pack, name)
+	if !ok {
+		return nil, fs.ErrNotExist
 	}
-	return s.fsSource.Open(m, d)
-}
-
-func mustSub(fsys fs.FS, dir string) Source {
-	sub, err := fs.Sub(fsys, dir)
-	if err != nil {
-		panic("intl: the embedded data is not where it should be: " + err.Error())
+	if start == end {
+		return []byte{}, nil
 	}
-	return NewFS(sub)
+	// The pack's own memory, which is read-only: Source's bytes are never
+	// changed.
+	return unsafe.Slice(unsafe.StringData(s.pack[start:end]), end-start), nil
 }
 
-// NewFS returns a Source that reads from a file system, which is how both the
-// embedded data and a directory on disk are served -- the same reader over a
-// different backing.
+// NewFS returns a Source that reads from a file system, such as the data
+// directory on disk: the files the embedded pack was made from.
 //
 // A data set kept for one locale is the file <marker>/<locale>.bin, and one
 // kept for everything is <marker>.bin.
@@ -221,21 +189,37 @@ func NewFS(fsys fs.FS) Source { return fsSource{fsys} }
 type fsSource struct{ fsys fs.FS }
 
 func (s fsSource) Open(m Marker, d DataLocale) ([]byte, error) {
-	name := string(m) + ".bin"
-	if !d.IsRoot() {
-		name = path.Join(string(m), d.String()+".bin")
-	} else if _, err := fs.Stat(s.fsys, name); errors.Is(err, fs.ErrNotExist) {
-		// A data set kept per locale has the root's as "und", where the
-		// fallback chain ends.
-		name = path.Join(string(m), "und.bin")
-	}
-	b, err := fs.ReadFile(s.fsys, name)
-	if errors.Is(err, fs.ErrNotExist) && !d.IsRoot() && d.Variant.IsZero() {
-		// A locale whose data is byte for byte another's has no file of its
-		// own; the data set's same.bin names the locale whose it is.
-		if to, ok := s.same(m, d); ok {
-			// The root is written "und", as its String is.
-			b, err = fs.ReadFile(s.fsys, path.Join(string(m), to.String()+".bin"))
+	return openFiles(s, m, d)
+}
+
+func (s fsSource) readFile(name string) ([]byte, error) { return fs.ReadFile(s.fsys, name) }
+
+// files is what a source reads its data from: a file system or a pack.
+type files interface {
+	readFile(name string) ([]byte, error)
+}
+
+// openFiles finds a data set's file for a data locale, as the generators
+// lay them out.
+func openFiles(s files, m Marker, d DataLocale) ([]byte, error) {
+	var b []byte
+	var err error
+	if d.IsRoot() {
+		b, err = s.readFile(string(m) + ".bin")
+		if errors.Is(err, fs.ErrNotExist) {
+			// A data set kept per locale has the root's as "und", where the
+			// fallback chain ends.
+			b, err = s.readFile(string(m) + "/und.bin")
+		}
+	} else {
+		b, err = s.readFile(string(m) + "/" + d.String() + ".bin")
+		if errors.Is(err, fs.ErrNotExist) && d.Variant.IsZero() {
+			// A locale whose data is byte for byte another's has no file of
+			// its own; the data set's same.bin names the locale whose it is.
+			if to, ok := same(s, m, d); ok {
+				// The root is written "und", as its String is.
+				b, err = s.readFile(string(m) + "/" + to.String() + ".bin")
+			}
 		}
 	}
 	if err != nil {
@@ -249,8 +233,8 @@ func (s fsSource) Open(m Marker, d DataLocale) ([]byte, error) {
 
 // same looks a locale up in a data set's table of locales whose data is
 // another's, written by the generators (internal/datawrite).
-func (s fsSource) same(m Marker, d DataLocale) (DataLocale, bool) {
-	b, err := fs.ReadFile(s.fsys, path.Join(string(m), "same.bin"))
+func same(s files, m Marker, d DataLocale) (DataLocale, bool) {
+	b, err := s.readFile(string(m) + "/same.bin")
 	if err != nil {
 		return DataLocale{}, false
 	}

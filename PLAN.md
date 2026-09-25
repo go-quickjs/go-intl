@@ -1220,6 +1220,20 @@ What a program pays is the binary: one that formats a number in English was
 already kept identical embedded files once, so writing files once shrank the
 repository more than the binary; the pools are what shrank the binary.
 
+**Loading time, which matters more than size.** A host builds a formatter
+on every toLocaleString and nothing may be cached, so what building one
+costs is paid over and over. Measured (`load_bench_test.go`), most of it was
+`embed.FS` copying files out: the likely subtags and parent locales, reread
+for every fallback chain, were 93% of what a ListFormat allocated. So the
+data directory is now also packed into one file, `data.pack`
+(`internal/packgen`, `internal/datapack`: a sorted index and the files),
+embedded as a string and served in place by binary search, and the embedded
+file system and the per-pool strings are gone; `data/` stays what the
+generators write and `NewFS` serves, and a test holds the pack to it. In
+English, a Collator went from 344 to 33 µs, a ListFormat from 151 to 16 µs,
+a NumberFormat from 148 to 73 µs, a DateTimeFormat from 1.07 to 0.32 ms and
+a Segmenter from 1.82 to 0.57 ms, each allocating a fraction of what it did.
+
 What is left is mostly text no two locales share -- translated names of
 languages, regions, zones, cities and currencies, about 9 MB -- and ICU's
 segmentation dictionaries, 3.1 MB, which no sharing reduces. Inlining the

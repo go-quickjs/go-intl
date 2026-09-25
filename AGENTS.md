@@ -56,6 +56,13 @@ disk rather than one new file beside one old one:
 go run ./internal/localegen     # writes data/likelysubtags.bin, data/parentlocales.bin
 ```
 
+The package embeds `data.pack`, the data directory packed into one file so
+it is read in place. After any generator, repack; a test fails until you do:
+
+```sh
+go run ./internal/packgen
+```
+
 Generator output is reproducible: running one twice gives byte-identical files.
 A generator that sorts a map without fixing the order is broken even when its
 tests pass.
