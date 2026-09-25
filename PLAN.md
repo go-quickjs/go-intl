@@ -953,7 +953,7 @@ README's Intl section.
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
-| **Data size** | files written once, 105 MB to 57.1 MB; dates and numbers shared through pools, 22.7 MB; the other sets next |
+| **Data size** | files written once, 105 MB to 57.1 MB; dates, numbers and zone names shared through pools, 20.3 MB; the other sets next |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
@@ -1207,7 +1207,11 @@ each list is a shared part, and a currency is read from the pool only when
 one is asked for. 8.6 MB became 3.1 MB, of which 1.5 MB is text no other
 locale shares, and the data 22.7 MB.
 
-Next: zone names, names, units and relative time the same way.
+Zone names likewise, into `zonenamesshared.bin`: 6.4 MB became 3.9 MB, of
+which 2.5 MB is the translated zone and city names themselves, which no two
+locales share; the data 20.3 MB.
+
+Next: names, units and relative time the same way.
 
 ## Status
 
@@ -1232,7 +1236,7 @@ Next: zone names, names, units and relative time the same way.
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
-| **Data size** | files written once, 105 MB to 57.1 MB; dates and numbers shared through pools, 22.7 MB; the other sets next |
+| **Data size** | files written once, 105 MB to 57.1 MB; dates, numbers and zone names shared through pools, 20.3 MB; the other sets next |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**

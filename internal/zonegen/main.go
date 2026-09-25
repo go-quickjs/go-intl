@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
@@ -88,6 +89,9 @@ func run(zipPath, tzDir string) error {
 		return fmt.Errorf("no locales under data/dates; run dategen first")
 	}
 	built := map[string][]byte{}
+	// The locales share one pool of names, written beside them, in the
+	// sorted order Tags gives, so the pool is the same every run.
+	pool := blob.NewPool(zonedata.Version)
 	for _, tag := range dates {
 		name := strings.ReplaceAll(tag, "-", "_")
 		if tag == "und" {
@@ -97,7 +101,7 @@ func run(zipPath, tzDir string) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", tag, err)
 		}
-		built[tag] = zonedata.Encode(l)
+		built[tag] = zonedata.Encode(l, pool)
 	}
 
 	out := filepath.Join("data", "zonenames")
@@ -105,6 +109,9 @@ func run(zipPath, tzDir string) error {
 		return err
 	}
 	if err := datawrite.Locales(out, built); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "zonenamesshared.bin"), pool.Bytes(), 0o644); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join("data", "metazones.bin"), zonedata.EncodeMeta(meta), 0o644); err != nil {

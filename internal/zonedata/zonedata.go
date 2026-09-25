@@ -21,7 +21,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 2
+const Version = 3
 
 // A Names is what a locale calls one metazone or zone.
 //
@@ -115,88 +115,106 @@ func (l *Locale) Region(code string) (string, bool) {
 	return "", false
 }
 
-// Encode writes a locale's zone names.
-func Encode(l *Locale) []byte {
-	b := blob.NewWriter(Version)
-	b.String(l.GMTFormat)
-	b.String(l.HourFormat)
-	b.String(l.RegionFormat)
-	b.String(l.FallbackFormat)
-	b.Uint(len(l.Metazones))
-	for _, e := range l.Metazones {
-		b.String(e.Metazone)
-		writeNames(b, e.Names)
-	}
-	b.Uint(len(l.Zones))
-	for _, e := range l.Zones {
-		b.String(e.Zone)
-		writeNames(b, e.Names)
-		b.String(e.City)
-	}
-	b.Uint(len(l.Regions))
-	for _, e := range l.Regions {
-		b.String(e.Region)
-		b.String(e.Name)
-	}
+// Encode writes a locale's zone names, with what it shares with other
+// locales -- every string, each set of names and each list -- in pool,
+// which the generator writes beside the locales and Decode is given.
+func Encode(l *Locale, pool *blob.Pool) []byte {
+	b := blob.NewPooledWriter(Version, pool)
+	b.SharedString(l.GMTFormat)
+	b.SharedString(l.HourFormat)
+	b.SharedString(l.RegionFormat)
+	b.SharedString(l.FallbackFormat)
+	b.Shared(func(b *blob.Writer) {
+		b.Uint(len(l.Metazones))
+		for _, e := range l.Metazones {
+			b.SharedString(e.Metazone)
+			writeNames(b, e.Names)
+		}
+	})
+	b.Shared(func(b *blob.Writer) {
+		b.Uint(len(l.Zones))
+		for _, e := range l.Zones {
+			b.SharedString(e.Zone)
+			writeNames(b, e.Names)
+			b.SharedString(e.City)
+		}
+	})
+	b.Shared(func(b *blob.Writer) {
+		b.Uint(len(l.Regions))
+		for _, e := range l.Regions {
+			b.SharedString(e.Region)
+			b.SharedString(e.Name)
+		}
+	})
 	return b.Bytes()
 }
 
 func writeNames(b *blob.Writer, n Names) {
-	for _, s := range [...]string{
-		n.LongGeneric, n.LongStandard, n.LongDaylight,
-		n.ShortGeneric, n.ShortStandard, n.ShortDaylight,
-	} {
-		b.String(s)
-	}
+	b.Shared(func(b *blob.Writer) {
+		for _, s := range [...]string{
+			n.LongGeneric, n.LongStandard, n.LongDaylight,
+			n.ShortGeneric, n.ShortStandard, n.ShortDaylight,
+		} {
+			b.SharedString(s)
+		}
+	})
 }
 
 func readNames(r *blob.Reader) Names {
 	var n Names
-	for _, p := range []*string{
-		&n.LongGeneric, &n.LongStandard, &n.LongDaylight,
-		&n.ShortGeneric, &n.ShortStandard, &n.ShortDaylight,
-	} {
-		*p = r.String()
+	r.Shared(func(r *blob.Reader) {
+		for _, p := range []*string{
+			&n.LongGeneric, &n.LongStandard, &n.LongDaylight,
+			&n.ShortGeneric, &n.ShortStandard, &n.ShortDaylight,
+		} {
+			*p = r.SharedString()
+		}
+	})
+	return n
+}
+
+// count reads a count, which cannot exceed the bytes left to hold what it
+// counts.
+func count(r *blob.Reader) int {
+	n := r.Uint()
+	if n < 0 || n > r.Left() {
+		return 0
 	}
 	return n
 }
 
-// Decode reads what Encode wrote.
-func Decode(data []byte) (*Locale, error) {
-	r, err := blob.NewReader(data, Version)
+// Decode reads what Encode wrote, with the pool it wrote into.
+func Decode(data []byte, pool blob.Shared) (*Locale, error) {
+	r, err := blob.NewPooledReader(data, Version, pool)
 	if err != nil {
 		return nil, err
 	}
 	var l Locale
-	l.GMTFormat = r.String()
-	l.HourFormat = r.String()
-	l.RegionFormat = r.String()
-	l.FallbackFormat = r.String()
-
-	if n := r.Uint(); n >= 0 && n <= r.Left() {
-		l.Metazones = make([]Entry, 0, n)
-		for i := 0; i < n; i++ {
-			name := r.String()
-			l.Metazones = append(l.Metazones, Entry{Metazone: name, Names: readNames(r)})
+	l.GMTFormat = r.SharedString()
+	l.HourFormat = r.SharedString()
+	l.RegionFormat = r.SharedString()
+	l.FallbackFormat = r.SharedString()
+	r.Shared(func(r *blob.Reader) {
+		l.Metazones = make([]Entry, count(r))
+		for i := range l.Metazones {
+			l.Metazones[i].Metazone = r.SharedString()
+			l.Metazones[i].Names = readNames(r)
 		}
-	}
-	if n := r.Uint(); n >= 0 && n <= r.Left() {
-		l.Zones = make([]ZoneEntry, 0, n)
-		for i := 0; i < n; i++ {
-			e := ZoneEntry{Zone: r.String()}
-			e.Names = readNames(r)
-			e.City = r.String()
-			l.Zones = append(l.Zones, e)
+	})
+	r.Shared(func(r *blob.Reader) {
+		l.Zones = make([]ZoneEntry, count(r))
+		for i := range l.Zones {
+			l.Zones[i].Zone = r.SharedString()
+			l.Zones[i].Names = readNames(r)
+			l.Zones[i].City = r.SharedString()
 		}
-	}
-	if n := r.Uint(); n >= 0 && n <= r.Left() {
-		l.Regions = make([]RegionEntry, 0, n)
-		for i := 0; i < n; i++ {
-			e := RegionEntry{Region: r.String()}
-			e.Name = r.String()
-			l.Regions = append(l.Regions, e)
+	})
+	r.Shared(func(r *blob.Reader) {
+		l.Regions = make([]RegionEntry, count(r))
+		for i := range l.Regions {
+			l.Regions[i] = RegionEntry{Region: r.SharedString(), Name: r.SharedString()}
 		}
-	}
+	})
 	if err := r.Err(); err != nil {
 		return nil, err
 	}

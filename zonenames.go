@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/zonedata"
 )
 
@@ -59,13 +60,21 @@ func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
 			chain = fb.Chain(loc.Data())
 		}
 	}
+	shared, err := src.Open(MarkerZoneNamesShared, DataLocale{})
+	if err != nil {
+		return nil, fmt.Errorf("intl: the shared zone names: %w", err)
+	}
+	pool, err := blob.ReadShared(shared, zonedata.Version)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the shared zone names: %w", err)
+	}
 	var data *zonedata.Locale
 	for _, d := range chain {
 		b, err := src.Open(MarkerZoneNames, d)
 		if err != nil {
 			continue
 		}
-		data, err = zonedata.Decode(b)
+		data, err = zonedata.Decode(b, pool)
 		if err != nil {
 			return nil, fmt.Errorf("intl: the zone names for %s: %w", d, err)
 		}
