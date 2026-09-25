@@ -30,11 +30,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/zonegen <icu4c-78.3-data.zip>")
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/zonegen <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1]); err != nil {
+	if err := run(os.Args[1], os.Args[2]); err != nil {
 		fmt.Fprintln(os.Stderr, "zonegen:", err)
 		os.Exit(1)
 	}
@@ -44,13 +44,13 @@ func main() {
 // empty, which stops its parents' value from showing through.
 const noInheritance = "∅∅∅"
 
-func run(zipPath string) error {
+func run(zipPath, tzDir string) error {
 	archive, err := icusrc.Open(zipPath, icusrc.DataSHA256)
 	if err != nil {
 		return err
 	}
 	defer archive.Close()
-	meta, err := readMeta(archive)
+	meta, err := readMeta(archive, tzDir)
 	if err != nil {
 		return err
 	}

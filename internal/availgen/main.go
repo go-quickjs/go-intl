@@ -1,7 +1,10 @@
 // Command availgen writes data/available.bin: the locales each service is
 // available in, as V8 builds its lists from ICU 78.3's.
 //
-//	go run ./internal/availgen icu4c-78.3-data.zip
+//	go run ./internal/availgen icu4c-78.3-data.zip <icu-tz-2026c dir>
+//
+// The time zone files are ICU's time zone update 2026c, which is what Node
+// runs (see icusrc.TZSHA256), in place of the data archive's.
 //
 // ECMA-402's locale negotiation resolves a request among a service's
 // available locales, and which locales those are decides answers: ICU has no
@@ -36,10 +39,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/availgen <icu4c-78.3-data.zip>")
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/availgen <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
 		os.Exit(2)
 	}
+	tzDir = os.Args[2]
 	out, err := build(os.Args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "availgen:", err)
@@ -58,6 +62,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, "availgen:", err)
 		os.Exit(1)
 	}
+}
+
+// tzDir is the time zone update's directory, which every read of a zone
+// file goes to.
+var tzDir string
+
+// openLocales opens the data archive's locales, reading the zone files from
+// the time zone update.
+func openLocales(zip string) (*icusrc.Locales, error) {
+	l, err := icusrc.OpenLocales(zip)
+	if err != nil {
+		return nil, err
+	}
+	l.UseTZ(tzDir)
+	return l, nil
 }
 
 // excluded are the bundles ICU's build leaves out of its index.
@@ -183,7 +202,7 @@ func buildSet(t *icusrc.Locales, names []string, key string, check bool) map[str
 }
 
 func build(zip string) ([]byte, error) {
-	locales, err := icusrc.OpenLocales(zip)
+	locales, err := openLocales(zip)
 	if err != nil {
 		return nil, err
 	}

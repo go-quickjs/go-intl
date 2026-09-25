@@ -13,10 +13,14 @@ import (
 	"github.com/go-quickjs/go-intl/internal/zonedata"
 )
 
-// readMeta reads what every locale shares about zones, from ICU's data/misc.
-func readMeta(archive *zip.ReadCloser) (*zonedata.Meta, error) {
+// readMeta reads what every locale shares about zones, from ICU's data/misc
+// and, for the zone files, the time zone update.
+func readMeta(archive *zip.ReadCloser, tzDir string) (*zonedata.Meta, error) {
 	read := func(name string) (*icutxt.Node, error) {
 		b, err := icusrc.ReadFile(archive, "data/misc/"+name+".txt")
+		if _, ok := icusrc.TZSHA256[name]; ok {
+			b, err = icusrc.ReadTZ(tzDir, name)
+		}
 		if err != nil {
 			return nil, err
 		}

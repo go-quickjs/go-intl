@@ -79,7 +79,7 @@ func writeValues(zip string) error {
 }
 
 func readMisc(zip, name string) (*icutxt.Node, error) {
-	l, err := icusrc.OpenLocales(zip)
+	l, err := openLocales(zip)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func canonicalZones(zip string, types *icutxt.Node, names []string) (func(string
 			typeAlias[strings.ReplaceAll(e.Key, ":", "/")] = true
 		}
 	}
-	l, err := icusrc.OpenLocales(zip)
+	l, err := openLocales(zip)
 	if err != nil {
 		return nil, err
 	}

@@ -82,6 +82,17 @@ Other URLs:
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-data.zip`
   — sha256 `9d8b3899096aeb83e4e21ef8a40fec9e03b28db18c48452efac882ce25a91e27`, 20 MB.
   `collgen` checks both checksums before reading either archive.
+- ICU's time zone update 2026c, `https://raw.githubusercontent.com/unicode-org/icu-data/main/tzdata/icunew/2026c/44/<file>`
+  for `zoneinfo64.txt` (sha256 `9e4ac14d6217865fd3d94d288063a214c6dc1e53012f6624aeb70a8a517b30a3`),
+  `metaZones.txt` (`55ba858327677222e9526acce34db10bee4fed14ccefc9df5b90452ab76f8c61`),
+  `timezoneTypes.txt` (`38b441f390473e353502a3fbd98f46a479fe3aef77d78fb4eef502623db46039`)
+  and `windowsZones.txt` (`7addd9b95977b860d540d29796a655b8fe7247a0fdf9641f6f759b5442041312`).
+  Node 26 runs tz 2026c (`process.versions.tz`) over ICU 78.3, whose data
+  archive carries 2026a; `zonegen`, `aliasgen` and `availgen` take the
+  directory these were downloaded to and read them in place of the
+  archive's copies, checking each checksum. Only the metazones differ in
+  what go-intl carries: Casablanca and El Aaiun join the Western European
+  metazone from 2026-09-20.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
   Five files are read, and all are vendored in `internal/icusrc`:

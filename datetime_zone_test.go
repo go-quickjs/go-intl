@@ -82,3 +82,29 @@ func TestDayPeriodNoon(t *testing.T) {
 		}
 	}
 }
+
+// ICU's time zone update 2026c, which Node runs, moves Casablanca to the
+// Western European metazone from 2026-09-20; the data archive's 2026a has
+// it in none. The answers are Node's.
+func TestCasablancaMetazone2026c(t *testing.T) {
+	loc, err := intl.ParseLocale("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{TimeZone: "Africa/Casablanca",
+		TimeZoneName: intl.ZoneLong, Hour: intl.WidthNumeric, Minute: intl.WidthNumeric})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		when time.Time
+		want string
+	}{
+		{time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), "1:00 AM GMT+01:00"},
+		{time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC), "12:00 AM Western European Standard Time"},
+	} {
+		if got := f.Format(c.when); got != c.want {
+			t.Errorf("%s = %q, want %q", c.when.Format("2006-01-02"), got, c.want)
+		}
+	}
+}

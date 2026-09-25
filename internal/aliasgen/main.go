@@ -1,11 +1,12 @@
 // Command aliasgen writes data/aliases.bin: the aliases a locale identifier's
 // canonical form replaces, as ICU 78.3 holds them.
 //
-//	go run ./internal/aliasgen icu4c-78.3-data.zip
+//	go run ./internal/aliasgen icu4c-78.3-data.zip <icu-tz-2026c dir>
 //
 // The subtag aliases are CLDR's supplementalMetadata, from the data archive's
 // misc/metadata.txt; the Unicode extension types are misc/keyTypeData.txt and
-// misc/timezoneTypes.txt. ICU is read rather than cldr-json because what
+// misc/timezoneTypes.txt, the last from ICU's time zone update 2026c, which
+// is what Node runs (see icusrc.TZSHA256). ICU is read rather than cldr-json because what
 // Node answers is ICU's canonicalization, and ICU's tables are what it
 // consults.
 //
@@ -44,11 +45,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/aliasgen <icu4c-78.3-data.zip>")
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/aliasgen <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
 		os.Exit(2)
 	}
-	out, err := build(os.Args[1])
+	out, err := build(os.Args[1], os.Args[2])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "aliasgen:", err)
 		os.Exit(1)
@@ -65,12 +66,13 @@ func main() {
 	}
 }
 
-func build(zip string) ([]byte, error) {
+func build(zip, tzDir string) ([]byte, error) {
 	icu, err := icusrc.OpenLocales(zip)
 	if err != nil {
 		return nil, err
 	}
 	defer icu.Close()
+	icu.UseTZ(tzDir)
 	misc := func(name string) (*icutxt.Node, error) {
 		b, err := icu.ReadMisc(name)
 		if err != nil {

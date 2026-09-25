@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -25,6 +26,34 @@ const (
 	// to ICU's resource bundle text.
 	DataSHA256 = "9d8b3899096aeb83e4e21ef8a40fec9e03b28db18c48452efac882ce25a91e27"
 )
+
+// TZSHA256 are ICU's time zone update 2026c, from the icu-data repository
+// (tzdata/icunew/2026c/44): the tz release Node 26 runs, which ICU 78.3's
+// data archive, at 2026a, predates. They replace the archive's copies of the
+// same files wherever a generator is given them.
+var TZSHA256 = map[string]string{
+	"metaZones":     "55ba858327677222e9526acce34db10bee4fed14ccefc9df5b90452ab76f8c61",
+	"timezoneTypes": "38b441f390473e353502a3fbd98f46a479fe3aef77d78fb4eef502623db46039",
+	"windowsZones":  "7addd9b95977b860d540d29796a655b8fe7247a0fdf9641f6f759b5442041312",
+	"zoneinfo64":    "9e4ac14d6217865fd3d94d288063a214c6dc1e53012f6624aeb70a8a517b30a3",
+}
+
+// ReadTZ reads one of the time zone update's files from the directory it
+// was downloaded to, after checking its checksum.
+func ReadTZ(dir, name string) ([]byte, error) {
+	want, ok := TZSHA256[name]
+	if !ok {
+		return nil, fmt.Errorf("%s is not one of the time zone files", name)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, name+".txt"))
+	if err != nil {
+		return nil, err
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(b)); got != want {
+		return nil, fmt.Errorf("%s.txt has checksum %s, want %s", name, got, want)
+	}
+	return b, nil
+}
 
 // Open opens a zip archive after checking its checksum.
 func Open(name, want string) (*zip.ReadCloser, error) {
@@ -64,6 +93,7 @@ func ReadFile(z *zip.ReadCloser, name string) ([]byte, error) {
 // data/zone/*.txt -- from the data archive, each once.
 type Locales struct {
 	z     *zip.ReadCloser
+	tz    string // the time zone update's directory, if given
 	tree  string
 	files map[string]*zip.File
 	cache map[string]*icutxt.Node
@@ -106,9 +136,16 @@ func (c *Locales) ReadTreeFile(name string) ([]byte, error) {
 	return ReadFile(c.z, "data/"+c.tree+"/"+name)
 }
 
+// UseTZ has ReadMisc read the time zone files from the update in dir rather
+// than from the data archive.
+func (c *Locales) UseTZ(dir string) { c.tz = dir }
+
 // ReadMisc reads one of the data archive's non-locale files, data/misc/
-// <name>.txt.
+// <name>.txt, or the time zone update's copy of it.
 func (c *Locales) ReadMisc(name string) ([]byte, error) {
+	if _, ok := TZSHA256[name]; ok && c.tz != "" {
+		return ReadTZ(c.tz, name)
+	}
 	return ReadFile(c.z, "data/misc/"+name+".txt")
 }
 
