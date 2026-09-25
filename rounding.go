@@ -1,7 +1,7 @@
 package intl
 
 import (
-	"math"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -117,8 +117,8 @@ func (m RoundingMode) roundsUp(r remainder, negative, lastOdd bool) bool {
 // Places may be negative, which rounds above the point: -3 rounds to the
 // nearest thousand, which is what a rounding increment and the wider
 // significant-digit counts need.
-func roundAt(v float64, places int, negative bool, mode RoundingMode) (integer, fraction string) {
-	integer, fraction = splitFloat(v)
+func roundAt(m mag, places int, negative bool, mode RoundingMode) (integer, fraction string) {
+	integer, fraction = m.integer, m.fraction
 
 	if places >= 0 {
 		if len(fraction) <= places {
@@ -178,22 +178,21 @@ func splitFloat(v float64) (integer, fraction string) {
 }
 
 // roundSignificant cuts a number to a number of significant digits.
-func roundSignificant(v float64, n int, negative bool, mode RoundingMode) (integer, fraction string) {
-	if v == 0 || n <= 0 {
+func roundSignificant(m mag, n int, negative bool, mode RoundingMode) (integer, fraction string) {
+	if m.isZero() || n <= 0 {
 		return "0", ""
 	}
 	// The place to round at is n digits after the first significant one.
-	e := int(math.Floor(math.Log10(v)))
-	return roundAt(v, n-1-e, negative, mode)
+	return roundAt(m, n-1-m.exponent(), negative, mode)
 }
 
 // significantPlace and fractionPlace say where each way of counting would
 // round, as a power of ten. The smaller place keeps more.
-func significantPlace(v float64, maxSignificant int) int {
-	if v == 0 {
+func significantPlace(m mag, maxSignificant int) int {
+	if m.isZero() {
 		return 0
 	}
-	return int(math.Floor(math.Log10(v))) - maxSignificant + 1
+	return m.exponent() - maxSignificant + 1
 }
 
 // roundToIncrement rounds to a multiple of an increment at a given number of
@@ -202,24 +201,25 @@ func significantPlace(v float64, maxSignificant int) int {
 // ECMA-402 only allows an increment when the smallest and largest decimal
 // counts are the same, so the digits are already at a fixed place and the
 // whole thing is integer arithmetic on that place.
-func roundToIncrement(integer, fraction string, places, increment int,
+func roundToIncrement(integer, fraction string, places, inc int,
 	negative bool, mode RoundingMode) (string, string) {
-	if increment <= 1 {
+	if inc <= 1 {
 		return integer, fraction
 	}
 	for len(fraction) < places {
 		fraction += "0"
 	}
-	units, ok := parseDigits(integer + fraction[:places])
-	if !ok {
-		// Too large to count in units of the last place, in which case it is
-		// far above any increment and rounding to one changes nothing.
-		return integer, fraction
-	}
-	step := int64(increment)
-	low := units - units%step
+	// The number is counted in units of the last place. Every increment
+	// ECMA-402 allows, doubled, divides a million, so the last six digits
+	// decide the rounding however many come before them.
+	units := integer + fraction[:places]
+	cut := max(0, len(units)-6)
+	head := units[:cut]
+	tail, _ := strconv.ParseInt(units[cut:], 10, 64)
+	step := int64(inc)
+	low := tail - tail%step
 	r := remainderBelowHalf
-	switch rest := units - low; {
+	switch rest := tail - low; {
 	case rest == 0:
 		r = remainderZero
 	case 2*rest > step:
@@ -227,11 +227,18 @@ func roundToIncrement(integer, fraction string, places, increment int,
 	case 2*rest == step:
 		r = remainderHalf
 	}
-	if mode.roundsUp(r, negative, (low/step)%2 == 1) {
+	if mode.roundsUp(r, negative, (low%(2*step))/step == 1) {
 		low += step
 	}
 
 	out := strconv.FormatInt(low, 10)
+	if cut > 0 {
+		if low >= 1000000 {
+			head, _ = increment(head, "")
+			low -= 1000000
+		}
+		out = head + fmt.Sprintf("%06d", low)
+	}
 	if places == 0 {
 		return out, ""
 	}
@@ -239,19 +246,4 @@ func roundToIncrement(integer, fraction string, places, increment int,
 		out = "0" + out
 	}
 	return out[:len(out)-places], out[len(out)-places:]
-}
-
-// parseDigits reads a digit string as a number, refusing one too long to hold.
-func parseDigits(s string) (int64, bool) {
-	if s == "" {
-		return 0, true
-	}
-	if len(s) > 18 {
-		return 0, false
-	}
-	v, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
 }

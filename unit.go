@@ -92,9 +92,9 @@ func loadUnits(src Source, loc Locale) (*unitdata.Locale, error) {
 }
 
 // applyUnit puts the amount into the unit's pattern.
-func (f *NumberFormat) applyUnit(parts []Part, magnitude float64) []Part {
+func (f *NumberFormat) applyUnit(parts []Part, magnitude mag, finite bool) []Part {
 	count := string(PluralOther)
-	if f.plurals != nil {
+	if f.plurals != nil && finite {
 		// The wording follows the digits that were written, not the value.
 		integer, fraction := f.round(magnitude, false)
 		o := operandsFor(padInteger(integer, f.minInt), fraction, 0)

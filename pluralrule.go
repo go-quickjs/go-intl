@@ -69,6 +69,11 @@ func operandsFor(integer, fraction string, exponent int) operands {
 		digits = integer + "." + fraction
 	}
 	o.n, _ = strconv.ParseFloat(digits, 64)
+	// ICU's i keeps the lowest eighteen digits of a number too long for
+	// them all (DecimalQuantity::toLong), so 10^21 has an i of zero.
+	if len(integer) > 18 {
+		integer = integer[len(integer)-18:]
+	}
 	o.i, _ = strconv.ParseInt(integer, 10, 64)
 
 	if fraction != "" {

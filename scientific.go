@@ -16,11 +16,11 @@ import (
 
 // exponentFor returns the power of ten a number is written against, and the
 // mantissa that goes with it.
-func (f *NumberFormat) exponentFor(magnitude float64) int {
-	if magnitude == 0 {
+func (f *NumberFormat) exponentFor(magnitude mag) int {
+	if magnitude.isZero() {
 		return 0
 	}
-	e := int(math.Floor(math.Log10(magnitude)))
+	e := magnitude.exponent()
 	if f.opts.Notation == NotationEngineering {
 		// Down to the multiple of three at or below it, which is a floor and
 		// not a truncation: -4 goes to -6, not to -3.
@@ -30,7 +30,7 @@ func (f *NumberFormat) exponentFor(magnitude float64) int {
 }
 
 // scientificParts writes a number against a power of ten.
-func (f *NumberFormat) scientificParts(magnitude float64, negative bool) []Part {
+func (f *NumberFormat) scientificParts(magnitude mag, negative bool) []Part {
 	exponent, integer, fraction := f.scientificDigits(magnitude, negative)
 
 	parts := f.groupedInteger(integer)
@@ -50,12 +50,9 @@ func (f *NumberFormat) scientificParts(magnitude float64, negative bool) []Part 
 
 // scientificDigits is the exponent a number is written against and the
 // rounded digits of its mantissa.
-func (f *NumberFormat) scientificDigits(magnitude float64, negative bool) (int, string, string) {
+func (f *NumberFormat) scientificDigits(magnitude mag, negative bool) (int, string, string) {
 	exponent := f.exponentFor(magnitude)
-	mantissa := magnitude
-	if magnitude != 0 {
-		mantissa = magnitude / math.Pow(10, float64(exponent))
-	}
+	mantissa := magnitude.shift(-exponent)
 
 	integer, fraction := f.round(mantissa, negative)
 	// Rounding can carry the mantissa past what the notation allows: 9.9995
@@ -66,7 +63,7 @@ func (f *NumberFormat) scientificDigits(magnitude float64, negative bool) (int, 
 	}
 	if len(integer) > limit {
 		exponent += len(integer) - limit
-		mantissa = magnitude / math.Pow(10, float64(exponent))
+		mantissa = magnitude.shift(-exponent)
 		integer, fraction = f.round(mantissa, negative)
 	}
 	return exponent, padInteger(integer, f.minInt), fraction
@@ -98,12 +95,12 @@ func shiftDigits(integer, fraction string, exponent int) (string, string) {
 // writes it: the digits after rounding, and in compact or scientific
 // notation the power of ten written apart, which French and others count.
 func (f *NumberFormat) pluralOperands(v float64) operands {
-	negative := v < 0 || v == 0 && math.Signbit(v)
-	magnitude := math.Abs(v)
+	negative := math.Signbit(v)
+	magnitude := magOf(v)
 	switch f.opts.Notation {
 	case NotationCompact:
 		form := f.compactForm(magnitude, negative)
-		integer, fraction := f.round(magnitude/form.divisor, negative)
+		integer, fraction := f.round(magnitude.shift(-form.exponent), negative)
 		integer, fraction = shiftDigits(integer, fraction, form.exponent)
 		return operandsFor(integer, fraction, form.exponent)
 	case NotationScientific, NotationEngineering:

@@ -121,7 +121,7 @@ func (r digitRequest) resolve() (digitPlan, error) {
 
 // round cuts a number down to the digits that will be written, by whichever
 // way of counting the options settled on, and then pads or trims the decimals.
-func (p *digitPlan) round(magnitude float64, negative bool) (string, string) {
+func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 	var integer, fraction string
 	switch p.rounding {
 	case roundSignificantDigits:

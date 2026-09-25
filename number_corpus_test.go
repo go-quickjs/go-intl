@@ -90,6 +90,8 @@ func numberOptions(in map[string]any) (intl.NumberFormatOptions, error) {
 				out.Style = intl.StylePercent
 			case "currency":
 				out.Style = intl.StyleCurrency
+			case "unit":
+				out.Style = intl.StyleUnit
 			default:
 				return out, fmt.Errorf("style %v", value)
 			}
@@ -133,6 +135,10 @@ func numberOptions(in map[string]any) (intl.NumberFormatOptions, error) {
 				out.Notation = intl.NotationStandard
 			case "compact":
 				out.Notation = intl.NotationCompact
+			case "scientific":
+				out.Notation = intl.NotationScientific
+			case "engineering":
+				out.Notation = intl.NotationEngineering
 			default:
 				return out, fmt.Errorf("notation %v", value)
 			}
@@ -151,6 +157,45 @@ func numberOptions(in map[string]any) (intl.NumberFormatOptions, error) {
 			out.MinimumFractionDigits = intl.Digits(int(value.(float64)))
 		case "maximumFractionDigits":
 			out.MaximumFractionDigits = intl.Digits(int(value.(float64)))
+		case "minimumSignificantDigits":
+			out.MinimumSignificantDigits = intl.Digits(int(value.(float64)))
+		case "maximumSignificantDigits":
+			out.MaximumSignificantDigits = intl.Digits(int(value.(float64)))
+		case "roundingIncrement":
+			out.RoundingIncrement = int(value.(float64))
+		case "roundingMode":
+			modes := map[any]intl.RoundingMode{"ceil": intl.Ceil, "floor": intl.Floor,
+				"expand": intl.Expand, "trunc": intl.Trunc, "halfCeil": intl.HalfCeil,
+				"halfFloor": intl.HalfFloor, "halfExpand": intl.HalfExpand,
+				"halfTrunc": intl.HalfTrunc, "halfEven": intl.HalfEven}
+			mode, ok := modes[value]
+			if !ok {
+				return out, fmt.Errorf("roundingMode %v", value)
+			}
+			out.RoundingMode = mode
+		case "roundingPriority":
+			switch value {
+			case "auto":
+			case "morePrecision":
+				out.RoundingPriority = intl.MorePrecision
+			case "lessPrecision":
+				out.RoundingPriority = intl.LessPrecision
+			default:
+				return out, fmt.Errorf("roundingPriority %v", value)
+			}
+		case "unit":
+			out.Unit, _ = value.(string)
+		case "unitDisplay":
+			switch value {
+			case "short":
+				out.UnitDisplay = intl.UnitShort
+			case "long":
+				out.UnitDisplay = intl.UnitLong
+			case "narrow":
+				out.UnitDisplay = intl.UnitNarrow
+			default:
+				return out, fmt.Errorf("unitDisplay %v", value)
+			}
 		default:
 			return out, fmt.Errorf("unknown option %q", key)
 		}

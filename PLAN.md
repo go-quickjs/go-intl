@@ -275,6 +275,22 @@ rather than the corpus gate:
 - ~~`PluralRules.selectRange`~~ **done**: ICU's StandardPluralRanges, from
   CLDR's plural ranges by language, over the ends as rounded. 145,340 cases
   against node, all matching.
+- ~~exact decimal input~~ **done**: `Decimal`, `ParseDecimal` (ECMA-402's
+  reading of a numeric string, hexadecimal and "Infinity" included) and
+  `FormatDecimal`. The formatter now works on decimal digits throughout
+  rather than on a float, so a string or a BigInt is written with every
+  digit it has; a float is its shortest decimal, as before. A string too
+  large for a float is infinite, as V8 has it; one too small is kept exactly,
+  as V8 keeps it and ECMA-402 would not. Comparing with node turned up four
+  rules that hold for floats too: `signDisplay` asks whether the number is
+  zero as written (0.0001 at two decimals has no sign under `exceptZero`); a
+  compact number rounding into the next power of ten takes that power's
+  pattern (999,999.5 is "1M"); an amount of exactly 0 or 1 takes CLDR's
+  explicit pattern where there is one, and a pattern with no digits replaces
+  the number (French "mille"); and NaN and infinity are "other" for unit and
+  currency names. Compact notation's word is now a `compact` part, with the
+  spaces around it literals, as ICU trims them. 6,970 strings in ten
+  locales, as strings and parts, all match.
 - ~~`PluralRules` in compact and scientific notation~~ **done**: a number is
   selected as ICU's number formatter writes it, with the power of ten apart
   (`c`) and the digits of the whole value, so "1.5M" is French "many".
@@ -539,7 +555,7 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
-| 3c. Rest of the surface | corpus done; decimal input and `formatRange` missing |
+| 3c. Rest of the surface | corpus done; exact decimal input done, 6,970 cases against node; `formatRange` missing |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
 | 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 14 calendars left |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
@@ -589,7 +605,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| NumberFormat | done | exact decimal input - strings and BigInts, which `Format(float64)` cannot hold; `formatRange`, `formatRangeToParts` |
+| NumberFormat | done | `formatRange`, `formatRangeToParts` |
 | DateTimeFormat | done | 14 calendars |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |

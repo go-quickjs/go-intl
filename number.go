@@ -2,7 +2,6 @@ package intl
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -386,6 +385,9 @@ const (
 	PartExponentSeparator PartKind = "exponentSeparator"
 	PartExponentMinusSign PartKind = "exponentMinusSign"
 	PartExponentInteger   PartKind = "exponentInteger"
+	// PartCompact is the word or letter compact notation writes for a
+	// magnitude: "K", "million".
+	PartCompact PartKind = "compact"
 
 	// The pieces of a date or a time, named as ECMA-402 names them.
 	PartEra              PartKind = "era"
@@ -431,10 +433,29 @@ func (f *NumberFormat) AppendFormat(dst []byte, v float64) []byte {
 // so having to produce them is what keeps the formatter assembling a number
 // out of a pattern rather than looking an answer up.
 func (f *NumberFormat) FormatToParts(v float64) []Part {
-	negative := math.Signbit(v)
-	magnitude := math.Abs(v)
+	return f.FormatDecimalToParts(DecimalFromFloat(v))
+}
+
+// FormatDecimal writes a number given exactly: a string or a BigInt, as
+// ECMA-402's formatters take them, with as many digits as it has.
+func (f *NumberFormat) FormatDecimal(d Decimal) string {
+	var b strings.Builder
+	for _, p := range f.FormatDecimalToParts(d) {
+		b.WriteString(p.Value)
+	}
+	return b.String()
+}
+
+// FormatDecimalToParts writes a number given exactly as the pieces it is
+// made of.
+func (f *NumberFormat) FormatDecimalToParts(d Decimal) []Part {
+	negative := d.neg
+	magnitude := d.m
+	if magnitude.integer == "" {
+		magnitude.integer = "0"
+	}
 	if f.opts.Style == StylePercent {
-		magnitude *= 100
+		magnitude = magnitude.shift(2)
 	}
 
 	var parts []Part
@@ -444,7 +465,10 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 		}
 	}
 
-	sign, showSign := f.signFor(v, negative)
+	// Whether the number is zero is asked of it as written: 0.0001 at two
+	// decimals is "0", which signDisplay "exceptZero" writes without a sign.
+	zero := d.kind == decimalNaN || d.kind == decimalFinite && f.roundsToZero(magnitude, negative)
+	sign, showSign := f.signFor(zero, negative)
 	prefix := f.pattern.prefixFor(negative)
 	suffix := f.pattern.suffixFor(negative)
 
@@ -456,9 +480,9 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 	parts = append(parts, f.affixParts(prefix)...)
 
 	switch {
-	case math.IsNaN(v):
+	case d.kind == decimalNaN:
 		add(PartNaN, f.data.Symbols.NaN)
-	case math.IsInf(v, 0):
+	case d.kind == decimalInfinite:
 		add(PartInfinity, f.data.Symbols.Infinity)
 	case f.opts.Notation == NotationCompact:
 		parts = append(parts, f.compactParts(magnitude, negative)...)
@@ -469,20 +493,23 @@ func (f *NumberFormat) FormatToParts(v float64) []Part {
 	}
 
 	parts = append(parts, f.affixParts(suffix)...)
+	// NaN and the infinities are "other" in every language, as ICU's plural
+	// rules answer for them.
+	finite := d.kind == decimalFinite
 	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName {
-		return f.joinCurrencyName(parts, magnitude)
+		return f.joinCurrencyName(parts, magnitude, finite)
 	}
 	if f.opts.Style == StyleUnit {
-		return f.applyUnit(parts, magnitude)
+		return f.applyUnit(parts, magnitude, finite)
 	}
 	return f.spaceCurrency(parts)
 }
 
 // joinCurrencyName puts the amount and the spelled-out name together, by the
 // locale's unit pattern and the plural category of the amount.
-func (f *NumberFormat) joinCurrencyName(parts []Part, magnitude float64) []Part {
+func (f *NumberFormat) joinCurrencyName(parts []Part, magnitude mag, finite bool) []Part {
 	count := string(PluralOther)
-	if f.plurals != nil {
+	if f.plurals != nil && finite {
 		// The category comes from the digits this formatter writes, not from
 		// the value: money is written with two decimals, so one dollar is
 		// "1.00" and English calls that "dollars" rather than "dollar".
@@ -591,11 +618,25 @@ type signPart struct {
 	text string
 }
 
+// roundsToZero reports whether a magnitude is written as zero. A number in
+// scientific notation never is unless it is zero, and one large enough to
+// compact is not.
+func (f *NumberFormat) roundsToZero(m mag, negative bool) bool {
+	if m.isZero() {
+		return true
+	}
+	switch f.opts.Notation {
+	case NotationScientific, NotationEngineering:
+		return false
+	}
+	integer, fraction := f.round(m, negative)
+	return strings.Trim(integer, "0") == "" && strings.Trim(fraction, "0") == ""
+}
+
 // signFor decides whether a sign is written and which one.
-func (f *NumberFormat) signFor(v float64, negative bool) (signPart, bool) {
+func (f *NumberFormat) signFor(zero, negative bool) (signPart, bool) {
 	minus := signPart{PartMinusSign, f.data.Symbols.MinusSign}
 	plus := signPart{PartPlusSign, f.data.Symbols.PlusSign}
-	zero := v == 0 || math.IsNaN(v)
 
 	switch f.opts.SignDisplay {
 	case SignNever:
@@ -627,7 +668,7 @@ func (f *NumberFormat) signFor(v float64, negative bool) (signPart, bool) {
 }
 
 // numberParts writes the digits themselves.
-func (f *NumberFormat) numberParts(magnitude float64, negative bool) []Part {
+func (f *NumberFormat) numberParts(magnitude mag, negative bool) []Part {
 	integer, fraction := f.round(magnitude, negative)
 	integer = padInteger(integer, f.minInt)
 

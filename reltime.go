@@ -188,7 +188,7 @@ func (f *RelativeTimeFormat) FormatToParts(v float64, unit RelativeTimeUnit) []R
 	// Zero looks to the future: "in 0 seconds" rather than "0 seconds ago".
 	future := !math.Signbit(v)
 
-	integer, fraction := f.numbers.round(magnitude, false)
+	integer, fraction := f.numbers.round(magOf(magnitude), false)
 	o := operandsFor(padInteger(integer, f.numbers.minInt), fraction, 0)
 	count := string(f.plurals.selectOperands(&o))
 

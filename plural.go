@@ -212,7 +212,7 @@ func (p *PluralRules) selectWith(v float64, exponent int) PluralCategory {
 	if negative {
 		v = -v
 	}
-	integer, fraction := p.round(v, negative)
+	integer, fraction := p.round(magOf(v), negative)
 	integer = padInteger(integer, p.minInt)
 
 	o := operandsFor(integer, fraction, exponent)
