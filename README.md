@@ -46,7 +46,7 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 | `NumberFormat` | Complete: every style, notation, rounding option and numbering system, exact decimal input (`ParseDecimal`, `FormatDecimal`), ranges |
 | `DateTimeFormat` | Complete for the Gregorian and Buddhist calendars: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges. The other 14 calendars are to come |
 | `PluralRules` | Complete, with `SelectRange` |
-| `Collator` | Complete: every tailoring, sensitivity, numeric ordering, case order |
+| `Collator` | Complete but for Korean `searchjl`: every other tailoring, sensitivity, numeric ordering, case order |
 | `ListFormat`, `RelativeTimeFormat`, `DisplayNames` | Complete |
 | `Normalizer` | NFC, NFD, NFKC, NFKD, at Unicode 17.0.0 |
 | `Segmenter`, `DurationFormat` | Not started |
@@ -69,8 +69,9 @@ The answers are checked, not assumed:
 
 Where Node and ECMA-402 disagree, the difference is a named entry in
 [`compat.go`](compat.go). The zero value of `Compat` is the standard, and
-`NodeICU` gives Node's behavior. The only entry so far is the plain space V8
-writes before AM and PM where ICU writes U+202F.
+`NodeICU` gives Node's behavior. There are two so far: V8 writes a plain
+space before AM and PM where ICU writes U+202F, and V8 adds a collation
+chosen by option to the resolved locale.
 
 Where ICU's implementation decides an answer, the implementation is ported.
 The pattern generator, the interval formatter, the number-range formatter
