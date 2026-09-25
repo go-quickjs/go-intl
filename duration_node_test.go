@@ -94,21 +94,11 @@ var durationGaps = []struct{ duration, why string }{
 		"go-intl sums exactly, as the proposal does"},
 }
 
-// durationLocaleGaps are locales Node resolves otherwise, for reasons that
-// belong to locale negotiation rather than to DurationFormat.
-var durationLocaleGaps = map[string]string{}
-
-func init() {
-	// ICU has no data of these at all, so V8's available locales omit them
-	// and ResolveLocale truncates: az-Arab is resolved, and written, as az.
-	for _, tag := range []string{"az-Arab", "az-Arab-IQ", "az-Arab-TR", "be-tarask", "bm-Nkoo",
-		"ca-ES-valencia", "el-polyton", "en-Dsrt", "en-Shaw", "ha-Arab", "ha-Arab-SD", "ku-Arab",
-		"ku-Arab-IR", "mn-Mong", "mn-Mong-MN", "mni-Mtei", "ms-Arab", "ms-Arab-BN", "nb-SJ",
-		"sat-Deva", "zh-Latn"} {
-		durationLocaleGaps[tag] = "not among ICU's locales, which V8's locale negotiation resolves among"
-	}
-	durationLocaleGaps["sr-Cyrl-ME"] = "ICU's unit tree has no sr_Cyrl_ME, and ICU's fallback reads " +
-		"sr_Latn_ME for it: Latin unit names beside Cyrillic list patterns"
+// durationLocaleGaps are locales Node writes otherwise, for reasons that
+// belong to the data rather than to DurationFormat.
+var durationLocaleGaps = map[string]string{
+	"sr-Cyrl-ME": "ICU's unit tree has no sr_Cyrl_ME, and ICU's fallback reads sr_Latn_ME " +
+		"for it: Latin unit names beside Cyrillic list patterns",
 }
 
 // TestDurationFormatMatchesNode replays testdata/duration_node.js.
@@ -124,6 +114,13 @@ func TestDurationFormatMatchesNode(t *testing.T) {
 	}
 	s := bufio.NewScanner(z)
 	s.Buffer(make([]byte, 1<<20), 1<<20)
+	// Each locale is resolved among DurationFormat's available locales, as a
+	// host does before building the formatter, with Node's default.
+	matcher, err := intl.NewLocaleMatcher(intl.Embedded, intl.ServiceDurationFormat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, _ := intl.ParseLocale("en-US")
 	// The lines come grouped by formatter, so only the last is kept.
 	type key struct{ locale, options string }
 	var last key
@@ -154,6 +151,7 @@ func TestDurationFormatMatchesNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			loc = matcher.Resolve([]intl.Locale{loc}, intl.BestFit, def)
 			df, dfErr = intl.NewDurationFormat(loc, durationOptions(t, raw))
 			last = k
 		}

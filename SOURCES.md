@@ -30,7 +30,7 @@ authority.
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
-| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`) | yes |
+| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`); each service's available locales, from the locale and collation trees, their `LOCALE_DEPS.json` and `misc/plurals.txt` (`availgen`) | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`

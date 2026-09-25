@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/icutxt"
@@ -63,6 +64,7 @@ func ReadFile(z *zip.ReadCloser, name string) ([]byte, error) {
 // data/zone/*.txt -- from the data archive, each once.
 type Locales struct {
 	z     *zip.ReadCloser
+	tree  string
 	files map[string]*zip.File
 	cache map[string]*icutxt.Node
 }
@@ -79,13 +81,29 @@ func OpenTree(zipPath, tree string) (*Locales, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := &Locales{z: z, files: map[string]*zip.File{}, cache: map[string]*icutxt.Node{}}
+	out := &Locales{z: z, tree: tree, files: map[string]*zip.File{}, cache: map[string]*icutxt.Node{}}
 	for _, f := range z.File {
 		if name, ok := strings.CutPrefix(f.Name, "data/"+tree+"/"); ok && strings.HasSuffix(name, ".txt") {
 			out.files[strings.TrimSuffix(name, ".txt")] = f
 		}
 	}
 	return out, nil
+}
+
+// Names lists the tree's bundles, sorted.
+func (c *Locales) Names() []string {
+	out := make([]string, 0, len(c.files))
+	for name := range c.files {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ReadTreeFile reads a file of the tree other than a bundle, such as
+// LOCALE_DEPS.json.
+func (c *Locales) ReadTreeFile(name string) ([]byte, error) {
+	return ReadFile(c.z, "data/"+c.tree+"/"+name)
 }
 
 // ReadMisc reads one of the data archive's non-locale files, data/misc/
@@ -160,6 +178,32 @@ func (c *Locales) Resolve(name string, fb Fallback) ([]*icutxt.Node, error) {
 		name = next
 	}
 	return out, nil
+}
+
+// Bundle is the name of the bundle ICU's ures_open reads first for a
+// locale: the locale's own if the tree has it, else the one fallback finds,
+// with an alias followed. It is "root" for a locale that finds none.
+func (c *Locales) Bundle(name string, fb Fallback) string {
+	orig := name
+	for i := 0; !c.Has(name) && i < 16; i++ {
+		next, ok := fb.parent(name, orig)
+		if !ok {
+			return "root"
+		}
+		name = next
+	}
+	for i := 0; i < 16; i++ {
+		n, err := c.Get(name)
+		if err != nil || n == nil {
+			return name
+		}
+		a := n.Get("%%ALIAS")
+		if a == nil || a.Value == "" {
+			return name
+		}
+		name = a.Value
+	}
+	return name
 }
 
 // parent is ICU's getParentLocaleID for a bundle that does not exist.

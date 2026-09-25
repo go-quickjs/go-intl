@@ -709,7 +709,7 @@ README's Intl section.
 | 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
-| 6c. DurationFormat | **done** - not in the corpus; 20,325 cases against node, all but named gaps that belong to locale negotiation |
+| 6c. DurationFormat | **done** - not in the corpus; 20,514 cases against node all match, and two named gaps cover 688 more |
 | 6d. Legacy `toLocale*` | **done** - 90/90; `Required` and `Defaults` on the date options |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
 | **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
@@ -760,7 +760,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`, as V8 builds them from ICU's (21 of CLDR's locales are not ICU's, and resolve by truncation); "best fit" as ICU's LocaleMatcher; ICU's per-tree fallback where it differs from CLDR's (sr-Cyrl-ME units and currency names, ku-TR). Canonicalization is done: see "Canonicalization" |
+| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | ICU's per-tree fallback where it differs from CLDR's (sr-Cyrl-ME units and currency names, ku-TR). Canonicalization, available locales, `Resolve` and `Supported` are done: see "Canonicalization" and "Negotiation" |
 | `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
@@ -793,6 +793,24 @@ tags: all 11,139 match.
 One divergence, in the compatibility profile: V8 answers two lowercase
 letters alone without consulting ICU, so "bh" stays "bh" where the standard
 makes it "bho".
+
+### Negotiation
+
+`LocaleMatcher` is ECMA-402's ResolveLocale and SupportedLocales for one
+service, over that service's available locales as V8 builds them from
+ICU's (`data/available.bin`, by `availgen`): ICU's installed locales, as
+its build indexes them, kept where the bundle or its language's holds what
+the service reads ("NumberElements", "calendar", "listPattern"), each also
+without its script; the Collator's from the collation tree, PluralRules'
+from plurals.txt. 21 of CLDR's locales have no ICU data and so are not
+available: "az-Arab" resolves as "az", "ht" as the default.
+`testdata/available_node.js` checks every name ICU has a bundle for, cut
+short and without its script, in nine services: all 9,747 agree.
+
+"Best fit" matches by lookup, as V8's does: its LocaleMatcher-based best
+fit is behind a flag Node leaves off, and across every available locale,
+alone and in pairs, Node's two matchers answer alike. With negotiation the
+DurationFormat sweep's 21 locale gaps close.
 
 ## Resuming cold
 
