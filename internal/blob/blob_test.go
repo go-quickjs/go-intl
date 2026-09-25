@@ -1,6 +1,7 @@
 package blob
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"testing"
@@ -140,5 +141,90 @@ func TestIndex(t *testing.T) {
 	}
 	if k, v := x.At(0); string(k) != "a" || string(v) != "one" {
 		t.Errorf("At(0) = %q %q", k, v)
+	}
+}
+
+func TestSharedTable(t *testing.T) {
+	pool := NewPool(1)
+	values := map[string]string{"b": "two", "a": "one", "c": "", "ab": "one"}
+	keys := []string{"b", "a", "c", "ab"}
+	write := func(w *Writer) {
+		w.SharedTable(keys, func(k string, w *Writer) { w.SharedString(values[k]) })
+	}
+	w := NewPooledWriter(1, pool)
+	write(w)
+	// A second table with the same records is the same part.
+	w2 := NewPooledWriter(1, pool)
+	write(w2)
+	if string(w.Bytes()) != string(w2.Bytes()) {
+		t.Errorf("the same table was written twice: % x, % x", w.Bytes(), w2.Bytes())
+	}
+	shared, err := ReadShared(pool.Bytes(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewPooledReader(w.Bytes(), 1, shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := r.SharedTable()
+	if err := r.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if table.Len() != 4 {
+		t.Fatalf("Len = %d, want 4", table.Len())
+	}
+	for k, want := range values {
+		v, ok := table.Find(k)
+		if !ok {
+			t.Errorf("Find(%q) found nothing", k)
+			continue
+		}
+		if got := v.SharedString(); got != want || v.Err() != nil {
+			t.Errorf("Find(%q) = %q, %v; want %q", k, got, v.Err(), want)
+		}
+	}
+	for _, k := range []string{"", "aa", "d", "0", "one"} {
+		if _, ok := table.Find(k); ok {
+			t.Errorf("Find(%q) found something", k)
+		}
+	}
+	if _, ok := (Table{}).Find("a"); ok {
+		t.Error("an empty table found something")
+	}
+}
+
+func TestSharedTableWideNumbers(t *testing.T) {
+	// More than 256 parts, so that a record's numbers take two bytes.
+	pool := NewPool(1)
+	var keys []string
+	for i := 0; i < 300; i++ {
+		keys = append(keys, fmt.Sprintf("key%03d", i))
+	}
+	w := NewPooledWriter(1, pool)
+	w.SharedTable(keys, func(k string, w *Writer) { w.SharedString("value " + k) })
+	shared, err := ReadShared(pool.Bytes(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewPooledReader(w.Bytes(), 1, shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := r.SharedTable()
+	if err := r.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if table.width != 2 || table.Len() != 300 {
+		t.Fatalf("a table of %d-byte numbers and %d records", table.width, table.Len())
+	}
+	for _, k := range keys {
+		v, ok := table.Find(k)
+		if !ok {
+			t.Fatalf("Find(%q) found nothing", k)
+		}
+		if got := v.SharedString(); got != "value "+k || v.Err() != nil {
+			t.Fatalf("Find(%q) = %q, %v", k, got, v.Err())
+		}
 	}
 }

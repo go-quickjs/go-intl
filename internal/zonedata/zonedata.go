@@ -15,13 +15,11 @@
 package zonedata
 
 import (
-	"sort"
-
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 3
+const Version = 4
 
 // A Names is what a locale calls one metazone or zone.
 //
@@ -48,8 +46,8 @@ type Entry struct {
 	Names    Names
 }
 
-// Locale holds what one locale says about zones.
-type Locale struct {
+// Built is what one locale says about zones, as a generator builds it.
+type Built struct {
 	// GMTFormat wraps an offset, "GMT{0}", and HourFormat writes the offset
 	// itself, "+HH:mm;-HH:mm".
 	GMTFormat  string
@@ -60,14 +58,14 @@ type Locale struct {
 	RegionFormat   string
 	FallbackFormat string
 
-	// Metazones is sorted by name.
+	// Metazones are the metazones the locale names.
 	Metazones []Entry
 	// Zones are the zones the locale says something about itself -- a name
-	// or the city it is written by -- sorted by zone, in CLDR's canonical
-	// form ("Asia/Calcutta").
+	// or the city it is written by -- in CLDR's canonical form
+	// ("Asia/Calcutta").
 	Zones []ZoneEntry
-	// Regions are the locale's names for the regions zones are in, sorted by
-	// code. A region it has no name for is written as its code.
+	// Regions are the locale's names for the regions zones are in. A region
+	// it has no name for is written as its code.
 	Regions []RegionEntry
 }
 
@@ -86,67 +84,84 @@ type RegionEntry struct {
 	Name   string
 }
 
+// Locale is what one locale says about zones, read where it lies: a
+// formatter names one zone, so the metazones, zones and regions are looked
+// up one at a time rather than read whole.
+type Locale struct {
+	GMTFormat      string
+	HourFormat     string
+	RegionFormat   string
+	FallbackFormat string
+
+	metazones, zones, regions blob.Table
+}
+
 // Metazone finds a metazone's names.
 func (l *Locale) Metazone(name string) (Names, bool) {
-	i := sort.Search(len(l.Metazones), func(i int) bool {
-		return l.Metazones[i].Metazone >= name
-	})
-	if i < len(l.Metazones) && l.Metazones[i].Metazone == name {
-		return l.Metazones[i].Names, true
+	r, ok := l.metazones.Find(name)
+	if !ok {
+		return Names{}, false
 	}
-	return Names{}, false
+	n := readNames(r)
+	return n, r.Err() == nil
 }
 
 // Zone finds what the locale says about one zone.
 func (l *Locale) Zone(name string) (ZoneEntry, bool) {
-	i := sort.Search(len(l.Zones), func(i int) bool { return l.Zones[i].Zone >= name })
-	if i < len(l.Zones) && l.Zones[i].Zone == name {
-		return l.Zones[i], true
+	r, ok := l.zones.Find(name)
+	if !ok {
+		return ZoneEntry{}, false
 	}
-	return ZoneEntry{}, false
+	e := ZoneEntry{Zone: name, Names: readNames(r), City: r.SharedString()}
+	return e, r.Err() == nil
 }
 
 // Region finds the locale's name for a region.
 func (l *Locale) Region(code string) (string, bool) {
-	i := sort.Search(len(l.Regions), func(i int) bool { return l.Regions[i].Region >= code })
-	if i < len(l.Regions) && l.Regions[i].Region == code {
-		return l.Regions[i].Name, true
+	r, ok := l.regions.Find(code)
+	if !ok {
+		return "", false
 	}
-	return "", false
+	name := r.SharedString()
+	return name, r.Err() == nil
 }
 
 // Encode writes a locale's zone names, with what it shares with other
 // locales -- every string, each set of names and each list -- in pool,
 // which the generator writes beside the locales and Decode is given.
-func Encode(l *Locale, pool *blob.Pool) []byte {
+func Encode(l *Built, pool *blob.Pool) []byte {
 	b := blob.NewPooledWriter(Version, pool)
 	b.SharedString(l.GMTFormat)
 	b.SharedString(l.HourFormat)
 	b.SharedString(l.RegionFormat)
 	b.SharedString(l.FallbackFormat)
-	b.Shared(func(b *blob.Writer) {
-		b.Uint(len(l.Metazones))
-		for _, e := range l.Metazones {
-			b.SharedString(e.Metazone)
-			writeNames(b, e.Names)
-		}
+	metazones := map[string]Names{}
+	for _, e := range l.Metazones {
+		metazones[e.Metazone] = e.Names
+	}
+	b.SharedTable(keys(metazones), func(k string, b *blob.Writer) { writeNames(b, metazones[k]) })
+	zones := map[string]ZoneEntry{}
+	for _, e := range l.Zones {
+		zones[e.Zone] = e
+	}
+	b.SharedTable(keys(zones), func(k string, b *blob.Writer) {
+		writeNames(b, zones[k].Names)
+		b.SharedString(zones[k].City)
 	})
-	b.Shared(func(b *blob.Writer) {
-		b.Uint(len(l.Zones))
-		for _, e := range l.Zones {
-			b.SharedString(e.Zone)
-			writeNames(b, e.Names)
-			b.SharedString(e.City)
-		}
-	})
-	b.Shared(func(b *blob.Writer) {
-		b.Uint(len(l.Regions))
-		for _, e := range l.Regions {
-			b.SharedString(e.Region)
-			b.SharedString(e.Name)
-		}
-	})
+	regions := map[string]string{}
+	for _, e := range l.Regions {
+		regions[e.Region] = e.Name
+	}
+	b.SharedTable(keys(regions), func(k string, b *blob.Writer) { b.SharedString(regions[k]) })
 	return b.Bytes()
+}
+
+func keys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 func writeNames(b *blob.Writer, n Names) {
@@ -173,16 +188,6 @@ func readNames(r *blob.Reader) Names {
 	return n
 }
 
-// count reads a count, which cannot exceed the bytes left to hold what it
-// counts.
-func count(r *blob.Reader) int {
-	n := r.Uint()
-	if n < 0 || n > r.Left() {
-		return 0
-	}
-	return n
-}
-
 // Decode reads what Encode wrote, with the pool it wrote into.
 func Decode(data []byte, pool blob.Shared) (*Locale, error) {
 	r, err := blob.NewPooledReader(data, Version, pool)
@@ -194,27 +199,9 @@ func Decode(data []byte, pool blob.Shared) (*Locale, error) {
 	l.HourFormat = r.SharedString()
 	l.RegionFormat = r.SharedString()
 	l.FallbackFormat = r.SharedString()
-	r.Shared(func(r *blob.Reader) {
-		l.Metazones = make([]Entry, count(r))
-		for i := range l.Metazones {
-			l.Metazones[i].Metazone = r.SharedString()
-			l.Metazones[i].Names = readNames(r)
-		}
-	})
-	r.Shared(func(r *blob.Reader) {
-		l.Zones = make([]ZoneEntry, count(r))
-		for i := range l.Zones {
-			l.Zones[i].Zone = r.SharedString()
-			l.Zones[i].Names = readNames(r)
-			l.Zones[i].City = r.SharedString()
-		}
-	})
-	r.Shared(func(r *blob.Reader) {
-		l.Regions = make([]RegionEntry, count(r))
-		for i := range l.Regions {
-			l.Regions[i] = RegionEntry{Region: r.SharedString(), Name: r.SharedString()}
-		}
-	})
+	l.metazones = r.SharedTable()
+	l.zones = r.SharedTable()
+	l.regions = r.SharedTable()
 	if err := r.Err(); err != nil {
 		return nil, err
 	}

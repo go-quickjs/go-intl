@@ -104,6 +104,11 @@ func run(zipPath, tzDir string) error {
 		built[tag] = zonedata.Encode(l, pool)
 	}
 
+	metaBytes, err := zonedata.EncodeMeta(meta)
+	if err != nil {
+		return err
+	}
+
 	out := filepath.Join("data", "zonenames")
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
@@ -114,7 +119,7 @@ func run(zipPath, tzDir string) error {
 	if err := os.WriteFile(filepath.Join("data", "zonenamesshared.bin"), pool.Bytes(), 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "metazones.bin"), zonedata.EncodeMeta(meta), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join("data", "metazones.bin"), metaBytes, 0o644); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "zonegen: %d locales, %d zones, %d aliases\n", len(built), len(meta.Zones), len(meta.Aliases))
@@ -123,7 +128,7 @@ func run(zipPath, tzDir string) error {
 
 // readLocale merges what a locale's zone and region bundles say, as ICU's
 // TimeZoneNames and LocaleDisplayNames read them.
-func readLocale(zones, regions *icusrc.Locales, fb icusrc.Fallback, name string, codes map[string]bool) (*zonedata.Locale, error) {
+func readLocale(zones, regions *icusrc.Locales, fb icusrc.Fallback, name string, codes map[string]bool) (*zonedata.Built, error) {
 	chain, err := zones.Resolve(name, fb)
 	if err != nil {
 		return nil, err
@@ -142,7 +147,7 @@ func readLocale(zones, regions *icusrc.Locales, fb icusrc.Fallback, name string,
 		}
 		return ""
 	}
-	l := &zonedata.Locale{
+	l := &zonedata.Built{
 		GMTFormat:      first("gmtFormat"),
 		HourFormat:     first("hourFormat"),
 		RegionFormat:   first("regionFormat"),

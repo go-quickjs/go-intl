@@ -339,13 +339,7 @@ func (z *zoneNames) locationName(id string) string {
 // stands for its region: the only canonical zone there, or the one CLDR
 // names as primary.
 func (z *zoneNames) isPrimary(id, region string) bool {
-	count := 0
-	for i := range z.meta.Zones {
-		if z.meta.Zones[i].Region == region {
-			count++
-		}
-	}
-	return count == 1 || z.meta.PrimaryZone(region) == id
+	return z.meta.ZonesIn(region) == 1 || z.meta.PrimaryZone(region) == id
 }
 
 func (z *zoneNames) regionName(code string) string {
