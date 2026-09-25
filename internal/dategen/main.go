@@ -78,6 +78,7 @@ var extras = []struct{ cldr, bcp47, pkg string }{
 	{"islamic-civil", "islamic-civil", "islamic"},
 	{"islamic-tbla", "islamic-tbla", "islamic"},
 	{"roc", "roc", "roc"},
+	{"hebrew", "hebrew", "hebrew"},
 }
 
 // packageOf finds the unpacked package a calendar comes from, among those
@@ -510,16 +511,25 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 		for w := 0; w < datedata.Widths; w++ {
 			at := ctx*datedata.Widths + w
 			if set, ok := source.Months[contextNames[ctx]][widthNames[w]]; ok {
-				// Twelve months, or thirteen in the Coptic and Ethiopic
-				// calendars.
+				// Twelve months, or thirteen in the Coptic, Ethiopic and
+				// Hebrew calendars. The Hebrew calendar's Adar in a leap
+				// year, "7-yeartype-leap", is kept fourteenth, where ICU
+				// keeps it.
 				count := 12
 				for key := range set {
 					if n, err := strconv.Atoi(key); err == nil && n > count {
 						count = n
 					}
 				}
+				if _, ok := set["7-yeartype-leap"]; ok {
+					count = 14
+				}
 				text := make([]string, count)
 				for key, value := range set {
+					if key == "7-yeartype-leap" {
+						text[13] = value
+						continue
+					}
 					n, err := strconv.Atoi(key)
 					if err != nil || n < 1 || n > count {
 						continue

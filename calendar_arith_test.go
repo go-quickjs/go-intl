@@ -40,3 +40,35 @@ func TestArithmeticCalendars(t *testing.T) {
 		}
 	}
 }
+
+// The Hebrew calendar names its leap month as ICU does: Adar I and Adar II
+// in a leap year, plain Adar in a common one, and Hebrew writes its dates in
+// Hebrew numerals, the year without its thousands. The expectations are
+// Node's.
+func TestHebrewCalendar(t *testing.T) {
+	dates := []time.Time{
+		time.Date(2024, 2, 20, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 3, 20, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 4, 20, 0, 0, 0, 0, time.UTC),
+		time.Date(2025, 3, 20, 0, 0, 0, 0, time.UTC),
+		time.Date(2025, 4, 20, 0, 0, 0, 0, time.UTC),
+	}
+	for _, c := range []struct {
+		tag  string
+		opts intl.DateTimeFormatOptions
+		want []string
+	}{
+		{"en-u-ca-hebrew", intl.DateTimeFormatOptions{TimeZone: "UTC", Year: intl.WidthNumeric,
+			Month: intl.WidthLong, Day: intl.WidthNumeric},
+			[]string{"11 Adar I 5784", "10 Adar II 5784", "12 Nisan 5784", "20 Adar 5785", "22 Nisan 5785"}},
+		{"he-u-ca-hebrew", intl.DateTimeFormatOptions{TimeZone: "UTC", DateStyle: intl.LengthLong},
+			[]string{"י״א באדר א׳ תשפ״ד", "י׳ באדר ב׳ תשפ״ד", "י״ב בניסן תשפ״ד", "כ׳ באדר תשפ״ה", "כ״ב בניסן תשפ״ה"}},
+	} {
+		f := newDateTime(t, c.tag, c.opts)
+		for i, d := range dates {
+			if got := f.Format(d); got != c.want[i] {
+				t.Errorf("%s %s = %q, want %q", c.tag, d.Format("2006-01-02"), got, c.want[i])
+			}
+		}
+	}
+}

@@ -555,9 +555,9 @@ ICU uses").
 
 ### Calendars
 
-Ten of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
+Eleven of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
 Coptic, Ethiopic, Ethiopic Amete Alem, Indian, civil and tabular Islamic,
-and ROC. Each is ICU 78's arithmetic, from the ICU source named in its
+ROC and Hebrew. Each is ICU 78's arithmetic, from the ICU source named in its
 comments, and matches go-quickjs's arithmetic wherever both were compared.
 `testdata/datetime_calendars_node.js` records every calendar Node supports
 in forty locales, dates from 1900 to 2077; the implemented ones all match,
@@ -600,7 +600,6 @@ answers are not:
 
 | Calendar | Source |
 |---|---|
-| Hebrew | go-quickjs's arithmetic, against ICU's; its leap month's names |
 | ISO 8601 | the Gregorian arithmetic, with ICU's root patterns |
 | Japanese | CLDR's era start dates |
 | Umm al-Qura | ICU's table of month lengths, from its source, as input data |
@@ -628,7 +627,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 10 of 17 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 11 of 17 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -676,7 +675,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| DateTimeFormat | done | 7 calendars: Hebrew, Japanese, ISO 8601, Islamic, Islamic (Saudi), Umm al-Qura, Chinese, Dangi; see "Calendars" |
+| DateTimeFormat | done | 6 calendars: Japanese, ISO 8601, Islamic, Islamic (Saudi), Umm al-Qura, Chinese, Dangi; see "Calendars" |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 

@@ -59,7 +59,7 @@ func TestUnimplementedCalendarIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, calendar := range []string{"hebrew", "japanese", "islamic"} {
+	for _, calendar := range []string{"japanese", "islamic", "chinese"} {
 		if _, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
 			Calendar: calendar,
 		}); err == nil {

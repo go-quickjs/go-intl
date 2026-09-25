@@ -209,15 +209,28 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		if fd.letter == 'L' {
 			context = datedata.StandAlone
 		}
+		month := p.month
+		if f.system == Hebrew {
+			// SimpleDateFormat: in a leap year Adar is called Adar II, the
+			// fourteenth name; in a common year, which has no Adar I, the
+			// months after it are numbered one lower.
+			leap := hebrewLeap(p.year)
+			switch {
+			case leap && month == 7 && fd.count >= 3:
+				month = 14
+			case !leap && month >= 7 && fd.count < 3:
+				month--
+			}
+		}
 		switch {
 		case fd.count <= 2:
-			return f.number(p, fd.letter, p.month, fd.count)
+			return f.number(p, fd.letter, month, fd.count)
 		case fd.count == 3:
-			return cal.Month(context, datedata.Abbreviated, p.month)
+			return cal.Month(context, datedata.Abbreviated, month)
 		case fd.count == 4:
-			return cal.Month(context, datedata.Wide, p.month)
+			return cal.Month(context, datedata.Wide, month)
 		default:
-			return cal.Month(context, datedata.Narrow, p.month)
+			return cal.Month(context, datedata.Narrow, month)
 		}
 
 	case 'd':

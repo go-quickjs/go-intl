@@ -40,6 +40,8 @@ const (
 	IslamicTabular CalendarSystem = "islamic-tbla"
 	// ROC counts the Gregorian years from 1912, the Republic of China.
 	ROC CalendarSystem = "roc"
+	// Hebrew is the lunisolar Hebrew calendar.
+	Hebrew CalendarSystem = "hebrew"
 )
 
 // implemented lists the calendars this can reckon in. The rest of CLDR's are
@@ -55,6 +57,7 @@ var implemented = map[CalendarSystem]bool{
 	IslamicCivil:      true,
 	IslamicTabular:    true,
 	ROC:               true,
+	Hebrew:            true,
 }
 
 // calendarPreferences maps a region to the calendar it reckons in, as lines of
@@ -193,6 +196,12 @@ func reckon(t time.Time, system CalendarSystem) dateParts {
 		p.era, p.extYear = 0, p.year
 		p.relatedYear = islamicRelatedYear(p.year)
 		p.yearLength = islamicTabularYearLength
+		return p
+	case Hebrew:
+		p.year, p.month, p.day, p.dayOfYear = hebrewDate(julianDay(t))
+		p.era, p.extYear = 0, p.year
+		p.relatedYear = p.year - 3760
+		p.yearLength = hebrewYearLength
 		return p
 	case Indian:
 		p.year, p.month, p.day, p.dayOfYear = indianDate(t)
