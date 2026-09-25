@@ -122,6 +122,9 @@ func run(root, icuData string) error {
 		if l.Partials, err = partials(icu, e.Name(), l, digits); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		if l.TimeSeparators, err = timeSeparators(icu, e.Name(), digits); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		built[e.Name()] = numdata.Encode(l)
 	}
 	if len(built) == 0 {
@@ -595,6 +598,65 @@ func compactPatterns(in map[string]string) []numdata.CompactPattern {
 		return out[i].Count < out[j].Count
 	})
 	return out
+}
+
+// timeSeparators finds the mark each numbering system puts between hours
+// and minutes in a locale, as DateFormatSymbols::initializeData finds it:
+// the first NumberElements/<system>/symbols table in the locale's chain,
+// the root's included, following the root's "/LOCALE/" aliases back to the
+// locale, and then that table's own timeSeparator, with no further fallback,
+// or a colon. So Urdu in Persian digits writes a colon although the root
+// gives those digits "٫": Urdu has an arabext symbols table of its own, and
+// it names no separator. Only the systems whose mark is not a colon are
+// kept.
+func timeSeparators(c *icusrc.Locales, name string, digits map[string]string) ([]numdata.SystemText, error) {
+	chain, err := c.Chain(strings.ReplaceAll(name, "-", "_"))
+	if err != nil {
+		return nil, err
+	}
+	root, err := c.Get("root")
+	if err != nil {
+		return nil, err
+	}
+	chain = append(chain, root)
+	var lookup func(system string, depth int) (string, error)
+	lookup = func(system string, depth int) (string, error) {
+		for _, n := range chain {
+			symbols := n.Get("NumberElements", system, "symbols")
+			if symbols == nil {
+				continue
+			}
+			if symbols.Alias {
+				target, ok := strings.CutPrefix(symbols.Value, "/LOCALE/NumberElements/")
+				target, ok2 := strings.CutSuffix(target, "/symbols")
+				if !ok || !ok2 || depth > 4 {
+					return "", fmt.Errorf("%s's symbols alias %s", system, symbols.Value)
+				}
+				return lookup(target, depth+1)
+			}
+			if t := symbols.Get("timeSeparator"); t != nil && !t.Alias {
+				return t.Value, nil
+			}
+			return ":", nil
+		}
+		return ":", nil
+	}
+	names := make([]string, 0, len(digits))
+	for system := range digits {
+		names = append(names, system)
+	}
+	sort.Strings(names)
+	var out []numdata.SystemText
+	for _, system := range names {
+		sep, err := lookup(system, 0)
+		if err != nil {
+			return nil, err
+		}
+		if sep != ":" {
+			out = append(out, numdata.SystemText{System: system, Text: sep})
+		}
+	}
+	return out, nil
 }
 
 // partials finds what a locale's ICU files say about numbering systems its

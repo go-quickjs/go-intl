@@ -245,6 +245,15 @@ func (d Decimal) IsInf() bool { return d.kind == decimalInfinite }
 // included.
 func (d Decimal) Negative() bool { return d.neg }
 
+// isZero reports whether the number is zero, of either sign.
+func (d Decimal) isZero() bool { return d.kind == decimalFinite && d.m.isZero() }
+
+// abs is the number without its sign.
+func (d Decimal) abs() Decimal {
+	d.neg = false
+	return d
+}
+
 // Float is the nearest float to the Decimal.
 func (d Decimal) Float() float64 {
 	switch d.kind {

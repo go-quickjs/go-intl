@@ -49,7 +49,8 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 | `Collator` | Complete but for Korean `searchjl`: every other tailoring, sensitivity, numeric ordering, case order |
 | `ListFormat`, `RelativeTimeFormat`, `DisplayNames` | Complete |
 | `Normalizer` | NFC, NFD, NFKC, NFKD, at Unicode 17.0.0 |
-| `Segmenter`, `DurationFormat` | Not started |
+| `DurationFormat` | Complete: every style and per-unit option, fractional digits, digital clocks with the locale's time separator, negative durations; as V8 writes them |
+| `Segmenter` | Not started |
 
 Every service has `ToParts` where ECMA-402 does, and a `ResolvedOptions`.
 
@@ -60,7 +61,7 @@ The answers are checked, not assumed:
 - **A golden corpus** of 7,949 cases taken from Node, run by `go test`.
 - **Sweeps against Node** over every locale Node supports, recorded under
   [`testdata`](testdata) by the scripts beside them: about 515,000 cases across
-  dates, date ranges, calendars, zone names, numbering systems, number
+  dates, date ranges, calendars, zone names, durations, numbering systems, number
   ranges, exact decimals, plural ranges and selection, and collation orders.
   Every one matches except the named gaps: Dublin's zone names (Go's
   time-zone data differs from ICU's for Ireland) and Korean `searchjl`

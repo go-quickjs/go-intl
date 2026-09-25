@@ -353,6 +353,42 @@ surface go-quickjs needs.
 Straightforward once the pattern layer from stage 5 exists. DisplayNames is the
 one that justifies the split-data design: it is most of the 14 MB.
 
+**DurationFormat: done.** It is made of the other formatters, as V8 makes it
+(js-duration-format.cc): each unit a NumberFormat in unit style or a bare
+number, joined by a ListFormat of units, the numeric ones run together with
+the time separator. The options resolve by GetDurationUnitOptions; V8
+reports a sub-second unit that joins the seconds as "numeric" where the
+proposal says "fractional", and never pads the hours by locale.
+
+Where the proposal leaves room, V8's choices are what Node does and are
+kept: numeric seconds join whatever part was written last ("1 hr, 46
+min:40"), numeric minutes join it whenever the hours are numeric in style,
+and a zero minute is forced between hours and seconds only in two-digit
+style. The time separator is ICU's DateFormatSymbols': the first
+NumberElements/<system>/symbols table in the locale's ICU chain, with no
+fallback past it, so Urdu in Persian digits writes a colon although the
+root gives those digits "٫" -- and V8 then keeps only ".", "：" and "٫".
+numbergen now carries it (`TimeSeparators`, only where it is not a colon).
+
+`testdata/duration_node.js` records 21,882 cases: seventeen option bags and
+twenty-four durations in forty locales, three of each in every other
+locale. All match but named gaps. One is V8's: it sums a fraction of a
+second in an int64 of nanoseconds, and 1e20 of them converts to INT64_MIN,
+a result C++ leaves undefined; go-intl sums exactly, as the proposal does.
+The others are locale negotiation's: ICU has no data at all for 21 of
+CLDR's locales (az-Arab, en-Dsrt, zh-Latn, ...), so V8 resolves them by
+truncation, az-Arab to az; and ICU's unit tree has no sr_Cyrl_ME, whose
+fallback reads sr_Latn_ME, so Node writes its units in Latin beside
+Cyrillic list patterns.
+
+The sweep also found that plural rules were looked up along CLDR's parent
+locales, where ICU truncates: Serbian in Latin, Bosnian in Cyrillic and Fula
+in Adlam counted as the root does, "1 sati". Fixed, with a regression test.
+
+A DurationFormat builds a NumberFormat for each unit it may write, from one
+load of the locale's number data (`numberSources`), which took construction
+from 4 ms to 0.4 ms.
+
 ### 7. Collator
 
 Needs `icuexportdata` for UCA and tailorings, plus normalization. Where ICU4X
@@ -673,7 +709,7 @@ README's Intl section.
 | 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
-| 6c. DurationFormat | not started - not in the corpus |
+| 6c. DurationFormat | **done** - not in the corpus; 20,325 cases against node, all but named gaps that belong to locale negotiation |
 | 6d. Legacy `toLocale*` | **done** - 90/90; `Required` and `Defaults` on the date options |
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
 | **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
@@ -719,13 +755,12 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Service | Corpus | Missing |
 |---|---|---|
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
-| DurationFormat | none | the service |
 
 ### Beyond the formatters
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`; CLDR's alias data for `getCanonicalLocales` |
+| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`, as V8 builds them from ICU's (21 of CLDR's locales are not ICU's, and resolve by truncation); ICU's per-tree fallback where it differs from CLDR's (sr-Cyrl-ME units and currency names, ku-TR); CLDR's alias data for `getCanonicalLocales` |
 | `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |

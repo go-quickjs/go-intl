@@ -173,30 +173,71 @@ func NewNumberFormat(loc Locale, opts NumberFormatOptions) (*NumberFormat, error
 
 // NewNumberFormatFrom builds a formatter from a source of the caller's own.
 func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*NumberFormat, error) {
-	switch opts.Notation {
-	case NotationStandard, NotationCompact, NotationScientific, NotationEngineering:
-	default:
-		return nil, fmt.Errorf("intl: %d is not a notation", opts.Notation)
+	if err := opts.check(); err != nil {
+		return nil, err
 	}
-	if opts.Style == StyleCurrency && opts.Currency == "" {
-		return nil, fmt.Errorf("intl: a currency style needs a currency")
+	s, err := loadNumberSources(src, loc, opts.NumberingSystem)
+	if err != nil {
+		return nil, err
 	}
-	if opts.Style == StyleUnit && !HasUnit(opts.Unit) {
-		return nil, fmt.Errorf("intl: %q is not a unit a number may be written in",
-			opts.Unit)
-	}
+	return s.numberFormat(opts)
+}
 
+// numberSources are what a NumberFormat is built from, loaded once so that
+// the several formatters one DurationFormat writes with share them: the
+// locale's number data in its chosen numbering system, and, when a
+// formatter first needs them, its units and plural rules. It is used while
+// formatters are being built and never after, so filling it in as it goes
+// breaks no formatter's immutability.
+type numberSources struct {
+	src     Source
+	loc     Locale
+	data    *numdata.Locale
+	nu      string
+	units   *unitdata.Locale
+	plurals *PluralRules
+}
+
+func loadNumberSources(src Source, loc Locale, numberingSystem string) (*numberSources, error) {
 	data, err := loadNumbers(src, loc)
 	if err != nil {
 		return nil, err
 	}
-	data, nu, err := selectNumberingSystem(src, data, loc, opts.NumberingSystem)
+	data, nu, err := selectNumberingSystem(src, data, loc, numberingSystem)
 	if err != nil {
 		return nil, err
 	}
+	return &numberSources{src: src, loc: loc, data: data, nu: nu}, nil
+}
+
+// check refuses the options no formatter can be built for.
+func (opts *NumberFormatOptions) check() error {
+	switch opts.Notation {
+	case NotationStandard, NotationCompact, NotationScientific, NotationEngineering:
+	default:
+		return fmt.Errorf("intl: %d is not a notation", opts.Notation)
+	}
+	if opts.Style == StyleCurrency && opts.Currency == "" {
+		return fmt.Errorf("intl: a currency style needs a currency")
+	}
+	if opts.Style == StyleUnit && !HasUnit(opts.Unit) {
+		return fmt.Errorf("intl: %q is not a unit a number may be written in",
+			opts.Unit)
+	}
+	return nil
+}
+
+// numberFormat builds a formatter from loaded sources. The options' own
+// numbering system is not consulted: the sources were loaded in one.
+func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, error) {
+	if err := opts.check(); err != nil {
+		return nil, err
+	}
+	src, loc, data := s.src, s.loc, s.data
+	var err error
 
 	// Of the Unicode extension, NumberFormat uses only the numbering system.
-	f := &NumberFormat{locale: loc.onlyKeywords().withKeyword("nu", nu), data: data, opts: opts}
+	f := &NumberFormat{locale: loc.onlyKeywords().withKeyword("nu", s.nu), data: data, opts: opts}
 	switch opts.Style {
 	case StylePercent:
 		f.pattern, err = parsePattern(data.PercentPattern)
@@ -237,9 +278,12 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 	}
 
 	if opts.Style == StyleUnit {
-		if f.units, err = loadUnits(src, loc); err != nil {
-			return nil, err
+		if s.units == nil {
+			if s.units, err = loadUnits(src, loc); err != nil {
+				return nil, err
+			}
 		}
+		f.units = s.units
 		switch opts.UnitDisplay {
 		case UnitLong:
 			f.unitWidth = unitdata.Long
@@ -255,9 +299,12 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 		// Both the compact patterns and the spelled-out currency names are
 		// chosen by the plural category of the amount, so the formatter
 		// carries the rules.
-		if f.plurals, err = NewPluralRulesFrom(src, loc, PluralRulesOptions{}); err != nil {
-			return nil, err
+		if s.plurals == nil {
+			if s.plurals, err = NewPluralRulesFrom(src, loc, PluralRulesOptions{}); err != nil {
+				return nil, err
+			}
 		}
+		f.plurals = s.plurals
 	}
 
 	f.grouping = opts.UseGrouping != GroupingNever && f.pattern.primaryGroup > 0
