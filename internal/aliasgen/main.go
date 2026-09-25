@@ -10,26 +10,25 @@
 // Node answers is ICU's canonicalization, and ICU's tables are what it
 // consults.
 //
-// The file is lines of text, one alias each:
+// The file is an index (blob.Index), read where it lies, of one alias a
+// record, keyed by the table and the alias, the replacement under it:
 //
-//	language aa_saaho ssy
-//	territory SU RU AM AZ BY EE GE KZ KG LV LT MD TJ TM UA UZ
-//	script Qaai Zinh
-//	variant heploc alalc97
-//	subdivision cn11 cnbj
-//	type ca islamicc islamic-civil
-//	legacy art-lojban jbo
-//	redundant sgn-no nsl
+//	language aa_saaho         ssy
+//	territory SU              RU AM AZ BY EE GE KZ KG LV LT MD TJ TM UA UZ
+//	script Qaai               Zinh
+//	variant heploc            alalc97
+//	subdivision cn11          cnbj
+//	type ca islamicc          islamic-civil
 //
-// A type line is a Unicode extension key, a value a tag may carry and the
-// canonical value it becomes: every spelling ICU's keyTypeData accepts for
-// a type -- its BCP 47 id, its legacy id, an alias of either -- written as
-// the BCP 47 id. Only the spellings that differ from their canonical form,
-// and that a tag can hold, are written.
+// A type record is a Unicode extension key and a value a tag may carry, and
+// the canonical value it becomes: every spelling ICU's keyTypeData accepts
+// for a type -- its BCP 47 id, its legacy id, an alias of either -- written
+// as the BCP 47 id. Only the spellings that differ from their canonical
+// form, and that a tag can hold, are written.
 //
-// The legacy and redundant lines are the whole tags ICU's parser rewrites
-// before anything else, in its order, from its source (uloc_tag.cpp, vendored
-// in internal/icusrc).
+// The records "legacy" and "redundant" are the whole tags ICU's parser
+// rewrites before anything else, a line each, "art-lojban jbo", in its
+// order, from its source (uloc_tag.cpp, vendored in internal/icusrc).
 package main
 
 import (
@@ -40,6 +39,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 )
@@ -125,13 +125,28 @@ func build(zip, tzDir string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, p := range legacy {
-		lines = append(lines, "legacy "+p[0]+" "+p[1])
+	records := map[string][]byte{}
+	for _, line := range lines {
+		// The table and the alias are the key, and the rest the value.
+		f := strings.Fields(line)
+		n := 2
+		if f[0] == "type" {
+			n = 3
+		}
+		key := strings.Join(f[:n], " ")
+		if _, ok := records[key]; ok {
+			return nil, fmt.Errorf("%q twice", key)
+		}
+		records[key] = []byte(strings.Join(f[n:], " "))
 	}
-	for _, p := range redundant {
-		lines = append(lines, "redundant "+p[0]+" "+p[1])
+	for name, pairs := range map[string][][2]string{"legacy": legacy, "redundant": redundant} {
+		var b strings.Builder
+		for _, p := range pairs {
+			b.WriteString(p[0] + " " + p[1] + "\n")
+		}
+		records[name] = []byte(b.String())
 	}
-	return []byte(strings.Join(lines, "\n") + "\n"), nil
+	return blob.BuildIndex(records)
 }
 
 // bcpShaped is what a Unicode extension value can hold: subtags of three to

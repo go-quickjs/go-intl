@@ -20,7 +20,8 @@
 // bundle of the tree but root and a few deprecated names, and, in the list
 // V8 asks for, the alias bundles LOCALE_DEPS.json names.
 //
-// The file is lines of a service and a tag: "number zh-Hant-HK". The index
+// The file is an index (blob.Index), read where it lies, whose keys are a
+// service and a tag, "number zh-Hant-HK", with nothing under them. The index
 // of ICU's trees its resource fallback reads is written beside it (see
 // writeIndex).
 package main
@@ -28,13 +29,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-quickjs/go-intl/internal/blob"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 )
@@ -251,18 +251,17 @@ func build(zip string) ([]byte, error) {
 		sets["plural"][tag] = true
 	}
 
-	var lines []string
+	records := map[string][]byte{}
 	for service, set := range sets {
 		for tag := range set {
-			lines = append(lines, service+" "+tag)
+			records[service+" "+tag] = nil
 		}
 	}
-	sort.Strings(lines)
 
 	if err := writeIndex(zip); err != nil {
 		return nil, err
 	}
-	return []byte(strings.Join(lines, "\n") + "\n"), nil
+	return blob.BuildIndex(records)
 }
 
 // indexTrees are the trees of ICU's data go-intl's data mirrors, whose index

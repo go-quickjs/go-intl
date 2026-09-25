@@ -5,6 +5,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Canonicalization: the form ECMA-402's CanonicalizeUnicodeLocaleId gives an
@@ -21,7 +23,8 @@ import (
 // subdivisions of "sd" and "rg" are replaced like any other alias.
 //
 // The aliases are data (data/aliases.bin, from ICU's metadata and
-// keyTypeData), read once when a Canonicalizer is built.
+// keyTypeData), an index read where it lies: a Canonicalizer looks up the
+// aliases a tag has rather than reading them all when it is built.
 
 // CanonicalizeOptions choose how a Canonicalizer answers.
 type CanonicalizeOptions struct {
@@ -34,15 +37,12 @@ type CanonicalizeOptions struct {
 // share.
 type Canonicalizer struct {
 	opts CanonicalizeOptions
+	// aliases is keyed by a table and an alias, "language aa_saaho",
+	// "type ca islamicc".
+	aliases blob.Index
 	// legacy and redundant are the whole tags ICU's parser rewrites first,
-	// in its order.
-	legacy, redundant [][2]string
-	language          map[string]string
-	territory         map[string][]string
-	script            map[string]string
-	variant           map[string]string
-	subdivision       map[string]string
-	types             map[[2]string]string // key and value to canonical value
+	// in its order, a line each.
+	legacy, redundant string
 	likely            *Fallbacker
 }
 
@@ -52,41 +52,17 @@ func NewCanonicalizer(src Source, opts CanonicalizeOptions) (*Canonicalizer, err
 	if err != nil {
 		return nil, fmt.Errorf("intl: the locale aliases: %w", err)
 	}
-	c := &Canonicalizer{
-		opts:     opts,
-		language: map[string]string{}, territory: map[string][]string{},
-		script: map[string]string{}, variant: map[string]string{},
-		subdivision: map[string]string{}, types: map[[2]string]string{},
+	aliases, err := blob.ReadIndex(b)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the locale aliases: %w", err)
 	}
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) == 0 {
-			continue
-		}
-		if len(f) < 3 || f[0] == "type" && len(f) != 4 || (f[0] == "legacy" || f[0] == "redundant") && len(f) != 3 {
-			return nil, fmt.Errorf("intl: the locale aliases: %q", line)
-		}
-		switch f[0] {
-		case "language":
-			c.language[f[1]] = f[2]
-		case "territory":
-			c.territory[f[1]] = f[2:]
-		case "script":
-			c.script[f[1]] = f[2]
-		case "variant":
-			c.variant[f[1]] = f[2]
-		case "subdivision":
-			c.subdivision[f[1]] = f[2]
-		case "type":
-			c.types[[2]string{f[1], f[2]}] = f[3]
-		case "legacy":
-			c.legacy = append(c.legacy, [2]string{f[1], f[2]})
-		case "redundant":
-			c.redundant = append(c.redundant, [2]string{f[1], f[2]})
-		default:
-			return nil, fmt.Errorf("intl: the locale aliases: %q", line)
-		}
+	c := &Canonicalizer{opts: opts, aliases: aliases}
+	legacy, ok1 := aliases.Find("legacy")
+	redundant, ok2 := aliases.Find("redundant")
+	if !ok1 || !ok2 {
+		return nil, fmt.Errorf("intl: the locale aliases have no legacy tags")
 	}
+	c.legacy, c.redundant = string(legacy), string(redundant)
 	if c.likely, err = NewFallbacker(src); err != nil {
 		return nil, err
 	}
@@ -141,17 +117,25 @@ func isTwoLetterFastPath(tag string) bool {
 // rewriteLegacy is ultag_parse's first step: a legacy tag, or failing that a
 // redundant one, that the tag starts with is replaced by its preferred form.
 func (c *Canonicalizer) rewriteLegacy(tag string) string {
-	for _, p := range c.legacy {
-		if strings.HasPrefix(tag, p[0]) && (len(tag) == len(p[0]) || tag[len(p[0])] == '-') {
-			return p[1] + tag[len(p[0]):]
-		}
-	}
-	for _, p := range c.redundant {
-		if strings.HasPrefix(tag, p[0]) && (len(tag) == len(p[0]) || tag[len(p[0])] == '-') {
-			return p[1] + tag[len(p[0]):]
+	for _, list := range [...]string{c.legacy, c.redundant} {
+		for list != "" {
+			var line string
+			line, list, _ = strings.Cut(list, "\n")
+			from, to, _ := strings.Cut(line, " ")
+			if strings.HasPrefix(tag, from) && (len(tag) == len(from) || tag[len(from)] == '-') {
+				return to + tag[len(from):]
+			}
 		}
 	}
 	return tag
+}
+
+// alias looks up an alias in one of the tables: "language", "territory",
+// "script", "variant", "subdivision", or "type" with the key before the
+// value, "ca islamicc".
+func (c *Canonicalizer) alias(table, from string) (string, bool) {
+	to, ok := c.aliases.Find(table + " " + from)
+	return string(to), ok
 }
 
 // legacyVariants is ICU's reading of private use: what follows "lvariant"
@@ -202,7 +186,7 @@ func (c *Canonicalizer) CanonicalizeLocale(l Locale) Locale {
 		}
 		seen[k.Key] = true
 		value := k.Value
-		if to, ok := c.types[[2]string{k.Key, value}]; ok {
+		if to, ok := c.alias("type", k.Key+" "+value); ok {
 			value = to
 		}
 		if (k.Key == "sd" || k.Key == "rg") && value != "" {
@@ -302,7 +286,7 @@ func (c *Canonicalizer) replaceLanguage(b *base, checkLanguage, checkRegion, che
 		if searchVariant != "" {
 			key += "_" + searchVariant
 		}
-		replacement, ok := c.language[key]
+		replacement, ok := c.alias("language", key)
 		if !ok {
 			continue
 		}
@@ -370,7 +354,8 @@ func (c *Canonicalizer) replaceTerritory(b *base) bool {
 	if b.region == "" {
 		return false
 	}
-	to, ok := c.territory[b.region]
+	replacement, ok := c.alias("territory", b.region)
+	to := strings.Fields(replacement)
 	if !ok || len(to) == 0 {
 		return false
 	}
@@ -397,7 +382,7 @@ func (c *Canonicalizer) replaceTerritory(b *base) bool {
 
 // replaceScript is AliasReplacer::replaceScript.
 func (c *Canonicalizer) replaceScript(b *base) bool {
-	if to, ok := c.script[b.script]; ok && b.script != "" && to != b.script {
+	if to, ok := c.alias("script", b.script); ok && b.script != "" && to != b.script {
 		b.script = to
 		return true
 	}
@@ -408,7 +393,7 @@ func (c *Canonicalizer) replaceScript(b *base) bool {
 // "heploc" becomes "alalc97" and takes "hepburn" with it.
 func (c *Canonicalizer) replaceVariant(b *base) bool {
 	for i, v := range b.variants {
-		to, ok := c.variant[v]
+		to, ok := c.alias("variant", v)
 		if !ok || to == v {
 			continue
 		}
@@ -430,7 +415,7 @@ func (c *Canonicalizer) replaceVariant(b *base) bool {
 // alias is the first it names, and a bare region is written as the region's
 // "zzzz", its whole.
 func (c *Canonicalizer) replaceSubdivision(value string) string {
-	to, ok := c.subdivision[value]
+	to, ok := c.alias("subdivision", value)
 	if !ok {
 		return value
 	}
@@ -475,7 +460,7 @@ func (c *Canonicalizer) canonicalTransformed(value string) string {
 			at++
 		}
 		v := strings.Join(subtags[start:at], "-")
-		if to, ok := c.types[[2]string{key, v}]; ok {
+		if to, ok := c.alias("type", key+" "+v); ok {
 			v = to
 		}
 		fields = append(fields, field{key, v})

@@ -1237,8 +1237,9 @@ a Segmenter from 1.82 to 0.57 ms, each allocating a fraction of what it did.
 Then the tables every build read in full became indexes (`blob.Index`:
 sorted keys and values, found by binary search where they lie): ICU's tree
 indexes and the tables its fallback reads, the normalization tables, the
-break engines' Unicode sets and scripts, the hour-cycle preferences and
-the zones' shared metadata. A locale's names of metazones, zones and
+break engines' Unicode sets and scripts, the hour-cycle preferences, the
+zones' shared metadata, the locale aliases and the services' available
+locales. A locale's names of metazones, zones and
 regions are tables in their pool (`blob.Table`): records of pool numbers,
 the key's first, all of one width, so a name is found by binary search
 without an index of offsets, for 133 KB more pool than the lists read whole.
@@ -1246,7 +1247,9 @@ Building no longer decodes any of them into maps; it looks up what it needs.
 In English now: a Collator 32 µs, a ListFormat or PluralRules 3.3 µs, a
 NumberFormat 22 µs, a Segmenter 21 µs, a RelativeTimeFormat 40 µs, a
 DurationFormat 75 µs, DisplayNames 92 µs, a DateTimeFormat of fields 0.11 ms
-and one of both full styles, with a zone name, 0.17 ms, down from 0.47.
+and one of both full styles, with a zone name, 0.17 ms, down from 0.47; a
+Canonicalizer 1 µs rather than 0.31 ms, and a LocaleMatcher 0.35 µs rather
+than 0.18 ms.
 
 What is left is mostly text no two locales share -- translated names of
 languages, regions, zones, cities and currencies, about 9 MB -- and ICU's

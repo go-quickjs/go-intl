@@ -2,7 +2,10 @@ package intl
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+
+	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Locale negotiation: ECMA-402's ResolveLocale and SupportedLocales, which
@@ -61,8 +64,11 @@ const (
 // locales. It never changes after it is built and is safe for any number of
 // goroutines to share.
 type LocaleMatcher struct {
-	service   Service
-	available map[string]bool
+	service Service
+	// list is the service's list in the index of available locales, which
+	// is read where it lies.
+	list      string
+	available blob.Index
 }
 
 // NewLocaleMatcher reads a service's available locales from a source.
@@ -75,28 +81,38 @@ func NewLocaleMatcher(src Source, service Service) (*LocaleMatcher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("intl: the available locales: %w", err)
 	}
-	m := &LocaleMatcher{service: service, available: map[string]bool{}}
-	for _, line := range strings.Split(string(b), "\n") {
-		name, tag, ok := strings.Cut(line, " ")
-		if ok && name == list {
-			m.available[tag] = true
-		}
+	index, err := blob.ReadIndex(b)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the available locales: %w", err)
 	}
-	if len(m.available) == 0 {
+	// The index is sorted, so the list's first tag follows the keys that
+	// sort before the list's.
+	prefix := list + " "
+	first := sort.Search(index.Len(), func(i int) bool {
+		k, _ := index.At(i)
+		return string(k) >= prefix
+	})
+	if first == index.Len() {
 		return nil, fmt.Errorf("intl: no available locales for %s", service)
 	}
-	return m, nil
+	if k, _ := index.At(first); !strings.HasPrefix(string(k), prefix) {
+		return nil, fmt.Errorf("intl: no available locales for %s", service)
+	}
+	return &LocaleMatcher{service: service, list: list, available: index}, nil
 }
 
 // Available reports whether the service is available in exactly this tag.
-func (m *LocaleMatcher) Available(tag string) bool { return m.available[tag] }
+func (m *LocaleMatcher) Available(tag string) bool {
+	_, ok := m.available.Find(m.list + " " + tag)
+	return ok
+}
 
 // bestAvailable is ECMA-402's BestAvailableLocale: the tag, or the longest
 // part of it the service is available in, cutting it short a subtag at a
 // time and a singleton with the subtag after it; empty if none.
 func (m *LocaleMatcher) bestAvailable(candidate string) string {
 	for {
-		if m.available[candidate] {
+		if m.Available(candidate) {
 			return candidate
 		}
 		pos := strings.LastIndexByte(candidate, '-')
