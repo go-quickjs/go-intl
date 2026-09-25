@@ -64,6 +64,9 @@ const (
 	// MarkerJapaneseEras is the first day of each era of the Japanese
 	// calendar.
 	MarkerJapaneseEras Marker = "japaneseeras"
+	// MarkerAliases is CLDR's aliases for locale subtags and extension types,
+	// as ICU holds them.
+	MarkerAliases Marker = "aliases"
 	// MarkerUmmAlQura is the Umm al-Qura calendar's table of month lengths.
 	MarkerUmmAlQura Marker = "ummalqura"
 	// MarkerRBNF is ICU's rules for its algorithmic numbering systems, the

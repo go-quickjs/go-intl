@@ -30,7 +30,7 @@ authority.
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026b | zone rules | yes, from node — but see below |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
-| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`) | yes |
+| ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`) | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
@@ -84,12 +84,14 @@ Other URLs:
   `collgen` checks both checksums before reading either archive.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
-  Two files are read, and both are vendored in `internal/icusrc`:
+  Three files are read, and all are vendored in `internal/icusrc`:
   `source/common/localefallback_data.h`, ICU's tables of parent locales and
-  default scripts, which ICU's resource fallback consults; and
+  default scripts, which ICU's resource fallback consults;
   `source/i18n/islamcal.cpp`, as `islamcal.cpp.txt` since Go refuses C++
   files in a package without cgo, for the Umm al-Qura calendar's tables of
-  month lengths and year-start corrections. Neither is in the data archive.
+  month lengths and year-start corrections; and `source/common/uloc_tag.cpp`,
+  as `uloc_tag.cpp.txt`, for the legacy and redundant tags ICU's parser
+  rewrites before anything else. None is in the data archive.
 - `https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt` - sha256
   `2e1efc1dcb59c575...`, vendored in `internal/normgen`
 - `https://www.unicode.org/Public/17.0.0/ucd/CompositionExclusions.txt` -

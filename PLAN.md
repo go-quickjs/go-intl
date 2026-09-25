@@ -760,7 +760,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`, as V8 builds them from ICU's (21 of CLDR's locales are not ICU's, and resolve by truncation); ICU's per-tree fallback where it differs from CLDR's (sr-Cyrl-ME units and currency names, ku-TR); CLDR's alias data for `getCanonicalLocales` |
+| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | each service's available locales, for `supportedLocalesOf` and `localeMatcher`, as V8 builds them from ICU's (21 of CLDR's locales are not ICU's, and resolve by truncation); "best fit" as ICU's LocaleMatcher; ICU's per-tree fallback where it differs from CLDR's (sr-Cyrl-ME units and currency names, ku-TR). Canonicalization is done: see "Canonicalization" |
 | `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
@@ -773,6 +773,26 @@ the largest pieces left, and they are Temporal's as much as Intl's.
 Anything without corpus cases needs what DisplayNames and the Collator
 needed: expectations taken from node, recorded in `testdata`, where the corpus
 does not reach.
+
+### Canonicalization
+
+`Canonicalizer` gives a tag the form `Intl.getCanonicalLocales` gives it,
+as V8 and ICU 78.3 give it: V8's check of the language identifier, then the
+legacy and redundant tags ICU's parser rewrites first ("zh-hakka" to
+"hak", "sgn-no" to "nsl", from uloc_tag.cpp, vendored), then ICU's strict
+parse, then ICU's AliasReplacer over CLDR's language, region, script,
+variant and subdivision aliases, and every spelling of a Unicode extension
+type written as its BCP 47 id (`data/aliases.bin`, from ICU's metadata and
+keyTypeData, by `aliasgen`). A replacement fills only the fields a tag
+leaves empty, so "cnr-BA" is "sr-BA"; a region that split becomes the one
+the language most likely means, "hy-SU" "hy-AM"; the extensions are
+written in singleton order. `testdata/canonical_node.js` records every
+alias ICU knows in a few surroundings, every extension type and test262's
+tags: all 11,139 match.
+
+One divergence, in the compatibility profile: V8 answers two lowercase
+letters alone without consulting ICU, so "bh" stays "bh" where the standard
+makes it "bho".
 
 ## Resuming cold
 

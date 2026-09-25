@@ -239,32 +239,44 @@ func (l Locale) String() string {
 		b.WriteByte('-')
 		b.WriteString(v.String())
 	}
-	if len(l.Attributes) > 0 || len(l.Keywords) > 0 {
-		b.WriteString("-u")
-		for _, a := range l.Attributes {
-			b.WriteByte('-')
-			b.WriteString(a)
-		}
-		for _, k := range l.Keywords {
-			b.WriteByte('-')
-			b.WriteString(k.Key)
-			if k.Value != "" {
-				b.WriteByte('-')
-				b.WriteString(k.Value)
-			}
-		}
-	}
+	// The extensions in the order of their singletons, the Unicode one
+	// among them.
+	unicode := len(l.Attributes) > 0 || len(l.Keywords) > 0
 	for _, e := range l.Extensions {
+		if unicode && e.Singleton > 'u' {
+			l.writeUnicode(&b)
+			unicode = false
+		}
 		b.WriteByte('-')
 		b.WriteByte(e.Singleton)
 		b.WriteByte('-')
 		b.WriteString(e.Value)
+	}
+	if unicode {
+		l.writeUnicode(&b)
 	}
 	if l.Private != "" {
 		b.WriteString("-x-")
 		b.WriteString(l.Private)
 	}
 	return b.String()
+}
+
+// writeUnicode writes the Unicode extension.
+func (l Locale) writeUnicode(b *strings.Builder) {
+	b.WriteString("-u")
+	for _, a := range l.Attributes {
+		b.WriteByte('-')
+		b.WriteString(a)
+	}
+	for _, k := range l.Keywords {
+		b.WriteByte('-')
+		b.WriteString(k.Key)
+		if k.Value != "" {
+			b.WriteByte('-')
+			b.WriteString(k.Value)
+		}
+	}
 }
 
 // String writes the data locale, which is an identifier with nothing but the

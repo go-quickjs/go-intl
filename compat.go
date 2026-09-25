@@ -51,6 +51,14 @@ var Divergences = []Divergence{
 			"reverting ICU 72's change for the web's sake",
 	},
 	{
+		Area: "Locale",
+		What: "canonicalizing a tag that is two lowercase letters alone",
+		Standard: "its aliases are replaced like any other tag's: \"bh\" is \"bho\" and " +
+			"\"tw\" is \"ak\"",
+		Node: "V8 answers it as it came, without consulting ICU, unless it is one of in, iw, ji, " +
+			"jw, mo, sh, tl and no: \"bh\" stays \"bh\"",
+	},
+	{
 		Area: "Collator",
 		What: "a collation chosen by option, in the resolved locale",
 		Standard: "the locale gains no keyword: ResolveLocale keeps a keyword only for " +
