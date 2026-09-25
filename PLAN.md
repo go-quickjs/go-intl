@@ -1215,6 +1215,17 @@ Display names (4.2 to 3.4 MB, nearly all of it names no two languages
 share), units (1.3 to 0.5 MB) and relative time (0.75 to 0.3 MB) likewise;
 the data 18.3 MB. Every set kept per locale now reads through `openShared`.
 
+What a program pays is the binary: one that formats a number in English was
+60.9 MB before any of this and is 21.8 MB after (Windows, amd64). The linker
+already kept identical embedded files once, so writing files once shrank the
+repository more than the binary; the pools are what shrank the binary.
+
+What is left is mostly text no two locales share -- translated names of
+languages, regions, zones, cities and currencies, about 9 MB -- and ICU's
+segmentation dictionaries, 3.1 MB, which no sharing reduces. Inlining the
+parts only one table uses, which pay an offset and a number for nothing,
+would save an estimated 1.5 to 2 MB more.
+
 ## Status
 
 | Stage | State |
