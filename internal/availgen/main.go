@@ -53,6 +53,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "availgen:", err)
 		os.Exit(1)
 	}
+	if err := writeValues(os.Args[1]); err != nil {
+		fmt.Fprintln(os.Stderr, "availgen:", err)
+		os.Exit(1)
+	}
 }
 
 // excluded are the bundles ICU's build leaves out of its index.

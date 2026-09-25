@@ -760,7 +760,6 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
 | Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
@@ -822,6 +821,18 @@ Cyrillic dates and names but writes Latin units and currency names, ICU's
 unit and currency trees having no bundle of its own. Zone names are the
 exception: zonegen already resolves ICU's zone and region trees for each
 locale it writes, so only a locale without a file is redirected.
+
+### Supported values
+
+`Calendars`, `Collations`, `Currencies`, `NumberingSystems`, `TimeZones`
+and `SanctionedUnits` are the lists `Intl.supportedValuesOf` answers with.
+The collations, currencies and time zones are V8's, built from ICU's
+(`data/values.bin`, by `availgen`): every collation the collation tree
+names, in BCP 47 spelling, but "standard" and "search"; ICU's common,
+current ISO currencies, a list compiled into ucurr.cpp (vendored), with an
+English name, V8's four additions and without VEF; and ICU's canonical
+zones in a region. `testdata/values_node.js` records all six: identical,
+order included.
 
 ## Resuming cold
 

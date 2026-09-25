@@ -64,6 +64,9 @@ const (
 	// MarkerJapaneseEras is the first day of each era of the Japanese
 	// calendar.
 	MarkerJapaneseEras Marker = "japaneseeras"
+	// MarkerValues is the collations, currencies and time zones
+	// Intl.supportedValuesOf lists.
+	MarkerValues Marker = "values"
 	// MarkerAvailable is the locales each service is available in.
 	MarkerAvailable Marker = "available"
 	// MarkerAliases is CLDR's aliases for locale subtags and extension types,

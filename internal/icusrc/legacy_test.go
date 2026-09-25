@@ -16,3 +16,19 @@ func TestLegacyTags(t *testing.T) {
 		t.Errorf("redundant: %d, %v, last %v", len(redundant), redundant[14], redundant[len(redundant)-1])
 	}
 }
+
+func TestCurrencyList(t *testing.T) {
+	list, err := CurrencyList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	common := 0
+	for _, c := range list {
+		if len(c.Flags) == 2 && c.Flags[0] == "UCURR_COMMON" && c.Flags[1] == "UCURR_NON_DEPRECATED" {
+			common++
+		}
+	}
+	if list[0].Code != "ADP" || common != 159 {
+		t.Errorf("first %s, %d common and current", list[0].Code, common)
+	}
+}
