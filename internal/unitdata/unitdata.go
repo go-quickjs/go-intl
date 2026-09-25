@@ -8,13 +8,11 @@
 package unitdata
 
 import (
-	"sort"
-
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 2
+const Version = 3
 
 // The widths, in the order they are stored.
 const (
@@ -55,8 +53,9 @@ func (u Unit) Pattern(count string) string {
 	return other
 }
 
-// A Width is everything a locale says at one level of abbreviation.
-type Width struct {
+// A BuiltWidth is everything a locale says at one level of abbreviation, as
+// a generator builds it.
+type BuiltWidth struct {
 	// Units is sorted by name.
 	Units []Unit
 	// Compound joins a unit to the one it is divided by, "{0} per {1}", for
@@ -64,13 +63,41 @@ type Width struct {
 	Compound string
 }
 
+// Built is every width, as a generator builds it.
+type Built struct {
+	Widths [Widths]BuiltWidth
+}
+
+// A Width is one level of abbreviation read where it lies: a formatter
+// writes one unit, or two, so its units are a table it looks them up in
+// rather than a list read whole.
+type Width struct {
+	units    blob.Table
+	Compound string
+}
+
 // Unit finds one measurement.
 func (w *Width) Unit(name string) (Unit, bool) {
-	i := sort.Search(len(w.Units), func(i int) bool { return w.Units[i].Name >= name })
-	if i < len(w.Units) && w.Units[i].Name == name {
-		return w.Units[i], true
+	r, ok := w.units.Find(name)
+	if !ok {
+		return Unit{}, false
 	}
-	return Unit{}, false
+	u := Unit{Name: name}
+	r.Shared(func(r *blob.Reader) {
+		u.PerUnit = r.SharedString()
+		k := r.Uint()
+		if k < 0 || k > r.Left() {
+			return
+		}
+		u.Patterns = make([]CountedText, k)
+		for m := range u.Patterns {
+			u.Patterns[m] = CountedText{Count: r.SharedString(), Text: r.SharedString()}
+		}
+	})
+	if r.Err() != nil {
+		return Unit{}, false
+	}
+	return u, true
 }
 
 // Locale holds every width.
@@ -82,7 +109,7 @@ type Locale struct {
 // a locale gives none, which is what CLDR's own inheritance does.
 func (l *Locale) Width(w int) *Width {
 	for i := w; i > Long; i-- {
-		if i < Widths && len(l.Widths[i].Units) > 0 {
+		if i < Widths && l.Widths[i].units.Len() > 0 {
 			return &l.Widths[i]
 		}
 	}
@@ -92,23 +119,26 @@ func (l *Locale) Width(w int) *Width {
 // Encode writes a locale's units, with what it shares with other locales --
 // every string, each unit and each list -- in pool, which the generator
 // writes beside the locales and Decode is given.
-func Encode(l *Locale, pool *blob.Pool) []byte {
+func Encode(l *Built, pool *blob.Pool) []byte {
 	b := blob.NewPooledWriter(Version, pool)
 	for _, w := range l.Widths {
 		b.SharedString(w.Compound)
-		b.Shared(func(b *blob.Writer) {
-			b.Uint(len(w.Units))
-			for _, u := range w.Units {
-				b.Shared(func(b *blob.Writer) {
-					b.SharedString(u.Name)
-					b.SharedString(u.PerUnit)
-					b.Uint(len(u.Patterns))
-					for _, p := range u.Patterns {
-						b.SharedString(p.Count)
-						b.SharedString(p.Text)
-					}
-				})
-			}
+		units := map[string]Unit{}
+		names := make([]string, 0, len(w.Units))
+		for _, u := range w.Units {
+			units[u.Name] = u
+			names = append(names, u.Name)
+		}
+		b.SharedTable(names, func(name string, b *blob.Writer) {
+			u := units[name]
+			b.Shared(func(b *blob.Writer) {
+				b.SharedString(u.PerUnit)
+				b.Uint(len(u.Patterns))
+				for _, p := range u.Patterns {
+					b.SharedString(p.Count)
+					b.SharedString(p.Text)
+				}
+			})
 		})
 	}
 	return b.Bytes()
@@ -122,30 +152,8 @@ func Decode(data []byte, pool blob.Shared) (*Locale, error) {
 	}
 	var l Locale
 	for i := range l.Widths {
-		w := &l.Widths[i]
-		w.Compound = r.SharedString()
-		r.Shared(func(r *blob.Reader) {
-			n := r.Uint()
-			if n < 0 || n > r.Left() {
-				return
-			}
-			w.Units = make([]Unit, n)
-			for j := range w.Units {
-				u := &w.Units[j]
-				r.Shared(func(r *blob.Reader) {
-					u.Name = r.SharedString()
-					u.PerUnit = r.SharedString()
-					k := r.Uint()
-					if k < 0 || k > r.Left() {
-						return
-					}
-					u.Patterns = make([]CountedText, k)
-					for m := range u.Patterns {
-						u.Patterns[m] = CountedText{Count: r.SharedString(), Text: r.SharedString()}
-					}
-				})
-			}
-		})
+		l.Widths[i].Compound = r.SharedString()
+		l.Widths[i].units = r.SharedTable()
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

@@ -126,7 +126,7 @@ func run(root string) error {
 	return nil
 }
 
-func read(main, name string) (*unitdata.Locale, error) {
+func read(main, name string) (*unitdata.Built, error) {
 	raw, err := os.ReadFile(filepath.Join(main, name, "units.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -143,7 +143,7 @@ func read(main, name string) (*unitdata.Locale, error) {
 		return nil, nil
 	}
 
-	var out unitdata.Locale
+	var out unitdata.Built
 	any := false
 	for i, width := range widthNames {
 		body, ok := entry.Units[width]

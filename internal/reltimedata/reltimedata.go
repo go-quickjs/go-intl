@@ -94,29 +94,50 @@ func (f *Field) Pattern(future bool, count string) string {
 	return other
 }
 
-// Locale holds every unit at every width.
-type Locale struct {
+// Built is every unit at every width, as a generator builds it.
+type Built struct {
 	Fields [Units * Widths]Field
+}
+
+// Locale is a locale's relative times read where they lie: a formatter
+// writes one unit at a time, so a field is read from the pool when it is
+// asked for rather than all of them when the formatter is built.
+type Locale struct {
+	fields [Units * Widths]int // part numbers in the pool
+	pool   blob.Shared
 }
 
 // Field returns one unit at one width, falling back to the wider forms where a
 // locale gives none, which is what CLDR's own inheritance does.
-func (l *Locale) Field(unit, width int) *Field {
+func (l *Locale) Field(unit, width int) Field {
 	if unit < 0 || unit >= Units {
 		unit = Year
 	}
+	if width < Long || width >= Widths {
+		width = Long
+	}
 	for w := width; w > Long; w-- {
-		if f := &l.Fields[unit*Widths+w]; len(f.Future) > 0 || len(f.Named) > 0 {
+		if f := l.field(unit*Widths + w); len(f.Future) > 0 || len(f.Named) > 0 {
 			return f
 		}
 	}
-	return &l.Fields[unit*Widths+Long]
+	return l.field(unit*Widths + Long)
+}
+
+// field reads one field from the pool. Decode found every field's part, so
+// a field that does not read is malformed data, and reads as empty.
+func (l *Locale) field(i int) Field {
+	var f Field
+	if err := l.pool.Read(l.fields[i], func(r *blob.Reader) { decodeField(r, &f) }); err != nil {
+		return Field{}
+	}
+	return f
 }
 
 // Encode writes a locale's relative-time data, with what it shares with
 // other locales -- every string and each field -- in pool, which the
 // generator writes beside the locales and Decode is given.
-func Encode(l *Locale, pool *blob.Pool) []byte {
+func Encode(l *Built, pool *blob.Pool) []byte {
 	b := blob.NewPooledWriter(Version, pool)
 	for _, f := range l.Fields {
 		b.Shared(func(b *blob.Writer) {
@@ -139,37 +160,39 @@ func Encode(l *Locale, pool *blob.Pool) []byte {
 	return b.Bytes()
 }
 
-// Decode reads what Encode wrote, with the pool it wrote into.
+func decodeField(r *blob.Reader, f *Field) {
+	n := r.Uint()
+	if n < 0 || n > r.Left() {
+		return
+	}
+	f.Named = make([]Named, n)
+	for j := range f.Named {
+		offset := r.Uint() - 8
+		f.Named[j] = Named{offset, r.SharedString()}
+	}
+	for _, set := range []*[]CountedText{&f.Future, &f.Past} {
+		m := r.Uint()
+		if m < 0 || m > r.Left() {
+			return
+		}
+		out := make([]CountedText, m)
+		for k := range out {
+			out[k] = CountedText{Count: r.SharedString(), Text: r.SharedString()}
+		}
+		*set = out
+	}
+}
+
+// Decode reads what Encode wrote, with the pool it wrote into, finding each
+// field's part and leaving it there.
 func Decode(data []byte, pool blob.Shared) (*Locale, error) {
 	r, err := blob.NewPooledReader(data, Version, pool)
 	if err != nil {
 		return nil, err
 	}
-	var l Locale
-	for i := range l.Fields {
-		f := &l.Fields[i]
-		r.Shared(func(r *blob.Reader) {
-			n := r.Uint()
-			if n < 0 || n > r.Left() {
-				return
-			}
-			f.Named = make([]Named, n)
-			for j := range f.Named {
-				offset := r.Uint() - 8
-				f.Named[j] = Named{offset, r.SharedString()}
-			}
-			for _, set := range []*[]CountedText{&f.Future, &f.Past} {
-				m := r.Uint()
-				if m < 0 || m > r.Left() {
-					return
-				}
-				out := make([]CountedText, m)
-				for k := range out {
-					out[k] = CountedText{Count: r.SharedString(), Text: r.SharedString()}
-				}
-				*set = out
-			}
-		})
+	l := Locale{pool: pool}
+	for i := range l.fields {
+		l.fields[i] = r.SharedNumber()
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

@@ -84,7 +84,7 @@ func run(root string) error {
 	return nil
 }
 
-func read(main, name string) (*reltimedata.Locale, error) {
+func read(main, name string) (*reltimedata.Built, error) {
 	raw, err := os.ReadFile(filepath.Join(main, name, "dateFields.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -101,7 +101,7 @@ func read(main, name string) (*reltimedata.Locale, error) {
 		return nil, nil
 	}
 
-	var out reltimedata.Locale
+	var out reltimedata.Built
 	any := false
 	for unit := 0; unit < reltimedata.Units; unit++ {
 		for width := 0; width < reltimedata.Widths; width++ {
