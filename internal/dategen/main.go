@@ -9,7 +9,7 @@
 // Each calendar beyond the Gregorian one is its own CLDR package, and each is
 // given as a further argument:
 //
-//	go run ./internal/dategen -icu icu4c-78.3-data.zip <cldr-dates-full/package> <cldr-cal-buddhist-full/package>
+//	go run ./internal/dategen -icu icu4c-78.3-data.zip <cldr-dates-full/package> <cldr-cal-*-full/package>...
 //
 // ICU's data sources, pinned in SOURCES.md, settle one thing cldr-json gets
 // wrong. CLDR's root points a calendar's date-and-time glue at the asking
@@ -66,9 +66,29 @@ var fieldNames = [datedata.Fields]string{
 // extras are the calendars beyond the Gregorian one, in the order their
 // packages are given. CLDR's name for a calendar is not always BCP-47's, which
 // is the name ECMA-402 uses and the one stored.
-var extras = []struct{ cldr, bcp47 string }{
-	{"buddhist", "buddhist"},
-	{"persian", "persian"},
+// Each comes from the package named for it, cldr-cal-<pkg>-full; the Islamic
+// and Ethiopic packages hold several.
+var extras = []struct{ cldr, bcp47, pkg string }{
+	{"buddhist", "buddhist", "buddhist"},
+	{"persian", "persian", "persian"},
+	{"coptic", "coptic", "coptic"},
+	{"ethiopic", "ethiopic", "ethiopic"},
+	{"ethiopic-amete-alem", "ethioaa", "ethiopic"},
+	{"indian", "indian", "indian"},
+	{"islamic-civil", "islamic-civil", "islamic"},
+	{"islamic-tbla", "islamic-tbla", "islamic"},
+	{"roc", "roc", "roc"},
+}
+
+// packageOf finds the unpacked package a calendar comes from, among those
+// given on the command line.
+func packageOf(others []string, pkg string) (string, bool) {
+	for _, dir := range others {
+		if strings.Contains(filepath.ToSlash(dir), "cldr-cal-"+pkg+"-full") {
+			return dir, true
+		}
+	}
+	return "", false
 }
 
 type file struct {
@@ -162,9 +182,10 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		if greg.IntervalFallback, greg.Intervals, err = intervalsFromICU(chain, "gregorian"); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
-		for i, other := range others {
-			if i >= len(extras) {
-				break
+		for i := range extras {
+			other, ok := packageOf(others, extras[i].pkg)
+			if !ok {
+				continue
 			}
 			c, err := readCalendar(filepath.Join(other, "main"), e.Name(),
 				extras[i].cldr, "ca-"+extras[i].cldr+".json")
@@ -489,10 +510,18 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 		for w := 0; w < datedata.Widths; w++ {
 			at := ctx*datedata.Widths + w
 			if set, ok := source.Months[contextNames[ctx]][widthNames[w]]; ok {
-				text := make([]string, 12)
+				// Twelve months, or thirteen in the Coptic and Ethiopic
+				// calendars.
+				count := 12
+				for key := range set {
+					if n, err := strconv.Atoi(key); err == nil && n > count {
+						count = n
+					}
+				}
+				text := make([]string, count)
 				for key, value := range set {
 					n, err := strconv.Atoi(key)
-					if err != nil || n < 1 || n > 12 {
+					if err != nil || n < 1 || n > count {
 						continue
 					}
 					text[n-1] = value

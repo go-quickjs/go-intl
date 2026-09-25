@@ -555,7 +555,10 @@ ICU uses").
 
 ### Calendars
 
-Three of CLDR's seventeen are implemented: Gregorian, Buddhist and Persian.
+Ten of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
+Coptic, Ethiopic, Ethiopic Amete Alem, Indian, civil and tabular Islamic,
+and ROC. Each is ICU 78's arithmetic, from the ICU source named in its
+comments, and matches go-quickjs's arithmetic wherever both were compared.
 `testdata/datetime_calendars_node.js` records every calendar Node supports
 in forty locales, dates from 1900 to 2077; the implemented ones all match,
 and each calendar still to come is a named gap there that reports itself
@@ -573,13 +576,24 @@ calendar's extended year is the Gregorian one, so Burmese Buddhist dates
 written with "Y" show 2024, not 2567. "u" (the extended year) and "r" (the
 related Gregorian year) are written as ICU writes them too.
 
+Two more are ICU's rather than any calendar's. V8 makes ICU's Gregorian
+calendar proleptic, but only a calendar that is exactly ICU's
+GregorianCalendar: the Buddhist and ROC calendars (and the Japanese, to
+come) are subclasses and keep Julian dates before October 1582. And a
+calendar with one era counts its years back through zero before it, so the
+Islamic year of AD 200 is -435.
+
+The date data is 32 MB with ten calendars, up from 9 MB with three, because
+each calendar keeps its own copy of names and patterns that often repeat the
+Gregorian ones. That is for the data-size decision below.
+
 To come, and where each comes from. go-quickjs's arithmetic is kept, as
 DESIGN.md intends, and checked against the sweep; its tables of Node's
 answers are not:
 
 | Calendar | Source |
 |---|---|
-| Hebrew, Coptic, Ethiopic, Ethiopic Amete Alem, Indian, civil and tabular Islamic, ROC | go-quickjs's arithmetic, against ICU's |
+| Hebrew | go-quickjs's arithmetic, against ICU's; its leap month's names |
 | ISO 8601 | the Gregorian arithmetic, with ICU's root patterns |
 | Japanese | CLDR's era start dates |
 | Umm al-Qura | ICU's table of month lengths, from its source, as input data |
@@ -607,7 +621,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; Gregorian, Buddhist and Persian of 17 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 10 of 17 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -655,7 +669,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| DateTimeFormat | done | 14 calendars; Gregorian, Buddhist and Persian are done, see "Calendars" |
+| DateTimeFormat | done | 7 calendars: Hebrew, Japanese, ISO 8601, Islamic, Islamic (Saudi), Umm al-Qura, Chinese, Dangi; see "Calendars" |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 

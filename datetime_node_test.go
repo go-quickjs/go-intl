@@ -34,19 +34,12 @@ var dateTimeGaps = []struct {
 	// The calendars not implemented yet; see PLAN.md.
 	{"", "", "chinese", "the Chinese calendar"},
 	{"", "", "dangi", "the Dangi calendar"},
-	{"", "", "coptic", "the Coptic calendar"},
-	{"", "", "ethiopic", "the Ethiopic calendar"},
-	{"", "", "ethioaa", "the Ethiopic Amete Alem calendar"},
 	{"", "", "hebrew", "the Hebrew calendar"},
-	{"", "", "indian", "the Indian calendar"},
 	{"", "", "islamic", "the Islamic calendar"},
-	{"", "", "islamic-civil", "the civil Islamic calendar"},
 	{"", "", "islamic-rgsa", "the Saudi Islamic calendar"},
-	{"", "", "islamic-tbla", "the tabular Islamic calendar"},
 	{"", "", "islamic-umalqura", "the Umm al-Qura calendar"},
 	{"", "", "iso8601", "the ISO 8601 calendar"},
 	{"", "", "japanese", "the Japanese calendar"},
-	{"", "", "roc", "the ROC calendar"},
 }
 
 // dateTimeGap returns why a case is a known gap, if it is one.

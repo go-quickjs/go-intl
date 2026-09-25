@@ -188,9 +188,11 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 
 	case 'y':
 		if fd.count == 2 {
-			return f.number(p, fd.letter, p.year%100, 2)
+			return f.number(p, fd.letter, mod(p.year, 100), 2)
 		}
-		return f.number(p, fd.letter, p.year, fd.count)
+		// A calendar with one era counts back through zero before it:
+		// the Islamic year -435.
+		return f.signedNumber(p, fd.letter, p.year, fd.count)
 	case 'Y':
 		year := f.weekYear(p)
 		if fd.count == 2 {

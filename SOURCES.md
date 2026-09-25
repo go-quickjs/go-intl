@@ -51,6 +51,18 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 | `cldr-localenames-full` | 48.2.0 | `7f2ac7fd3b5d90f56ad127f9ed5ae67b58b3e556818f55530b9f47bb81bcde57` | `namegen` |
 | `cldr-cal-buddhist-full` | 48.2.0 | `3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff` | `dategen` |
 | `cldr-cal-persian-full` | 48.2.0 | `937af05a2e84a3a38e9fd6880888c622ff14db6577fc254d71a91d2e0442f41f` | `dategen` |
+| `cldr-cal-coptic-full` | 48.2.0 | `abc83085e46f6d3ee1b39f886f2c81da0f6a7aec11f6988f1644f7638c22ea5c` | `dategen` |
+| `cldr-cal-ethiopic-full` | 48.2.0 | `0c31d3c862f91bc7495a757e6e845fa0077b29f942d7e19d6715ce694c3a3126` | `dategen` (Ethiopic and Amete Alem) |
+| `cldr-cal-indian-full` | 48.2.0 | `13dce446625868d858199117d88cbeee3e15fb520994dbf33f94dbf28cb3ea03` | `dategen` |
+| `cldr-cal-islamic-full` | 48.2.0 | `ea139d42f68105a135d72e49eed1eb84d6e6970173b35e83924412c12022b885` | `dategen` (civil and tabular so far) |
+| `cldr-cal-roc-full` | 48.2.0 | `c90f6e4b718d1384f11a1b005101f26e6b6573e08274584ce84a51f3e4530983` | `dategen` |
+| `cldr-cal-hebrew-full` | 48.2.0 | `b06b8f2834564e843a3bda0410b9cc6152b010a54e08fda34d3530892a0d3e7f` | to come |
+| `cldr-cal-japanese-full` | 48.2.0 | `05d2e6709e87349ee8dfbe733b93b2e8a8da375164d838b9aa01fc5d759ec49b` | to come |
+| `cldr-cal-chinese-full` | 48.2.0 | `cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2` | to come |
+| `cldr-cal-dangi-full` | 48.2.0 | `67171aaa6fe075c0ba3c86c67788a26c8b6f5f595d5fb76276a0fbaddc722e73` | to come |
+
+`dategen` finds each package by its directory's name, `cldr-cal-<name>-full`,
+so the packages are unpacked under those names and given in any order.
 
 Each calendar beyond the Gregorian one is its own CLDR package, so the
 remaining fourteen arrive as fourteen more rows here rather than as a change
