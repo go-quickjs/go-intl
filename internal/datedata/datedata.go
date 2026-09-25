@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 4
+const Version = 5
 
 // The widths a name may be written at, in the order they are stored.
 const (
@@ -130,7 +130,29 @@ type Calendar struct {
 	// its parents', sorted within each bundle. The order decides which of
 	// two equally good skeletons ICU picks.
 	Intervals []Interval
+
+	// LeapMonthPatterns are what the Chinese calendars wrap a leap month's
+	// name or number in, "{0}bis", indexed as ICU's DateFormatSymbols
+	// indexes them (LeapFormatWide and on). All empty in a calendar without
+	// leap months, or one whose locale does not give all seven.
+	LeapMonthPatterns [LeapPatterns]string
+	// CyclicYears are the names of the sixty years of the cycle, "jia-zi",
+	// which the Chinese calendars write for "U": the abbreviated format
+	// names, the only ones ICU reads.
+	CyclicYears []string
 }
+
+// The leap-month patterns, in DateFormatSymbols' order.
+const (
+	LeapFormatWide = iota
+	LeapFormatAbbreviated
+	LeapFormatNarrow
+	LeapStandAloneWide
+	LeapStandAloneAbbreviated
+	LeapStandAloneNarrow
+	LeapNumeric
+	LeapPatterns
+)
 
 // IntervalFields is how many fields an interval pattern can be keyed by:
 // the largest field that differs between the two ends of the range.
@@ -389,6 +411,13 @@ func encodeCalendar(b *blob.Writer, c *Calendar) {
 			b.String(p)
 		}
 	}
+	for _, p := range c.LeapMonthPatterns {
+		b.String(p)
+	}
+	b.Uint(len(c.CyclicYears))
+	for _, s := range c.CyclicYears {
+		b.String(s)
+	}
 }
 
 // Decode reads what Encode wrote.
@@ -511,6 +540,19 @@ func decodeCalendar(r *blob.Reader, c *Calendar) {
 		c.Intervals[i].Skeleton = r.String()
 		for j := range c.Intervals[i].Patterns {
 			c.Intervals[i].Patterns[j] = r.String()
+		}
+	}
+	for i := range c.LeapMonthPatterns {
+		c.LeapMonthPatterns[i] = r.String()
+	}
+	n = r.Uint()
+	if n < 0 || n > r.Left() {
+		return
+	}
+	if n > 0 {
+		c.CyclicYears = make([]string, n)
+		for i := range c.CyclicYears {
+			c.CyclicYears[i] = r.String()
 		}
 	}
 }

@@ -32,8 +32,6 @@ var dateTimeGaps = []struct {
 	{"Europe/Dublin", "long", "", "Go's tzdata has Ireland's negative DST"},
 
 	// The calendars not implemented yet; see PLAN.md.
-	{"", "", "chinese", "the Chinese calendar"},
-	{"", "", "dangi", "the Dangi calendar"},
 }
 
 // dateTimeGap returns why a case is a known gap, if it is one.

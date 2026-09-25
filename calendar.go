@@ -11,12 +11,12 @@ import (
 // A calendar is two things: an arithmetic, which says what year and month an
 // instant falls in, and a set of names and patterns, which the locale supplies
 // separately for each one. The names live in the date data; the arithmetic is
-// here.
+// here and in the cal*.go files beside it, each ICU 78's.
 //
-// Two are implemented. The Gregorian one needs no arithmetic of its own, since
-// that is what Go's time package already reckons in. The Buddhist one counts
-// the same months and days from a different year, 543 earlier, and has one era
-// rather than two.
+// All of CLDR's are implemented. The Gregorian one needs no arithmetic of its
+// own, since that is what Go's time package already reckons in; the others
+// are reckoned from the Julian day, or, for the lunar ones, from the sun and
+// the moon.
 
 // A CalendarSystem is a way of reckoning dates.
 type CalendarSystem string
@@ -54,10 +54,15 @@ const (
 	// ISO8601 is the Gregorian calendar written in ISO 8601's order, with
 	// weeks from Monday.
 	ISO8601 CalendarSystem = "iso8601"
+	// Chinese and Dangi are the lunisolar calendars of China and Korea,
+	// reckoned alike in their own time zones.
+	Chinese CalendarSystem = "chinese"
+	Dangi   CalendarSystem = "dangi"
 )
 
-// implemented lists the calendars this can reckon in. The rest of CLDR's are
-// refused when a formatter is built rather than answered in the wrong one.
+// implemented lists the calendars this can reckon in, which is all of CLDR's.
+// A name not among them is passed over when a formatter is built, as
+// ECMA-402 passes over a calendar a locale does not support.
 var implemented = map[CalendarSystem]bool{
 	Gregory:           true,
 	Buddhist:          true,
@@ -75,6 +80,8 @@ var implemented = map[CalendarSystem]bool{
 	Hebrew:            true,
 	Japanese:          true,
 	ISO8601:           true,
+	Chinese:           true,
+	Dangi:             true,
 }
 
 // calendarPreferences maps a region to the calendar it reckons in, as lines of
@@ -95,24 +102,32 @@ func (p calendarPreferences) of(region string) (CalendarSystem, bool) {
 	return "", false
 }
 
-// chooseCalendar settles which calendar a formatter reckons in.
+// chooseCalendar settles which calendar a formatter reckons in, as
+// ECMA-402's ResolveLocale settles the "ca" key.
 //
-// The option wins, then the locale's own "-u-ca-" extension, then the calendar
-// the locale's region uses, and failing all of that the Gregorian one. A
-// locale with no region of its own is given the one its likely subtags supply,
-// so that "th" reckons as "th-TH" does.
-func chooseCalendar(src Source, loc Locale, asked string) (CalendarSystem, error) {
-	if asked == "" {
-		if value, ok := loc.Keyword("ca"); ok {
-			asked = value
-		}
-	}
+// The option wins if it names a calendar, then the locale's own "-u-ca-"
+// extension if that does, then the calendar the locale's region uses, and
+// failing all of that the Gregorian one. A name that is well formed but no
+// calendar's is passed over, as Node passes over "foo"; one that is not a
+// Unicode locale type at all is an error, ECMA-402's RangeError. A locale
+// with no region of its own is given the one its likely subtags supply, so
+// that "th" reckons as "th-TH" does.
+//
+// It also returns the "-u-ca-" value the resolved locale keeps: the
+// keyword's, when that is the calendar chosen.
+func chooseCalendar(src Source, loc Locale, asked string) (CalendarSystem, string, error) {
 	if asked != "" {
-		system := CalendarSystem(asked)
-		if !implemented[system] {
-			return "", &unimplementedCalendarError{asked}
+		if !isUnicodeType(asked) {
+			return "", "", fmt.Errorf("intl: %q is not a well-formed calendar name", asked)
 		}
-		return system, nil
+		asked = strings.ToLower(asked)
+	}
+	keyword, _ := loc.Keyword("ca")
+	switch {
+	case asked != "" && asked != keyword && implemented[CalendarSystem(asked)]:
+		return CalendarSystem(asked), "", nil
+	case implemented[CalendarSystem(keyword)]:
+		return CalendarSystem(keyword), keyword, nil
 	}
 
 	region := loc.Region.String()
@@ -125,10 +140,26 @@ func chooseCalendar(src Source, loc Locale, asked string) (CalendarSystem, error
 	}
 	if b, err := src.Open(MarkerCalendarPrefs, DataLocale{}); err == nil {
 		if system, ok := calendarPreferences(b).of(region); ok && implemented[system] {
-			return system, nil
+			return system, "", nil
 		}
 	}
-	return Gregory, nil
+	return Gregory, "", nil
+}
+
+// isUnicodeType reports whether a name is a Unicode locale type, UTS #35's
+// "type": segments of three to eight letters or digits, joined by hyphens.
+func isUnicodeType(s string) bool {
+	for _, seg := range strings.Split(s, "-") {
+		if len(seg) < 3 || len(seg) > 8 {
+			return false
+		}
+		for i := 0; i < len(seg); i++ {
+			if c := seg[i] | 0x20; !(c >= 'a' && c <= 'z') && !(seg[i] >= '0' && seg[i] <= '9') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // gregorianYearLength is the proleptic Gregorian year's length, as V8 sets
@@ -140,18 +171,7 @@ func gregorianYearLength(year int) int {
 	return 365
 }
 
-// unimplementedCalendarError names a calendar CLDR has and this does not.
-type unimplementedCalendarError struct{ name string }
-
-func (e *unimplementedCalendarError) Error() string {
-	return "intl: the " + e.name + " calendar is not implemented yet"
-}
-
 // reckon turns an instant into the fields of a date in one calendar.
-//
-// Only the year and the era differ between the two implemented calendars: the
-// Buddhist one keeps the Gregorian months and days and counts the years from
-// 543 years earlier, so 2024 is 2567 and every date is in its single era.
 func reckon(t time.Time, system CalendarSystem, rules calendarRules) dateParts {
 	p := partsOf(t)
 	// The Gregorian calendar's own fields, which the Buddhist one keeps:
@@ -228,6 +248,20 @@ func reckon(t time.Time, system CalendarSystem, rules calendarRules) dateParts {
 		p.era, p.extYear = 0, p.year
 		p.relatedYear = islamicRelatedYear(p.year)
 		p.yearLength = rules.ummAlQura.yearLength
+		return p
+	case Chinese, Dangi:
+		// ChineseCalendar::handleComputeFields: the era is the sixty-year
+		// cycle, the year the year within it, and the related year the
+		// extended one.
+		c := chineseReckoner{offset: chinaOffset}
+		if system == Dangi {
+			c.offset = koreaOffset
+		}
+		d := c.date(t.Year(), t.Month(), julianDay(t)-2440588)
+		p.era, p.year, p.month, p.leapMonth = d.cycle, d.yearOfCycle, d.month, d.leap
+		p.day, p.dayOfYear = d.day, d.dayOfYear
+		p.extYear, p.relatedYear = d.extYear, d.extYear
+		p.yearLength = c.yearLength
 		return p
 	case Hebrew:
 		p.year, p.month, p.day, p.dayOfYear = hebrewDate(julianDay(t))

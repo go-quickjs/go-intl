@@ -555,17 +555,24 @@ ICU uses").
 
 ### Calendars
 
-Fifteen of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
-Coptic, Ethiopic, Ethiopic Amete Alem, Indian, the five Islamic ones
-(civil, tabular, astronomical, Saudi, Umm al-Qura), ROC, Hebrew, Japanese
-and ISO 8601. Each is ICU 78's arithmetic, from the ICU source named in its
-comments, and matches go-quickjs's arithmetic wherever both were compared.
-`testdata/datetime_calendars_node.js` records every calendar Node supports
-in forty locales, dates from 1900 to 2077; the implemented ones all match,
-and each calendar still to come is a named gap there that reports itself
-when it starts to pass. `testdata/calendar_days_node.js` checks every day
+All eighteen calendars Node supports are implemented: Gregorian, Buddhist,
+Persian, Coptic, Ethiopic, Ethiopic Amete Alem, Indian, the five Islamic
+ones (civil, tabular, astronomical, Saudi, Umm al-Qura), ROC, Hebrew,
+Japanese, ISO 8601, Chinese and Dangi. Each is ICU 78's arithmetic, from
+the ICU source named in its comments, and matches go-quickjs's arithmetic
+wherever both were compared. `testdata/datetime_calendars_node.js` records
+every calendar Node supports in forty locales, dates from 1900 to 2077, and
+all 48,960 cases match. `testdata/calendar_days_node.js` checks every day
 from 1600 to 2400 in each calendar whose months are not the Gregorian
-ones, 4.4 million days, and all of them match, on amd64 and on 386.
+ones, five million days, and all of them match, on amd64 and on 386.
+
+The calendar is resolved as ECMA-402 resolves "ca": the option if it names
+a calendar, else the locale's "-u-ca-" keyword if that does, which the
+resolved locale then keeps, else the region's. A well-formed name that is
+no calendar's is passed over and an ill-formed one is an error, as in Node.
+What Node does and go-intl does not yet is canonicalize an alias,
+"islamicc" to "islamic-civil": that needs CLDR's BCP 47 alias data, which
+comes with locale canonicalization under "Locale negotiation" below.
 
 Persian is ICU 78's arithmetic (persncal.cpp): the 33-year rule with ICU's
 list of corrected years. It is not astronomical, whatever go-quickjs's
@@ -607,6 +614,20 @@ year's start, read from islamcal.cpp (vendored in `internal/icusrc`) into
 remainder makes every civil year before 0 a leap year, and go-intl's
 tabular calendar now agrees.
 
+The Chinese calendar and Dangi, the Korean, are ICU's ChineseCalendar:
+months from new moon to new moon, the eleventh holding the winter
+solstice, and a leap month wherever a year between solstices has thirteen
+and a month holds no major solar term, all found with the ported
+CalendarAstronomer in China's time, UTC+8, or in dangical.cpp's Korean
+zone (UTC+8, UTC+7 in 1897, UTC+9 from 1912). ICU caches the solstices and
+new years it finds; go-intl's formatters keep no caches, so a date costs
+some 17 microseconds. The era is the sixty-year cycle, written as a
+number; "U" writes the year's name in the cycle, "jia-chen", from CLDR's
+cyclic name sets, and a leap month is its month in the locale's leap-month
+pattern, "{0}bis" or "闰{0}", loaded as DateFormatSymbols loads them, with
+ICU's fix-ups for the Korean calendar's inheritance. The parts are V8's:
+"relatedYear" for "r", "yearName" for "U".
+
 The algorithmic numbering systems date patterns name -- Roman numerals for
 Hawaiian months, Hebrew numerals, the Japanese era year that calls its first
 year 元, the Chinese calendar's days -- are ICU's rule-based number formats.
@@ -614,7 +635,7 @@ go-intl carries ICU's rules (`data/rbnf.bin`, 23 KB) and interprets them, as
 nfrule.cpp and nfrs.cpp do, for whole numbers. The hand-written Roman
 numerals it replaced agreed with it.
 
-The date data is 50 MB with sixteen calendars, up from 9 MB with three: each
+The date data is 53 MB with eighteen calendars, up from 9 MB with three: each
 calendar keeps its own copy of names and patterns that often repeat the
 Gregorian ones, and every locale repeats the Japanese calendar's 237 era
 names in three widths. A calendar identical to an earlier one in the same
@@ -623,13 +644,10 @@ are. That is for the data-size decision below: storing
 only what a locale's parent does not say, or compressing across locales,
 would take most of it back.
 
-To come, and where each comes from. go-quickjs's arithmetic is kept, as
-DESIGN.md intends, and checked against the sweep; its tables of Node's
-answers are not:
-
-| Calendar | Source |
-|---|---|
-| Chinese, Dangi | ICU's ChineseCalendar and CalendarAstronomer, ported; leap-month patterns and cyclic year names from CLDR |
+go-quickjs's arithmetic calendars agree with these; its tables of Node's
+answers for the astronomical ones (Chinese, Dangi, the Islamic ones,
+Persian, the Japanese eras) are not carried, since the algorithms they
+recorded are ported.
 
 ### 8. Segmenter
 
@@ -652,7 +670,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 15 of 17 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -700,7 +718,6 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| DateTimeFormat | done | 2 calendars: Chinese, Dangi; see "Calendars" |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 

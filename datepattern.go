@@ -83,6 +83,9 @@ type dateParts struct {
 	hour, minute     int
 	second, millis   int
 	era              int // zero before the epoch, one after
+	// leapMonth marks a leap month of the Chinese calendars, which has the
+	// number of the month before it.
+	leapMonth bool
 	// instant is the moment in the formatter's zone, which the zone's name
 	// depends on, and zoneOffset its distance from UTC in seconds.
 	instant    time.Time
@@ -143,8 +146,12 @@ func datePartKind(letter byte) PartKind {
 	switch letter {
 	case 'G':
 		return PartEra
-	case 'y', 'Y', 'u', 'U', 'r':
+	case 'y', 'Y', 'u':
 		return PartYear
+	case 'U':
+		return PartYearName
+	case 'r':
+		return PartRelatedYear
 	case 'M', 'L':
 		return PartMonth
 	case 'd':
@@ -177,6 +184,11 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 	cal := f.calendar
 	switch fd.letter {
 	case 'G':
+		if f.system == Chinese || f.system == Dangi {
+			// SimpleDateFormat writes the Chinese calendars' era, the
+			// sixty-year cycle, as a number.
+			return f.number(p, fd.letter, p.era, 1)
+		}
 		width := datedata.Abbreviated
 		switch {
 		case fd.count >= 5:
@@ -201,6 +213,16 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		return f.signedNumber(p, fd.letter, year, fd.count)
 	case 'u':
 		return f.signedNumber(p, fd.letter, p.extYear, fd.count)
+	case 'U':
+		// The year's name in the sixty-year cycle, where the calendar has
+		// names; otherwise the year, as "y" writes it.
+		if p.year >= 1 && p.year <= len(cal.CyclicYears) {
+			return cal.CyclicYears[p.year-1]
+		}
+		if fd.count == 2 {
+			return f.number(p, fd.letter, mod(p.year, 100), 2)
+		}
+		return f.signedNumber(p, fd.letter, p.year, fd.count)
 	case 'r':
 		return f.signedNumber(p, fd.letter, p.relatedYear, fd.count)
 
@@ -222,16 +244,32 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 				month--
 			}
 		}
+		var text string
+		leap := datedata.LeapNumeric
 		switch {
 		case fd.count <= 2:
-			return f.number(p, fd.letter, month, fd.count)
+			text = f.number(p, fd.letter, month, fd.count)
 		case fd.count == 3:
-			return cal.Month(context, datedata.Abbreviated, month)
+			text = cal.Month(context, datedata.Abbreviated, month)
+			leap = datedata.LeapFormatAbbreviated
 		case fd.count == 4:
-			return cal.Month(context, datedata.Wide, month)
+			text = cal.Month(context, datedata.Wide, month)
+			leap = datedata.LeapFormatWide
 		default:
-			return cal.Month(context, datedata.Narrow, month)
+			text = cal.Month(context, datedata.Narrow, month)
+			leap = datedata.LeapFormatNarrow
 		}
+		if p.leapMonth {
+			// A leap month is its month's name or number in the locale's
+			// leap-month pattern, "{0}bis".
+			if context == datedata.StandAlone && leap != datedata.LeapNumeric {
+				leap += datedata.LeapStandAloneWide - datedata.LeapFormatWide
+			}
+			if pattern := cal.LeapMonthPatterns[leap]; pattern != "" {
+				text = strings.Replace(pattern, "{0}", text, 1)
+			}
+		}
+		return text
 
 	case 'd':
 		return f.number(p, 'd', p.day, fd.count)

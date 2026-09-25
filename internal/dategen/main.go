@@ -84,6 +84,8 @@ var extras = []struct{ cldr, bcp47, pkg string }{
 	{"roc", "roc", "roc"},
 	{"hebrew", "hebrew", "hebrew"},
 	{"japanese", "japanese", "japanese"},
+	{"chinese", "chinese", "chinese"},
+	{"dangi", "dangi", "dangi"},
 }
 
 // packageOf finds the unpacked package a calendar comes from, among those
@@ -110,6 +112,9 @@ type calendar struct {
 	Days       map[string]map[string]map[string]string `json:"days"`
 	DayPeriods map[string]map[string]map[string]string `json:"dayPeriods"`
 	Eras       map[string]map[string]string            `json:"eras"`
+
+	MonthPatterns  map[string]map[string]map[string]string            `json:"monthPatterns"`
+	CyclicNameSets map[string]map[string]map[string]map[string]string `json:"cyclicNameSets"`
 
 	DateFormats     map[string]json.RawMessage `json:"dateFormats"`
 	TimeFormats     map[string]json.RawMessage `json:"timeFormats"`
@@ -665,6 +670,15 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 			c.Eras[w].Text = text
 		}
 	}
+	c.LeapMonthPatterns = leapMonthPatterns(source.MonthPatterns)
+	if years := source.CyclicNameSets["years"]["format"]["abbreviated"]; len(years) > 0 {
+		c.CyclicYears = make([]string, len(years))
+		for key, value := range years {
+			if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= len(years) {
+				c.CyclicYears[n-1] = value
+			}
+		}
+	}
 
 	for i, length := range datedata.LengthNames {
 		c.DateFormats[i] = pattern(source.DateFormats[length])
@@ -784,4 +798,42 @@ func atTimeFromICU(icu *icusrc.Locales, name, calendar string) ([datedata.Length
 	// None anywhere, the root included: ICU then joins with the plain glue,
 	// and so does the reader, finding this empty.
 	return out, nil
+}
+
+// leapMonthPatterns reads a calendar's leap-month patterns as
+// DateFormatSymbols::initializeData does: all seven sets must be there, or
+// there are none; a set without a "leap" pattern gives an empty one; and
+// the empty ones are then filled from their neighbours, in ICU's order,
+// which ICU calls a hack for the Korean calendar's inheritance.
+func leapMonthPatterns(patterns map[string]map[string]map[string]string) [datedata.LeapPatterns]string {
+	var out [datedata.LeapPatterns]string
+	paths := [datedata.LeapPatterns][2]string{
+		datedata.LeapFormatWide:            {"format", "wide"},
+		datedata.LeapFormatAbbreviated:     {"format", "abbreviated"},
+		datedata.LeapFormatNarrow:          {"format", "narrow"},
+		datedata.LeapStandAloneWide:        {"stand-alone", "wide"},
+		datedata.LeapStandAloneAbbreviated: {"stand-alone", "abbreviated"},
+		datedata.LeapStandAloneNarrow:      {"stand-alone", "narrow"},
+		datedata.LeapNumeric:               {"numeric", "all"},
+	}
+	for i, path := range paths {
+		set, ok := patterns[path[0]][path[1]]
+		if !ok {
+			return [datedata.LeapPatterns]string{}
+		}
+		out[i] = set["leap"]
+	}
+	if out[datedata.LeapFormatAbbreviated] == "" {
+		out[datedata.LeapFormatAbbreviated] = out[datedata.LeapFormatWide]
+	}
+	if out[datedata.LeapFormatNarrow] == "" {
+		out[datedata.LeapFormatNarrow] = out[datedata.LeapStandAloneNarrow]
+	}
+	if out[datedata.LeapStandAloneWide] == "" {
+		out[datedata.LeapStandAloneWide] = out[datedata.LeapFormatWide]
+	}
+	if out[datedata.LeapStandAloneAbbreviated] == "" {
+		out[datedata.LeapStandAloneAbbreviated] = out[datedata.LeapFormatAbbreviated]
+	}
+	return out
 }

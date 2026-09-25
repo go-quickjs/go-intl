@@ -52,18 +52,39 @@ func TestCalendarSelection(t *testing.T) {
 	}
 }
 
-// A calendar CLDR has and this does not is refused when the formatter is
-// built, rather than answered in the wrong one.
-func TestUnimplementedCalendarIsRefused(t *testing.T) {
+// The calendar is resolved as ECMA-402's ResolveLocale resolves "ca": a
+// name that is no calendar's is passed over, one that is not a Unicode
+// locale type is an error, and the resolved locale keeps the "-u-ca-"
+// keyword only when it is the calendar chosen. The answers are Node's.
+func TestCalendarResolution(t *testing.T) {
+	for _, c := range []struct {
+		tag, option      string
+		locale, calendar string
+	}{
+		{"fa-IR", "foo", "fa-IR", "persian"},
+		{"fa-IR", "islamic-xyz", "fa-IR", "persian"},
+		{"fa-IR", "GREGORY", "fa-IR", "gregory"},
+		{"th-u-ca-gregory", "", "th-u-ca-gregory", "gregory"},
+		{"en-u-ca-buddhist", "buddhist", "en-u-ca-buddhist", "buddhist"},
+		{"en-u-ca-gregory", "buddhist", "en", "buddhist"},
+		{"en-u-ca-foo", "", "en", "gregory"},
+		{"en-u-ca-foo", "buddhist", "en", "buddhist"},
+		{"en-u-ca-buddhist", "foo", "en-u-ca-buddhist", "buddhist"},
+	} {
+		f := newDateTime(t, c.tag, intl.DateTimeFormatOptions{Calendar: c.option})
+		r := f.ResolvedOptions()
+		if r.Locale != c.locale || r.Calendar != c.calendar {
+			t.Errorf("%s calendar=%q resolved to %s %s, want %s %s",
+				c.tag, c.option, r.Locale, r.Calendar, c.locale, c.calendar)
+		}
+	}
 	loc, err := intl.ParseLocale("fa-IR")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, calendar := range []string{"chinese", "dangi"} {
-		if _, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
-			Calendar: calendar,
-		}); err == nil {
-			t.Errorf("the %s calendar was accepted", calendar)
+	for _, name := range []string{"gregorian", "ab", "abc_def", "toolongname9"} {
+		if _, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{Calendar: name}); err == nil {
+			t.Errorf("the calendar %q was accepted", name)
 		}
 	}
 }

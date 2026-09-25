@@ -394,8 +394,12 @@ const (
 	PartApproximatelySign PartKind = "approximatelySign"
 
 	// The pieces of a date or a time, named as ECMA-402 names them.
-	PartEra              PartKind = "era"
-	PartYear             PartKind = "year"
+	PartEra  PartKind = "era"
+	PartYear PartKind = "year"
+	// PartYearName is the name of a year in the Chinese calendars' cycle,
+	// "jia-chen", and PartRelatedYear the Gregorian year a year starts in.
+	PartYearName         PartKind = "yearName"
+	PartRelatedYear      PartKind = "relatedYear"
 	PartMonth            PartKind = "month"
 	PartDay              PartKind = "day"
 	PartWeekday          PartKind = "weekday"

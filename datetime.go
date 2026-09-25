@@ -224,7 +224,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	if err != nil {
 		return nil, err
 	}
-	system, err := chooseCalendar(src, loc, opts.Calendar)
+	system, keep, err := chooseCalendar(src, loc, opts.Calendar)
 	if err != nil {
 		return nil, err
 	}
@@ -235,10 +235,10 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		if cal, ok = data.Calendar(string(Gregory)); !ok {
 			return nil, fmt.Errorf("intl: %s has no calendar data: %w", loc, ErrNotFound)
 		}
-		system = Gregory
+		system, keep = Gregory, ""
 	}
 
-	f := &DateTimeFormat{locale: loc, opts: opts, data: data, calendar: cal, system: system}
+	f := &DateTimeFormat{locale: loc.withKeyword("ca", keep), opts: opts, data: data, calendar: cal, system: system}
 	if system == Japanese {
 		if f.rules.eras, err = loadJapaneseEras(src); err != nil {
 			return nil, err

@@ -44,7 +44,7 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 | Service | State |
 |---|---|
 | `NumberFormat` | Complete: every style, notation, rounding option and numbering system, exact decimal input (`ParseDecimal`, `FormatDecimal`), ranges |
-| `DateTimeFormat` | Complete in fifteen calendars -- Gregorian, Buddhist, Persian, Coptic, Ethiopic (both eras), Indian, all five Islamic (civil, tabular, astronomical, Saudi, Umm al-Qura), ROC, Hebrew, Japanese, ISO 8601: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges. Chinese and Dangi are to come |
+| `DateTimeFormat` | Complete in all eighteen calendars Node supports -- Gregorian, Buddhist, Persian, Coptic, Ethiopic (both eras), Indian, all five Islamic (civil, tabular, astronomical, Saudi, Umm al-Qura), ROC, Hebrew, Japanese, ISO 8601, Chinese, Dangi: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges |
 | `PluralRules` | Complete, with `SelectRange` |
 | `Collator` | Complete but for Korean `searchjl`: every other tailoring, sensitivity, numeric ordering, case order |
 | `ListFormat`, `RelativeTimeFormat`, `DisplayNames` | Complete |
@@ -62,11 +62,11 @@ The answers are checked, not assumed:
   [`testdata`](testdata) by the scripts beside them: about 515,000 cases across
   dates, date ranges, calendars, zone names, numbering systems, number
   ranges, exact decimals, plural ranges and selection, and collation orders.
-  Every one matches except the named gaps: the calendars not yet
-  implemented, Dublin's zone names (Go's time-zone data differs from ICU's
-  for Ireland) and Korean `searchjl` collation. A gap that
+  Every one matches except the named gaps: Dublin's zone names (Go's
+  time-zone data differs from ICU's for Ireland) and Korean `searchjl`
+  collation. A gap that
   starts passing fails its test, so the entry gets removed.
-- **Every day from 1600 to 2400** in each non-Gregorian calendar, 4.4
+- **Every day from 1600 to 2400** in each non-Gregorian calendar, five
   million days, against the dates Node gives them.
 
 Where Node and ECMA-402 disagree, the difference is a named entry in

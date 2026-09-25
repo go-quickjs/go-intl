@@ -17,10 +17,7 @@ import (
 // calendarDayGaps are the calendars testdata/calendar_days_node.txt.gz holds
 // that go-intl does not reckon in yet. One that starts to pass is reported,
 // so the entry goes.
-var calendarDayGaps = map[string]string{
-	"chinese": "the Chinese calendar",
-	"dangi":   "the Korean calendar",
-}
+var calendarDayGaps = map[string]string{}
 
 type calendarRun struct {
 	calendar string

@@ -1,6 +1,7 @@
 package intl_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -140,5 +141,40 @@ func TestISO8601Calendar(t *testing.T) {
 				t.Errorf("%s %v = %q, want %q", c.tag, d.Format("2006-01-02"), got, c.want[i])
 			}
 		}
+	}
+}
+
+// TestChineseCalendars pins the Chinese and Korean calendars to Node: the
+// leap second month of 2023 in each language's leap-month pattern, the
+// cyclic year names, the new year, and Chinese days in hanidays numerals.
+func TestChineseCalendars(t *testing.T) {
+	leap := time.Date(2023, 3, 25, 0, 0, 0, 0, time.UTC)
+	newYear := time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC)
+	full := intl.DateTimeFormatOptions{TimeZone: "UTC", DateStyle: intl.LengthFull}
+	for _, c := range []struct {
+		tag  string
+		when time.Time
+		want string
+	}{
+		{"zh-u-ca-chinese", leap, "2023癸卯年闰二月初四星期六"},
+		{"en-u-ca-chinese", leap, "Saturday, Second Monthbis 4, 2023(gui-mao)"},
+		{"ko-u-ca-dangi", leap, "계묘년 윤2월 4일 토요일"},
+		{"zh-u-ca-chinese", newYear, "2024甲辰年正月初一星期六"},
+	} {
+		if got := newDateTime(t, c.tag, full).Format(c.when); got != c.want {
+			t.Errorf("%s %s = %q, want %q", c.tag, c.when.Format("2006-01-02"), got, c.want)
+		}
+	}
+
+	f := newDateTime(t, "ko-u-ca-dangi", intl.DateTimeFormatOptions{TimeZone: "UTC",
+		Year: intl.WidthNumeric, Month: intl.WidthLong, Day: intl.WidthNumeric})
+	var got []string
+	for _, p := range f.FormatToParts(leap) {
+		got = append(got, string(p.Kind)+"="+p.Value)
+	}
+	want := []string{"relatedYear=2023", "literal=년(", "yearName=계묘", "literal=년) ",
+		"month=윤2월", "literal= ", "day=4", "literal=일"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("ko-u-ca-dangi parts = %q, want %q", got, want)
 	}
 }
