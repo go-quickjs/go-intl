@@ -112,6 +112,15 @@ func (p calendarPreferences) all(region string) []string {
 	return nil
 }
 
+// isIslamic reports whether a calendar is one of the Islamic ones.
+func isIslamic(c CalendarSystem) bool {
+	switch c {
+	case Islamic, IslamicCivil, IslamicTabular, IslamicRGSA, IslamicUmmAlQura:
+		return true
+	}
+	return false
+}
+
 // chooseCalendar settles which calendar a formatter reckons in, as
 // ECMA-402's ResolveLocale settles the "ca" key.
 //

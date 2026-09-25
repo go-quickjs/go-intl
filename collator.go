@@ -211,7 +211,7 @@ func NewCollatorFrom(src Source, loc Locale, opts CollatorOptions) (*Collator, e
 		switch {
 		case keyword == c.collation:
 			keep["co"] = keyword
-		case opts.Compat == NodeICU && option == c.collation && !keywordFound:
+		case opts.Compat.Has(CollationKeyword) && option == c.collation && !keywordFound:
 			// Node writes a collation the options chose into the locale
 			// too, unless the locale had a keyword of its own it honoured.
 			keep["co"] = option

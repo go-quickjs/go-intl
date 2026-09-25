@@ -33,7 +33,8 @@ func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, Hour
 		return "", HourCycleAuto, nil, err
 	}
 	g := newDTPG(f.calendar, f.data.FieldNames, decimal, hourChar, allowed)
-	hc := f.resolveHourCycle(g.defaultHourCycle())
+	hc := f.resolveHourCycle(g.defaultHourCycle(), allowed)
+	f.clock = hc
 
 	o := &f.opts
 	if o.DateStyle != LengthNone || o.TimeStyle != LengthNone {
@@ -64,12 +65,17 @@ func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, Hour
 	return replaceHourCycleInPattern(pattern, patternCycle), patternCycle, g, nil
 }
 
-// resolveHourCycle is V8's: hour12 wins over hourCycle, which wins over the
-// -u-hc keyword, which wins over the locale's default. hour12 picks the
-// locale's own twelve- or twenty-four-hour cycle, and V8 decides the twelve
-// hour one by whether the locale names Japan, where the clock counts from 0.
-func (f *DateTimeFormat) resolveHourCycle(def HourCycle) HourCycle {
+// resolveHourCycle is ECMA-402's: hour12 wins over hourCycle, which wins
+// over the -u-hc keyword, which wins over the locale's default. hour12 picks
+// the locale's own twelve- or twenty-four-hour cycle, [[HourCycle12]] and
+// [[HourCycle24]] of its data: the first of each that CLDR's time data allows
+// for the locale's region. V8 decides the twelve-hour one by whether the
+// locale names Japan, where the clock counts from 0 (TwelveHourCycle).
+func (f *DateTimeFormat) resolveHourCycle(def HourCycle, allowed []string) HourCycle {
 	o := &f.opts
+	if o.Hour12 != nil && !o.Compat.Has(TwelveHourCycle) {
+		return allowedHourCycle(allowed, *o.Hour12)
+	}
 	if o.Hour12 != nil {
 		if *o.Hour12 {
 			if def == H11 || def == H12 {
@@ -94,6 +100,38 @@ func (f *DateTimeFormat) resolveHourCycle(def HourCycle) HourCycle {
 		}
 	}
 	return def
+}
+
+// allowedHourCycle is the first twelve-hour cycle a region allows, or the
+// first twenty-four-hour one: "H K h" in Japan allows h11 before h12.
+func allowedHourCycle(allowed []string, twelve bool) HourCycle {
+	for _, a := range allowed {
+		if a == "" {
+			continue
+		}
+		switch a[0] {
+		case 'h':
+			if twelve {
+				return H12
+			}
+		case 'K':
+			if twelve {
+				return H11
+			}
+		case 'H':
+			if !twelve {
+				return H23
+			}
+		case 'k':
+			if !twelve {
+				return H24
+			}
+		}
+	}
+	if twelve {
+		return H12
+	}
+	return H23
 }
 
 func parseHourCycle(s string) (HourCycle, bool) {

@@ -33,6 +33,7 @@ func TestArithmeticCalendars(t *testing.T) {
 		f := newDateTime(t, "en", intl.DateTimeFormatOptions{
 			Calendar: calendar, TimeZone: "UTC", Era: intl.WidthShort,
 			Year: intl.WidthNumeric, Month: intl.WidthNumeric, Day: intl.WidthNumeric,
+			Compat: intl.NodeICU,
 		})
 		for i, d := range dates {
 			if got := f.Format(d); got != want[i] {

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Temporal values, as V8 writes them.
+// Temporal values.
 //
 // A DateTimeFormat writes a Temporal value with a pattern of its own for the
 // value's kind, which V8 makes when it writes one (CallICUFormat): the
@@ -16,6 +16,13 @@ import (
 // AdjustDateTimeStyleFormat and GetDateTimeFormat), and a pattern generated
 // for it in the formatter's locale. A range is written by an interval
 // formatter made from the same skeleton.
+//
+// V8 departs from the proposal in two ways (TemporalFormats): it counts an
+// era among the fields asked for, so an era alone is written alone, and the
+// pattern it generates keeps no hour cycle, so hour12 and hourCycle change
+// nothing for a value asked for no hour. The standard side writes the kind's
+// defaults beside an era, and makes a fields' pattern in the formatter's
+// hour cycle.
 //
 // The value itself is the engine's to turn into an instant: a plain value
 // is the instant it names in the formatter's zone, as Temporal's
@@ -66,7 +73,7 @@ func (f *DateTimeFormat) CalendarMatches(kind TemporalKind, calendar string) boo
 
 // ForTemporal returns the formatter that writes a Temporal value of a kind
 // for this one: the same locale, calendar, zone and numbering, with the
-// pattern V8 makes for the kind.
+// pattern made for the kind.
 func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error) {
 	dateStyle, timeStyle := f.opts.DateStyle != LengthNone, f.opts.TimeStyle != LengthNone
 	switch kind {
@@ -82,8 +89,9 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 	default:
 		return nil, ErrTemporalFormat
 	}
+	node := f.opts.Compat.Has(TemporalFormats)
 	skeleton := temporalSkeleton(staticSkeleton(f.patternText), f.explicit, kind,
-		dateStyle || timeStyle, f.opts.ToLocaleStringTimeZone)
+		dateStyle || timeStyle, f.opts.ToLocaleStringTimeZone, node)
 	if skeleton == "" {
 		return nil, ErrTemporalFormat
 	}
@@ -95,9 +103,17 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		return nil, err
 	}
 	g := newDTPG(f.calendar, f.data.FieldNames, f.decimal, hourChar, allowed)
-	pattern := g.bestPattern(skeleton, 0)
-
 	d := *f
+	var pattern string
+	if node || dateStyle || timeStyle || !strings.ContainsAny(skeleton, "hHkKj") {
+		pattern = g.bestPattern(skeleton, 0)
+	} else {
+		// The proposal's format options keep the formatter's hour cycle,
+		// which a fields' pattern is made with as the formatter's own is.
+		skeleton = withHourLetter(skeleton, f.clock)
+		pattern = replaceHourCycleInPattern(g.bestPattern(skeleton, matchHourFieldLength), f.clock)
+		d.hourCycle = f.clock
+	}
 	d.overrides, d.systems, d.rbnf = nil, nil, nil
 	d.patternText = pattern
 	d.pattern = compileDatePattern(pattern, nil)
@@ -112,8 +128,10 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 
 // temporalSkeleton is V8's GetSkeletonForPatternKind: the skeleton a kind
 // of Temporal value is written with, from the skeleton of the formatter's
-// pattern and the fields its options named; empty for none.
-func temporalSkeleton(best, explicit string, kind TemporalKind, styled, zoned bool) string {
+// pattern and the fields its options named; empty for none. Where node is
+// false it is the proposal's GetDateTimeFormat, whose required fields have
+// no era (TemporalFormats).
+func temporalSkeleton(best, explicit string, kind TemporalKind, styled, zoned, node bool) string {
 	if styled {
 		// AdjustDateTimeStyleFormat: the style's fields the kind has.
 		switch kind {
@@ -133,12 +151,16 @@ func temporalSkeleton(best, explicit string, kind TemporalKind, styled, zoned bo
 
 	// The fields the options named, in the order the pattern writes them.
 	options := keepLetters(best, explicit)
-	const requiredAny, defaultsAll = "EcGyMLdhHkKjmsBbaS", "yMdjms"
+	requiredDate, requiredYearMonth, requiredAny := "EcyMLd", "yML", "EcyMLdhHkKjmsBbaS"
+	if node {
+		requiredDate, requiredYearMonth, requiredAny = "EcGyMLd", "GyML", "EcGyMLdhHkKjmsBbaS"
+	}
+	const defaultsAll = "yMdjms"
 	switch kind {
 	case TemporalPlainDate:
-		return temporalFormat(options, explicit, "EcGyMLd", "yMd", false, true, false, false)
+		return temporalFormat(options, explicit, requiredDate, "yMd", false, true, false, false)
 	case TemporalPlainYearMonth:
-		return temporalFormat(options, explicit, "GyML", "yM", false, true, false, false)
+		return temporalFormat(options, explicit, requiredYearMonth, "yM", false, true, false, false)
 	case TemporalPlainMonthDay:
 		return temporalFormat(options, explicit, "MLd", "Md", false, false, false, false)
 	case TemporalPlainTime:
@@ -147,6 +169,22 @@ func temporalSkeleton(best, explicit string, kind TemporalKind, styled, zoned bo
 		return temporalFormat(options, explicit, requiredAny, defaultsAll, false, true, true, false)
 	}
 	return temporalFormat(options, explicit, requiredAny, defaultsAll, true, true, true, zoned)
+}
+
+// withHourLetter is a skeleton with its hour, 'j' or any, written in a
+// cycle's letter.
+func withHourLetter(skeleton string, hc HourCycle) string {
+	to, ok := hourLetters[hc]
+	if !ok {
+		return skeleton
+	}
+	b := []byte(skeleton)
+	for i, c := range b {
+		if strings.IndexByte("jhHkK", c) >= 0 {
+			b[i] = to
+		}
+	}
+	return string(b)
 }
 
 // keepLetters is the letters of a skeleton that are among allowed, or

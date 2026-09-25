@@ -198,8 +198,11 @@ type DateTimeFormat struct {
 	// one in use.
 	rules calendarRules
 	// hourCycle is the cycle resolvedOptions reports, unset unless an hour
-	// or a time style was asked for.
+	// or a time style was asked for, and clock the cycle the options and the
+	// locale settled on whether or not an hour was asked for, which a
+	// Temporal value's format keeps (see ForTemporal).
 	hourCycle HourCycle
+	clock     HourCycle
 	decimal   string
 	minus     string
 	// overrides are the numbering systems some fields of a style pattern
@@ -618,7 +621,7 @@ func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
 		}
 		out = append(out, Part{kind, seg.value})
 	}
-	if f.opts.Compat == NodeICU {
+	if f.opts.Compat.Has(NarrowSpace) {
 		// V8 writes a plain space wherever ICU writes a narrow no-break
 		// one, reverting ICU 72 for the web's sake (Replace202F).
 		for i := range out {

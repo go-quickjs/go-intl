@@ -81,7 +81,7 @@ func (c *Canonicalizer) Canonicalize(tag string) (Locale, error) {
 	if err := checkLanguagePrefix(tag); err != nil {
 		return Locale{}, err
 	}
-	if c.opts.Compat == NodeICU && isTwoLetterFastPath(tag) {
+	if c.opts.Compat.Has(TwoLetterTags) && isTwoLetterFastPath(tag) {
 		// V8 answers a lone two-letter language as it came, without the
 		// aliases: "bh" stays "bh", where ECMA-402 makes it "bho".
 		l, err := ParseLocale(tag)

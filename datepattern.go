@@ -499,6 +499,11 @@ func (f *DateTimeFormat) instant(t time.Time) dateParts {
 	offset := f.tz.offsetAt(t.UnixMilli()).total()
 	local := t.In(time.FixedZone("", offset))
 	p := reckon(local, f.system, f.rules)
+	if p.year < 1 && isIslamic(f.system) && !f.opts.Compat.Has(IslamicEras) {
+		// CLDR's era before the Hijrah, the year counted back from 1 AH,
+		// where ICU4C writes a year of the era after it (IslamicEras).
+		p.era, p.year = 1, 1-p.year
+	}
 	p.zoneOffset = offset
 	p.instant = local
 	return p

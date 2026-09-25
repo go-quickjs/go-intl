@@ -498,7 +498,7 @@ func (w *durationWriter) write(i int, value Decimal, join, negativeZero bool) {
 // exactly in nanoseconds, as the proposal sums them; NodeICU sums them as V8
 // does (v8FractionOf). It reports whether the sum is zero.
 func fractionOf(d Duration, from int, compat Compat) (Decimal, bool) {
-	if compat == NodeICU {
+	if compat.Has(DurationOverflow) {
 		return v8FractionOf(d, from)
 	}
 	exponent := 9 - 3*(from-DurationSeconds)

@@ -1,0 +1,150 @@
+package intl_test
+
+import (
+	"testing"
+	"time"
+
+	intl "github.com/go-quickjs/go-intl"
+)
+
+// Each divergence's flag chooses Node's side of it alone, and every flag has
+// an entry in Divergences.
+func TestCompatFlags(t *testing.T) {
+	var all intl.Compat
+	for _, d := range intl.Divergences {
+		if d.Flag == 0 || all&d.Flag != 0 {
+			t.Errorf("%s: flag %d is zero or another's", d.Name, d.Flag)
+		}
+		all |= d.Flag
+		if !intl.NodeICU.Has(d.Flag) || intl.Standard.Has(d.Flag) {
+			t.Errorf("%s: not in NodeICU, or in Standard", d.Name)
+		}
+		if d.Flag.String() != d.Name {
+			t.Errorf("%s: String() = %q", d.Name, d.Flag.String())
+		}
+	}
+	if all != intl.NodeICU {
+		t.Errorf("the divergences make %d, NodeICU is %d", all, intl.NodeICU)
+	}
+	if got := (intl.NarrowSpace | intl.TwoLetterTags).String(); got != "NarrowSpace|TwoLetterTags" {
+		t.Errorf("String() = %q", got)
+	}
+}
+
+// hour12 in Japanese: ECMA-402 takes the locale's twelve-hour cycle, which
+// Japan's time data gives as K, h11; V8 takes h12 for "ja", which names no
+// region. Node's is its answer.
+func TestTwelveHourCycle(t *testing.T) {
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+		cycle  intl.HourCycle
+	}{
+		{intl.Standard, "午前0:00", intl.H11},
+		{intl.TwelveHourCycle, "午前12:00", intl.H12},
+	} {
+		f := newDateTime(t, "ja", intl.DateTimeFormatOptions{TimeZone: "UTC", Hour: intl.WidthNumeric,
+			Minute: intl.Width2Digit, Hour12: intl.Bool(true), Compat: c.compat})
+		if got := f.Format(time.Date(2000, 2, 29, 0, 0, 0, 0, time.UTC)); got != c.want {
+			t.Errorf("%v: %q, want %q", c.compat, got, c.want)
+		}
+		if got := f.ResolvedOptions().HourCycle; got != c.cycle {
+			t.Errorf("%v: hour cycle %v, want %v", c.compat, got, c.cycle)
+		}
+	}
+	// Where the region allows only one twelve-hour cycle, the two agree.
+	for _, c := range []intl.Compat{intl.Standard, intl.NodeICU} {
+		f := newDateTime(t, "en", intl.DateTimeFormatOptions{Hour: intl.WidthNumeric, Hour12: intl.Bool(false), Compat: c})
+		if got := f.ResolvedOptions().HourCycle; got != intl.H23 {
+			t.Errorf("%v: en with hour12 false is %v", c, got)
+		}
+	}
+}
+
+// A year before the Hijrah: CLDR 48.2's era for it, the year counted back,
+// or ICU4C's negative year of the era after. Node's is ICU4C's.
+func TestIslamicEras(t *testing.T) {
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "127 Before Hijrah"},
+		{intl.IslamicEras, "-126 Anno Hegirae"},
+	} {
+		for _, calendar := range []string{"islamic", "islamic-civil", "islamic-tbla", "islamic-umalqura"} {
+			f := newDateTime(t, "en", intl.DateTimeFormatOptions{Calendar: calendar, TimeZone: "UTC",
+				Era: intl.WidthLong, Year: intl.WidthNumeric, Compat: c.compat})
+			if got := f.Format(time.Date(500, 1, 1, 0, 0, 0, 0, time.UTC)); got != c.want {
+				t.Errorf("%v %s: %q, want %q", c.compat, calendar, got, c.want)
+			}
+		}
+	}
+	// After the Hijrah the two agree.
+	for _, c := range []intl.Compat{intl.Standard, intl.NodeICU} {
+		f := newDateTime(t, "en", intl.DateTimeFormatOptions{Calendar: "islamic-civil", TimeZone: "UTC",
+			Era: intl.WidthShort, Year: intl.WidthNumeric, Compat: c})
+		if got := f.Format(time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)); got != "1445 AH" {
+			t.Errorf("%v: %q", c, got)
+		}
+	}
+}
+
+// Temporal values: an era alone, and an hour cycle with no hour asked for.
+// The Node side's expectations are Node's; the standard side's follow the
+// Temporal proposal's GetDateTimeFormat.
+func TestTemporalFormats(t *testing.T) {
+	type value struct {
+		kind intl.TemporalKind
+		at   time.Time
+	}
+	instant := value{intl.TemporalInstant, time.UnixMilli(0)}
+	date := value{intl.TemporalPlainDate, time.Date(2000, 5, 2, 0, 0, 0, 0, time.UTC)}
+	dateTime := value{intl.TemporalPlainDateTime, time.Date(2000, 5, 2, 14, 46, 0, 0, time.UTC)}
+	yearMonth := value{intl.TemporalPlainYearMonth, time.Date(2000, 5, 1, 0, 0, 0, 0, time.UTC)}
+	clock := value{intl.TemporalPlainTime, time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)}
+	any_ := [2]intl.DateTimeComponents{intl.ComponentsAny, intl.ComponentsAll}
+	dates := [2]intl.DateTimeComponents{intl.ComponentsDate, intl.ComponentsDate}
+	times := [2]intl.DateTimeComponents{intl.ComponentsTime, intl.ComponentsTime}
+	for _, c := range []struct {
+		name           string
+		opts           intl.DateTimeFormatOptions
+		method         [2]intl.DateTimeComponents
+		value          value
+		standard, node string
+	}{
+		{"era, Instant", intl.DateTimeFormatOptions{Era: intl.WidthNarrow}, any_, instant,
+			"1/1/1970 A, 12:00:00 AM", "A"},
+		{"era, PlainDate", intl.DateTimeFormatOptions{Era: intl.WidthNarrow}, dates, date, "5/2/2000 A", "A"},
+		{"era, PlainDateTime", intl.DateTimeFormatOptions{Era: intl.WidthNarrow}, any_, dateTime,
+			"5/2/2000 A, 2:46:00 PM", "A"},
+		{"era, PlainYearMonth", intl.DateTimeFormatOptions{Era: intl.WidthNarrow}, dates, yearMonth, "5/2000 A", "A"},
+		{"era, Intl.DateTimeFormat", intl.DateTimeFormatOptions{Era: intl.WidthNarrow}, [2]intl.DateTimeComponents{},
+			date, "5/2/2000 A", "A"},
+		{"hour12 false, PlainTime", intl.DateTimeFormatOptions{Hour12: intl.Bool(false)}, times, clock,
+			"00:00:00", "12:00:00 AM"},
+		{"hour12 false, Instant", intl.DateTimeFormatOptions{Hour12: intl.Bool(false)}, any_, instant,
+			"1/1/1970, 00:00:00", "1/1/1970, 12:00:00 AM"},
+		{"h24, PlainTime", intl.DateTimeFormatOptions{HourCycle: intl.H24}, times, clock,
+			"24:00:00", "12:00:00 AM"},
+		{"h11, PlainTime", intl.DateTimeFormatOptions{HourCycle: intl.H11}, times, clock,
+			"0:00:00 AM", "12:00:00 AM"},
+	} {
+		for _, compat := range []intl.Compat{intl.Standard, intl.TemporalFormats} {
+			opts := c.opts
+			opts.TimeZone, opts.Compat = "UTC", compat
+			opts.Required, opts.Defaults = c.method[0], c.method[1]
+			f := newDateTime(t, "en", opts)
+			k, err := f.ForTemporal(c.value.kind)
+			if err != nil {
+				t.Fatalf("%s %v: %v", c.name, compat, err)
+			}
+			want := c.standard
+			if compat != intl.Standard {
+				want = c.node
+			}
+			if got := k.Format(c.value.at); got != want {
+				t.Errorf("%s %v: %+q, want %+q", c.name, compat, got, want)
+			}
+		}
+	}
+}
