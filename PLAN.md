@@ -775,6 +775,28 @@ calendars' arithmetic (the calendar arithmetic row above). go-quickjs's VM
 keeps the objects and calls in. Temporal's own choice of zones, narrower
 than Intl.DateTimeFormat's, is followed.
 
+**Node's Temporal is not ICU4C's.** Node 26.10.0 builds Temporal from Rust
+crates (`deps/crates/Cargo.lock`): `temporal_rs` 0.2.3 over ICU4X's
+`icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4 and
+`icu_calendar_data` 2.2.0, with zones from `zoneinfo64` 0.3.0, which reads
+the same ICU zone data go-intl does. So Temporal's calendars follow ICU4X,
+where Intl.DateTimeFormat's follow ICU4C, and the two disagree: over every
+day from 1000 to 3000, the Chinese and Dangi calendars put the day in a
+different month or on a different date in about 1,800 years, and in a few
+years (1954, 1999, 2012, 2027, 2057...) even between 1900 and 2102, where
+ICU4X reads tables (Qing 1900-1911, then China and Korea to 2102) and
+ICU4C computes the astronomy; outside them ICU4X has a mean-motion
+approximation. Buddhist, Japanese and ROC differ before 1582, where ICU4C
+changes to the Julian calendar and Temporal stays proleptic. Temporal takes
+neither "islamic" nor "islamic-rgsa". The other calendars agree day for day.
+
+So the `temporal` package carries ICU4X's reckoning, ported from those
+crates at those versions, and `intl` keeps ICU4C's for formatting, as V8
+does: V8 formats a Temporal date by handing ICU4C its ISO date. The port
+starts with the calendars: a date's fields from its ISO date and back, with
+Temporal's overflow; then adding to a date and the difference between two;
+then the rest of Temporal.
+
 ### 9. Retire internal/icu
 
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
@@ -849,7 +871,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | done (see Time zones): `TimeZone`, `HostTimeZone`, `DefaultTimeZone`, `TimeZones`; Temporal's possible instants belong to the `temporal` stage, and `LegacyZoneNameAt` to `date` |
-| Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
+| Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars, as ICU4X's `icu_calendar` 2.2.1 reckons them (see 8c): part of the `temporal` package |
 
 The formatter surfaces come first: they are go-intl's own API, and each item
 is small beside the areas below them. Time zones and calendar arithmetic are
