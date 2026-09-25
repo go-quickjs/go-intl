@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/numdata"
@@ -110,6 +111,10 @@ func run(root, icuData string) error {
 	// leaves the tracked tables as a matched set.
 	built := map[string][]byte{}
 	locales := map[string]*numdata.Locale{}
+	// The locales share one pool of strings, systems and currencies,
+	// written beside them. ReadDir's order is sorted, so the pool is the
+	// same every run.
+	pool := blob.NewPool(numdata.Version)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -127,7 +132,7 @@ func run(root, icuData string) error {
 		if l.TimeSeparators, err = timeSeparators(icu, e.Name(), digits); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
-		built[e.Name()] = numdata.Encode(l)
+		built[e.Name()] = numdata.Encode(l, pool)
 		locales[e.Name()] = l
 	}
 	if len(built) == 0 {
@@ -137,7 +142,7 @@ func run(root, icuData string) error {
 	if err != nil {
 		return fmt.Errorf("en-US-posix: %w", err)
 	}
-	built["en-US-posix"] = numdata.Encode(posix)
+	built["en-US-posix"] = numdata.Encode(posix, pool)
 
 	fractions, err := currencyDigitsTable()
 	if err != nil {
@@ -162,6 +167,9 @@ func run(root, icuData string) error {
 	// Anything left from a previous run for a locale CLDR no longer has would
 	// otherwise be served forever.
 	if err := datawrite.Locales(out, built); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "numbersshared.bin"), pool.Bytes(), 0o644); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "numbergen: %d locales\n", len(built))

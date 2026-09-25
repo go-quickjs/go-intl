@@ -54,6 +54,8 @@ const (
 	// MarkerDatesShared is what the locales' date data shares: every
 	// string and list, kept once and read by number.
 	MarkerDatesShared Marker = "datesshared"
+	// MarkerNumbersShared is what the locales' number data shares.
+	MarkerNumbersShared Marker = "numbersshared"
 	// MarkerZoneNames is what one locale calls the time zones.
 	MarkerZoneNames Marker = "zonenames"
 	// MarkerMetazones maps a zone to the metazone it belongs to, which is not
@@ -145,13 +147,17 @@ var embeddedData embed.FS
 //go:embed data/datesshared.bin
 var embeddedDatesShared string
 
+//go:embed data/numbersshared.bin
+var embeddedNumbersShared string
+
 // Embedded is the data built into this package. It is the default, so that the
 // simple path needs no setting up, and it is only a default: anything taking a
 // Source can be given another.
 var Embedded Source = &embeddedSource{
 	fsSource: mustSub(embeddedData, "data").(fsSource),
 	shared: map[Marker]string{
-		MarkerDatesShared: embeddedDatesShared,
+		MarkerDatesShared:   embeddedDatesShared,
+		MarkerNumbersShared: embeddedNumbersShared,
 	},
 }
 

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/numdata"
 	"github.com/go-quickjs/go-intl/internal/unitdata"
 )
@@ -371,18 +372,26 @@ func loadNumbers(src Source, loc Locale) (*numdata.Locale, error) {
 		if err != nil {
 			return nil, err
 		}
-		data.Currencies = names.Currencies
+		data.TakeCurrencies(names)
 	}
 	return data, nil
 }
 
 func loadNumbersAlong(src Source, loc Locale, chain []DataLocale) (*numdata.Locale, error) {
+	shared, err := src.Open(MarkerNumbersShared, DataLocale{})
+	if err != nil {
+		return nil, fmt.Errorf("intl: the shared number data: %w", err)
+	}
+	pool, err := blob.ReadShared(shared, numdata.Version)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the shared number data: %w", err)
+	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerNumbers, d)
 		if err != nil {
 			continue
 		}
-		l, err := numdata.Decode(b)
+		l, err := numdata.Decode(b, pool)
 		if err != nil {
 			return nil, fmt.Errorf("intl: the number data for %s: %w", d, err)
 		}
