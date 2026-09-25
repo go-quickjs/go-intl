@@ -86,6 +86,9 @@ type Case struct {
 	// to write their result as one string.
 	Field string
 	Join  string
+	// IfWordLike and IfNot are the branches of a conditional on isWordLike,
+	// when the map body is one: s => s.isWordLike ? "w" : ".".
+	IfWordLike, IfNot string
 }
 
 // Number returns the case's first numeric argument.
@@ -272,13 +275,24 @@ func parseSegment(src string) (*Case, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The body is either s => s.field or s => s.isWordLike ? "a" : "b"; only
-	// which field it reads matters, since the branches are constants.
+	// The body is either s => s.field or s => s.isWordLike ? "a" : "b".
 	_, field, ok := strings.Cut(body, "s.")
 	if !ok {
 		return nil, fmt.Errorf("the map body reads no field of the segment")
 	}
 	if at := strings.IndexAny(field, " ?"); at >= 0 {
+		if cond := strings.TrimSpace(field[at:]); strings.HasPrefix(cond, "?") {
+			yes, no, ok := strings.Cut(strings.TrimPrefix(cond, "?"), ":")
+			if !ok {
+				return nil, fmt.Errorf("a conditional without two branches")
+			}
+			if err := json.Unmarshal([]byte(strings.TrimSpace(yes)), &c.IfWordLike); err != nil {
+				return nil, fmt.Errorf("the conditional's first branch: %w", err)
+			}
+			if err := json.Unmarshal([]byte(strings.TrimSpace(no)), &c.IfNot); err != nil {
+				return nil, fmt.Errorf("the conditional's second branch: %w", err)
+			}
+		}
 		field = field[:at]
 	}
 	c.Field = field

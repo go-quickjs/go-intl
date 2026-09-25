@@ -1,0 +1,12 @@
+boundaries el sentence sent_el.brk
+boundaries en_US_POSIX word word_POSIX.brk
+boundaries root grapheme char.brk
+boundaries root sentence sent.brk
+boundaries root word word.brk
+dictionary Hani cjdict.dict
+dictionary Hira cjdict.dict
+dictionary Kana cjdict.dict
+dictionary Khmr khmerdict.dict
+dictionary Laoo laodict.dict
+dictionary Mymr burmesedict.dict
+dictionary Thai thaidict.dict

@@ -92,6 +92,7 @@ const (
 	treeRegion  = "region"
 	treeZone    = "zone"
 	treeColl    = "coll"
+	treeBrkitr  = "brkitr"
 )
 
 // NewFallbacker reads the tables it needs from a source.

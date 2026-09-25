@@ -31,7 +31,8 @@ authority.
 | IANA tzdb | 2026c, as ICU's `zoneinfo64` | zone rules (`tzgen`) | yes, from node |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
 | ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`); each service's available locales, from the locale and collation trees, their `LOCALE_DEPS.json` and `misc/plurals.txt`, and the collations, currencies and time zones `supportedValuesOf` lists, from the collation and currency trees, `keyTypeData.txt`, `zoneinfo64.txt` and `timezoneTypes.txt` (`availgen`) | yes |
-| LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
+| ICU's compiled data | `icudt78l.dat` in `icu4c-78.3-sources.tgz` | the break rules and dictionaries (`segmentgen`) | yes: Node carries this data |
+| Unicode (UCD) properties | 17.0.0 `Scripts.txt`, `LineBreak.txt`, `extracted/DerivedGeneralCategory.txt` | the break engines' sets and the Script property (`segmentgen`) | yes, from node |
 | Temporal's crates | `temporal_rs` 0.2.3, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0 | the `temporal` package: Temporal's calendars and arithmetic | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
@@ -96,6 +97,17 @@ Other URLs:
   metazone from 2026-09-20. `tzgen` writes each zone's offsets from
   `zoneinfo64.txt`, with its canonical name from `timezoneTypes.txt`, and
   the Windows zone mapping from `windowsZones.txt`.
+- `segmentgen` reads `icu/source/data/in/icudt78l.dat` from the sources
+  archive (checksum below), the prebuilt ICU data Node's full-icu carries,
+  for the compiled break rules (`brkitr/*.brk`) and dictionaries
+  (`brkitr/*.dict`). The data has no LSTM models, so neither Node nor
+  go-intl uses them. It reads the brkitr bundles of the data archive for
+  which rules each names, and from the Unicode Character Database 17.0.0
+  `https://www.unicode.org/Public/17.0.0/ucd/Scripts.txt` (sha256
+  `9f5e50d3abaee7d6ce09480f325c706f485ae3240912527e651954d2d6b035bf`),
+  `LineBreak.txt` (`e6a18fa91f8f6a6f8e534b1d3f128c21ada45bfe152eb6b1bcc5e15fd8ac92e6`)
+  and `extracted/DerivedGeneralCategory.txt`
+  (`d62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e`).
 - Temporal's crates, as Node 26.10.0 pins them in `deps/crates/Cargo.lock`
   (which carries no checksums; these are crates.io's), from
   `https://static.crates.io/crates/<name>/<name>-<version>.crate`:

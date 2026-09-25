@@ -266,7 +266,7 @@ func build(zip string) ([]byte, error) {
 
 // indexTrees are the trees of ICU's data go-intl's data mirrors, whose index
 // the runtime resolves a locale in as ICU does.
-var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "coll"}
+var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "coll", "brkitr"}
 
 // writeIndex writes what ICU's resource fallback reads, so that go-intl can
 // open, for any locale, the bundle ICU opens. Each tree has a file,

@@ -65,7 +65,7 @@ where go-quickjs already is.
   Algorithms UTS #35 pattern selection, UCA, plural rules, UAX #29    the logic
   Model      typed data: patterns, rules, tries, tables               no answers
   Provider   Source interface - embedded / io.FS / custom             the seam
-  Datagen    CLDR-JSON + icuexportdata + tzdb + LSTM to Model         offline
+  Datagen    CLDR-JSON + icuexportdata + ICU data + UCD to Model      offline
 ```
 
 **The invariant: datagen emits inputs to algorithms, never answers.** If a
@@ -84,7 +84,7 @@ it does not:
 | ICU's data sources (`icu4c-*-data.zip`) | the collation tree and what the export drops from tailorings |
 | Unicode Character Database | normalization |
 | IANA tzdb | zone rules |
-| segmenter LSTM models | Thai, Khmer, Lao, Burmese word breaking |
+| ICU's compiled data (`icudt78l.dat`) | the break rules and dictionaries, as ICU compiles them |
 
 `icuexportdata` is produced by ICU4C tooling, so this does not fully escape
 ICU4C - but it is a versioned, tagged, declarative export of *rules and tables*,

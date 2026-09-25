@@ -738,8 +738,42 @@ recorded are ported.
 
 ### 8. Segmenter
 
-Needs the LSTM models and the dictionaries for Chinese, Japanese, Thai, Khmer,
-Lao and Burmese. Last because it is the most self-contained.
+**Done.** `Segmenter` is Intl.Segmenter as V8 builds it on ICU's break
+iterators, ported: `RuleBasedBreakIterator`'s state machine
+(`handleNext`, with its look-ahead rules and rule statuses), its break
+cache and dictionary cache (a run of dictionary characters between two
+rule boundaries handed to the engine for its first character, and the
+engine's boundaries, which may run past the rule boundary, taken with the
+closing rule's status), and the dictionary engines of `dictbe.cpp`: Thai,
+Lao, Burmese and Khmer, one look-ahead algorithm with each script's sets
+and Thai's suffixes, and Chinese and Japanese, the cheapest segmentation by
+the dictionary's costs, with katakana runs, NFKC normalization and its
+position map. The tries are ICU's `UCharsTrie` and `BytesTrie` and the
+character classes its `UCPTrie`, read as they lie.
+
+The rules and dictionaries are ICU's own compiled ones, from the
+`icudt78l.dat` its source release ships and Node carries: `segmentgen`
+copies out `char`, `word`, `word_POSIX`, `sent` and `sent_el` and the five
+dictionaries, the way `zoneinfo64` and the collation export are taken, and
+reads which rules each bundle of the brkitr tree names (resolved as ICU
+opens it, so "el" breaks sentences at semicolons and "en-US-u-va-posix"
+words at colons) and the engines' Unicode sets and the Script property
+from UCD 17. Node uses no LSTM models: its ICU data has none, so ICU falls
+back to the dictionaries for Thai and Burmese too.
+
+ICU's factory keeps every engine it makes for the life of the process, and
+an engine made for any character claims every character of its set. go-intl
+reckons as a process that has made them all; a process that has not yet
+broken any Chinese or Japanese text finds no engine for a run that starts
+with U+30FC, U+FF70, U+FF9E or U+FF9F, which are of the Common script, and
+breaks it differently.
+
+All 140 corpus cases match, and `testdata/segmenter_node.js` records 9,555
+more: sentences in two dozen scripts and 3,000 random strings from pools of
+combining marks, emoji sequences, Hangul jamo, Indic conjuncts, the
+dictionary scripts, halfwidth and fullwidth forms and lone surrogates, in
+every granularity and in the locales whose rules differ, with
+`containing` checked at every offset. All match.
 
 ### 8b. `date`: JavaScript's Date
 
@@ -851,12 +885,12 @@ README's Intl section.
 | **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
 | 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
-| 8. Segmenter | not started |
+| 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | not started |
 | 8c. `temporal` package | calendars done: all 16, 96,659 years, and fields, adding and differencing, 311,526 cases, against node; the rest of Temporal left |
 | 9. Retire internal/icu | not started |
 
-**Corpus coverage so far: 7,809 of 7,949 cases, every one of them exact.** Only the Segmenter's 140 are left.
+**Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
 
 | Service | Cases | Matching |
 |---|---|---|
@@ -868,6 +902,7 @@ README's Intl section.
 | DisplayNames | 34 | 34 |
 | Collator | 1,805 | 1,805 |
 | legacy `toLocale*` | 90 | 90 |
+| Segmenter | 140 | 140 |
 
 Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
 
@@ -891,9 +926,7 @@ Much of `internal/icu` serves things that are not Intl formatters at all.
 
 What go-quickjs's VM accepts and go-intl does not yet:
 
-| Service | Corpus | Missing |
-|---|---|---|
-| Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
+None: the Segmenter, the last, is done.
 
 ### Beyond the formatters
 

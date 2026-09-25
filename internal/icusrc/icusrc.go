@@ -113,7 +113,10 @@ func OpenTree(zipPath, tree string) (*Locales, error) {
 	}
 	out := &Locales{z: z, tree: tree, files: map[string]*zip.File{}, cache: map[string]*icutxt.Node{}}
 	for _, f := range z.File {
-		if name, ok := strings.CutPrefix(f.Name, "data/"+tree+"/"); ok && strings.HasSuffix(name, ".txt") {
+		// A tree's bundles are the files at its top; brkitr keeps its rules
+		// and dictionaries' sources in directories beneath.
+		if name, ok := strings.CutPrefix(f.Name, "data/"+tree+"/"); ok && strings.HasSuffix(name, ".txt") &&
+			!strings.Contains(name, "/") {
 			out.files[strings.TrimSuffix(name, ".txt")] = f
 		}
 	}
