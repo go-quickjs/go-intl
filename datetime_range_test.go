@@ -50,3 +50,30 @@ func TestFormatRange(t *testing.T) {
 		t.Errorf("parts = %q, want %q", got, want)
 	}
 }
+
+// A calendar whose interval formats are an alias to the generic calendar's
+// joins a range it has no interval pattern for with the locale's generic
+// fallback, which ICU finds by following the root's alias back into the
+// locale. The Persian and Hebrew calendars had none, and joined ranges with
+// a plain en dash. The expectations are Node's.
+func TestFormatRangeFallbackOfAliasedCalendars(t *testing.T) {
+	for _, c := range []struct {
+		locale, calendar, want string
+	}{
+		{"fa", "", "۰:۰۰:۰۰ تا ۱:۰۰:۰۰"},
+		{"en", "hebrew", "12:00:00 AM – 1:00:00 AM"},
+	} {
+		loc, err := intl.ParseLocale(c.locale)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{Calendar: c.calendar,
+			Hour: intl.WidthNumeric, Minute: intl.WidthNumeric, Second: intl.WidthNumeric, TimeZone: "UTC"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.FormatRange(time.UnixMilli(0), time.UnixMilli(3600000)); got != c.want {
+			t.Errorf("%s %s: %+q, want %+q", c.locale, c.calendar, got, c.want)
+		}
+	}
+}

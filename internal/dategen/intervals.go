@@ -82,14 +82,18 @@ func intervalsFromICU(chain []*icutxt.Node, calendar string) (string, []datedata
 }
 
 // intervalFallback is the pattern ICU joins a range with when nothing better
-// fits: the first "intervalFormats" table up the chain, following aliases,
-// then its "fallback" there or further up.
+// fits, as DateIntervalInfo::initializeData reads it: the calendar's
+// "intervalFormats/fallback" up the chain, where the tables up the chain
+// that are an alias to another calendar's go on to that calendar's, from
+// the locale itself ("/LOCALE/"). English has Hebrew interval formats of
+// its own but no fallback among them, and the root's are the generic
+// calendar's, so English's generic fallback is the Hebrew calendar's.
 func intervalFallback(chain []*icutxt.Node, calendar string) string {
 	seen := map[string]bool{}
 	for cal := calendar; cal != "" && !seen[cal]; {
 		seen[cal] = true
 		next := ""
-		for i, n := range chain {
+		for _, n := range chain {
 			formats := n.Get("calendar", cal, "intervalFormats")
 			if formats == nil {
 				continue
@@ -98,12 +102,9 @@ func intervalFallback(chain []*icutxt.Node, calendar string) string {
 				next, _ = aliasCalendar(formats.Value)
 				break
 			}
-			for _, m := range chain[i:] {
-				if f := m.Get("calendar", cal, "intervalFormats", "fallback"); f != nil && f.Value != "" {
-					return f.Value
-				}
+			if f := n.Get("calendar", cal, "intervalFormats", "fallback"); f != nil && f.Value != "" {
+				return f.Value
 			}
-			return ""
 		}
 		cal = next
 	}

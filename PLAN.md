@@ -616,7 +616,13 @@ as ICU's uhash would. And ICU passes skeletons by pointer, so once the month's
 pattern is found by extending the skeleton, the year's is looked for in the
 extended one. The interval patterns come from ICU's sources, merged along
 ICU's chain and following its calendar aliases, as DateIntervalInfo loads
-them.
+them. So does the fallback pattern a range is joined with when no interval
+pattern fits, which had stopped at a calendar's own table: English has
+Hebrew interval formats but no fallback among them, and the root's Hebrew
+ones are an alias to the locale's generic calendar's, so a Hebrew or
+Persian range was joined with no locale's fallback at all ("–" in Persian,
+where Node writes "تا"). The range recordings, nearly all Gregorian, had not
+reached it; the Temporal ones did.
 
 ### Numbering systems
 
