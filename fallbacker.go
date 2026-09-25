@@ -3,6 +3,8 @@ package intl
 import (
 	"fmt"
 	"strings"
+
+	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // The fallback chain, once CLDR has a say in it.
@@ -41,46 +43,41 @@ type Fallbacker struct {
 }
 
 // icuTree is ICU's index of one of its trees, read when a locale is
-// resolved in it and searched as the resolution needs it: the tree's
-// bundles, aliases and parents, and, only if a bundle is missing, the
-// tables ICU's fallback then reads.
+// resolved in it and looked up in where it lies: the tree's bundles,
+// aliases and parents, and, only if a bundle is missing, the tables ICU's
+// fallback then reads. availgen writes both as indexes (blob.Index).
 type icuTree struct {
 	src      Source
-	text     string // the tree's index, with a newline before the first line
-	fallback string // data/icufallback.bin, read when first needed
-}
-
-// line finds the rest of the line of text that begins with prefix.
-func line(text, prefix string) (string, bool) {
-	at := strings.Index(text, "\n"+prefix)
-	if at < 0 {
-		return "", false
-	}
-	rest := text[at+1+len(prefix):]
-	if end := strings.IndexByte(rest, '\n'); end >= 0 {
-		rest = rest[:end]
-	}
-	return rest, true
+	index    blob.Index
+	fallback *blob.Index // data/icufallback.bin, read when first needed
 }
 
 func (x *icuTree) has(name string) bool {
-	list, ok := line(x.text, "bundles ")
-	return ok && strings.Contains(" "+list+" ", " "+name+" ")
+	_, ok := x.index.Find("bundle " + name)
+	return ok
 }
 
-func (x *icuTree) value(prefix string) (string, bool) {
-	return line(x.text, prefix+" ")
+// value looks up "alias <name>" or "parent <name>".
+func (x *icuTree) value(key string) (string, bool) {
+	v, ok := x.index.Find(key)
+	return string(v), ok
 }
 
-func (x *icuTree) fallbackValue(prefix string) (string, bool) {
-	if x.fallback == "" {
+// fallbackValue looks up "defaultscript <name>" or "icuparent <name>".
+func (x *icuTree) fallbackValue(key string) (string, bool) {
+	if x.fallback == nil {
 		b, err := x.src.Open(MarkerICUFallback, DataLocale{})
 		if err != nil {
 			return "", false
 		}
-		x.fallback = "\n" + string(b)
+		index, err := blob.ReadIndex(b)
+		if err != nil {
+			return "", false
+		}
+		x.fallback = &index
 	}
-	return line(x.fallback, prefix+" ")
+	v, ok := x.fallback.Find(key)
+	return string(v), ok
 }
 
 // The trees of ICU's data a service's data comes from, for ChainIn.
@@ -114,7 +111,11 @@ func (f *Fallbacker) icuTree(tree string) (*icuTree, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return &icuTree{src: f.src, text: "\n" + string(b)}, true
+	index, err := blob.ReadIndex(b)
+	if err != nil {
+		return nil, false
+	}
+	return &icuTree{src: f.src, index: index}, true
 }
 
 // ChainIn is Chain for data read from one of ICU's trees: the bundles ICU

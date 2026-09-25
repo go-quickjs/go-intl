@@ -112,3 +112,33 @@ func TestSharedRoundTrip(t *testing.T) {
 		t.Error("a part past the pool's end went unnoticed")
 	}
 }
+
+// TestIndex finds each record of an index, and nothing else.
+func TestIndex(t *testing.T) {
+	records := map[string][]byte{"b": []byte("two"), "a": []byte("one"), "c": nil, "ab": []byte("x")}
+	b, err := BuildIndex(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, err := ReadIndex(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x.Len() != 4 {
+		t.Fatalf("Len = %d, want 4", x.Len())
+	}
+	for k, want := range records {
+		got, ok := x.Find(k)
+		if !ok || string(got) != string(want) {
+			t.Errorf("Find(%q) = %q, %v; want %q", k, got, ok, want)
+		}
+	}
+	for _, k := range []string{"", "aa", "d", "0"} {
+		if _, ok := x.Find(k); ok {
+			t.Errorf("Find(%q) found something", k)
+		}
+	}
+	if k, v := x.At(0); string(k) != "a" || string(v) != "one" {
+		t.Errorf("At(0) = %q %q", k, v)
+	}
+}

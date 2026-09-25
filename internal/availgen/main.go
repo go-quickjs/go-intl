@@ -28,6 +28,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -270,25 +271,26 @@ var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "
 
 // writeIndex writes what ICU's resource fallback reads, so that go-intl can
 // open, for any locale, the bundle ICU opens. Each tree has a file,
-// data/icutree-<tree>.bin: its bundles ("bundles <name>..."), those that are
-// aliases ("alias <name> <target>") and those that name their parent
-// ("parent <name> <parent>"). data/icufallback.bin holds the tables ICU
-// consults when a bundle does not exist: the default scripts
-// ("defaultscript sr_ME Latn") and parent locales ("icuparent en_150
-// en_001"). ICU opens an alias bundle as the one it names and, for one that
-// does not exist, drops a default script, so "sr-ME" is Serbian in Latin,
-// "zh-TW" traditional Chinese and "az-Arab", which ICU has no data for, the
-// root.
+// data/icutree-<tree>.bin, an index (blob.Index) of its bundles ("bundle
+// <name>"), those that are aliases ("alias <name>", the target) and those
+// that name their parent ("parent <name>", the parent). data/icufallback.bin
+// is an index of the tables ICU consults when a bundle does not exist: the
+// default scripts ("defaultscript sr_ME", Latn) and parent locales
+// ("icuparent en_150", en_001). ICU opens an alias bundle as the one it
+// names and, for one that does not exist, drops a default script, so
+// "sr-ME" is Serbian in Latin, "zh-TW" traditional Chinese and "az-Arab",
+// which ICU has no data for, the root. They are indexes so that a formatter
+// resolving its locale looks up what it needs where it lies.
 func writeIndex(zip string) error {
-	files := map[string][]string{}
+	files := map[string]map[string][]byte{}
 	for _, tree := range indexTrees {
 		t, err := icusrc.OpenTree(zip, tree)
 		if err != nil {
 			return err
 		}
-		names := t.Names()
-		out := []string{"bundles " + strings.Join(names, " ")}
-		for _, name := range names {
+		out := map[string][]byte{}
+		for _, name := range t.Names() {
+			out["bundle "+name] = nil
 			n, err := t.Get(name)
 			if err != nil {
 				t.Close()
@@ -298,10 +300,10 @@ func writeIndex(zip string) error {
 				continue
 			}
 			if a := n.Get("%%ALIAS"); a != nil && a.Value != "" {
-				out = append(out, "alias "+name+" "+a.Value)
+				out["alias "+name] = []byte(a.Value)
 			}
 			if p := n.Get("%%Parent"); p != nil && p.Value != "" {
-				out = append(out, "parent "+name+" "+p.Value)
+				out["parent "+name] = []byte(p.Value)
 			}
 		}
 		t.Close()
@@ -311,23 +313,30 @@ func writeIndex(zip string) error {
 	if err != nil {
 		return err
 	}
-	var tables []string
+	tables := map[string][]byte{}
 	for k, v := range defaults {
-		tables = append(tables, "defaultscript "+k+" "+v)
+		tables["defaultscript "+k] = []byte(v)
 	}
 	for k, v := range parents {
-		tables = append(tables, "icuparent "+k+" "+v)
+		tables["icuparent "+k] = []byte(v)
 	}
-	sort.Strings(tables)
 	files["icufallback.bin"] = tables
 	// Every file is built before any is written.
-	for name, lines := range files {
+	built := map[string][]byte{}
+	for name, records := range files {
+		b, err := blob.BuildIndex(records)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		built[name] = b
+	}
+	for name, b := range built {
 		target := filepath.Join("data", name)
-		if err := os.WriteFile(target+".tmp", []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		if err := os.WriteFile(target+".tmp", b, 0o644); err != nil {
 			return err
 		}
 	}
-	for name := range files {
+	for name := range built {
 		target := filepath.Join("data", name)
 		if err := os.Rename(target+".tmp", target); err != nil {
 			return err
