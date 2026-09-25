@@ -13,7 +13,7 @@ import "strings"
 // The choice is made divergence by divergence, because a host may want Node
 // in most places and the standard in a few: go-quickjs answers as Node does
 // but for the Japanese twelve-hour clock, the Islamic eras, Temporal's
-// formats and the keyword value "yes". Standard and NodeICU are the two ends.
+// formats, the keyword value "yes" and the currencies DisplayNames names. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -51,6 +51,9 @@ const (
 	// YesValues leaves "yes" out of any Unicode extension keyword, as ICU
 	// does, rather than only where it stands for "true".
 	YesValues
+	// CurrencyNames names every currency CLDR has a name for, where the
+	// standard names only those Intl.supportedValuesOf lists.
+	CurrencyNames
 )
 
 const (
@@ -59,7 +62,7 @@ const (
 	// NodeICU reproduces Node's and ICU4C's observable behavior in every
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
-		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues
+		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -160,6 +163,16 @@ var Divergences = []Divergence{
 			"so \"und-u-ka-yes\" stays as it is",
 		Node: "ICU takes \"yes\" for any key as \"true\" and leaves it out: " +
 			"\"und-u-ka-yes\" is \"und-u-ka\"",
+	},
+	{
+		Name: "CurrencyNames", Flag: CurrencyNames,
+		Area: "DisplayNames",
+		What: "a currency Intl.supportedValuesOf does not list",
+		Standard: "ECMA-402's AvailableCurrencies are the currencies DisplayNames and NumberFormat " +
+			"provide for, so DisplayNames names only those: the Andorran peseta, ADP, has no name " +
+			"(test262's currencies-accepted-by-DisplayNames)",
+		Node: "V8 lists ICU's current currencies but names every one CLDR does: " +
+			"\"Andorran Peseta\"",
 	},
 }
 

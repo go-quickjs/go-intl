@@ -178,3 +178,37 @@ func TestYesValues(t *testing.T) {
 		}
 	}
 }
+
+// A currency Intl.supportedValuesOf does not list: named only on Node's
+// side, as test262's currencies-accepted-by-DisplayNames requires of the
+// standard. The Node side's expectation is Node's.
+func TestCurrencyNames(t *testing.T) {
+	loc, _ := intl.ParseLocale("en")
+	for _, c := range []struct {
+		compat    intl.Compat
+		adp, name string
+		found     bool
+	}{
+		{intl.Standard, "ADP", "", false},
+		{intl.CurrencyNames, "ADP", "Andorran Peseta", true},
+	} {
+		d, err := intl.NewDisplayNames(loc, intl.DisplayNamesOptions{Kind: intl.DisplayCurrency,
+			Fallback: intl.FallbackNone, Compat: c.compat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := d.Of(c.adp); got != c.name || ok != c.found {
+			t.Errorf("%v: %s is %q %v, want %q %v", c.compat, c.adp, got, ok, c.name, c.found)
+		}
+		// Every listed currency is named on both sides.
+		codes, err := intl.Currencies()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, code := range codes {
+			if _, ok := d.Of(code); !ok {
+				t.Errorf("%v: listed %s has no name", c.compat, code)
+			}
+		}
+	}
+}

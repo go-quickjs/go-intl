@@ -2,6 +2,7 @@ package intl
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/namedata"
@@ -85,6 +86,8 @@ type DisplayNamesOptions struct {
 	Style           DisplayStyle
 	Fallback        DisplayFallback
 	LanguageDisplay LanguageDisplay
+
+	Compat Compat
 }
 
 // A DisplayNames answers what things are called in one locale. It never
@@ -95,6 +98,9 @@ type DisplayNames struct {
 	data     *namedata.Locale
 	width    int
 	currency *numdata.Locale
+	// available are the currencies Intl.supportedValuesOf lists, sorted,
+	// which are the only ones named on the standard side (CurrencyNames).
+	available []string
 }
 
 // NewDisplayNames builds one from the data built into the package.
@@ -129,6 +135,11 @@ func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*Dis
 		// is also used to write an amount out in words.
 		if d.currency, err = loadNumbers(src, loc); err != nil {
 			return nil, err
+		}
+		if !opts.Compat.Has(CurrencyNames) {
+			if d.available, err = CurrenciesFrom(src); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return d, nil
@@ -178,7 +189,15 @@ func (d *DisplayNames) lookup(code string) (string, bool) {
 		if d.currency == nil {
 			return "", false
 		}
-		c, ok := d.currency.Currency(strings.ToUpper(code))
+		code = strings.ToUpper(code)
+		if !d.opts.Compat.Has(CurrencyNames) {
+			// ECMA-402's AvailableCurrencies are the currencies DisplayNames
+			// names, so a currency it does not list has no name.
+			if _, found := slices.BinarySearch(d.available, code); !found {
+				return "", false
+			}
+		}
+		c, ok := d.currency.Currency(code)
 		if !ok {
 			return "", false
 		}
