@@ -174,12 +174,12 @@ func readMeta(archive *zip.ReadCloser) (*zonedata.Meta, error) {
 
 // minutes turns metaZones.txt's "1970-01-01 00:00", which is UTC, into
 // minutes since 1970 plus one, so that zero can mean unbounded.
-func minutes(s string) (int, error) {
+func minutes(s string) (int64, error) {
 	t, err := time.Parse("2006-01-02 15:04", s)
 	if err != nil {
 		return 0, fmt.Errorf("metaZones.txt: %w", err)
 	}
-	m := int(t.Unix()/60) + 1
+	m := t.Unix()/60 + 1
 	if m < 1 {
 		return 0, fmt.Errorf("metaZones.txt: %s is before 1970", s)
 	}

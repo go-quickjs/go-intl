@@ -34,6 +34,15 @@ func (w *Writer) Uint(v int) {
 	w.b = binary.AppendUvarint(w.b, uint64(v))
 }
 
+// Uint64 appends a number that may not fit a 32-bit int. It is written as
+// Uint writes it; only the reading differs.
+func (w *Writer) Uint64(v int64) {
+	if v < 0 {
+		v = 0
+	}
+	w.b = binary.AppendUvarint(w.b, uint64(v))
+}
+
 // Bytes returns the finished table.
 func (w *Writer) Bytes() []byte { return w.b }
 
@@ -88,8 +97,20 @@ func (r *Reader) Bytes() []byte {
 	return b
 }
 
-// Uint reads the next number.
+// Uint reads the next number. One too large for an int, which on a 32-bit
+// platform is 32 bits, is a failure rather than a number wrapped round; a
+// table that holds such numbers reads them with Uint64.
 func (r *Reader) Uint() int {
+	v := r.Uint64()
+	if int64(int(v)) != v {
+		r.err = fmt.Errorf("blob: %d does not fit an int", v)
+		return 0
+	}
+	return int(v)
+}
+
+// Uint64 reads the next number as 64 bits, whatever the platform.
+func (r *Reader) Uint64() int64 {
 	if r.err != nil {
 		return 0
 	}
@@ -98,8 +119,12 @@ func (r *Reader) Uint() int {
 		r.err = fmt.Errorf("blob: a number is cut short")
 		return 0
 	}
+	if v > 1<<63-1 {
+		r.err = fmt.Errorf("blob: %d does not fit an int64", v)
+		return 0
+	}
 	r.b = r.b[n:]
-	return int(v)
+	return int64(v)
 }
 
 // Left reports how many bytes have not been read.

@@ -201,7 +201,7 @@ func EncodeLocale(l *Locale) []byte {
 	w.Uint(len(l.Collations))
 	for _, c := range l.Collations {
 		w.String(c.Name)
-		w.Uint(int(c.Meta))
+		w.Uint64(int64(c.Meta))
 		if c.Data == nil {
 			w.Uint(0)
 		} else {
@@ -212,7 +212,7 @@ func EncodeLocale(l *Locale) []byte {
 			w.Uint(0)
 		} else {
 			w.Uint(1)
-			w.Uint(int(c.Reordering.MinHighNoReorder))
+			w.Uint64(int64(c.Reordering.MinHighNoReorder))
 			w.String(string(c.Reordering.Table[:]))
 			w.String(u32s(c.Reordering.Ranges))
 		}
@@ -241,7 +241,7 @@ func DecodeLocale(b []byte) (*Locale, error) {
 	for i := 0; i < n; i++ {
 		var c Collation
 		c.Name = r.String()
-		c.Meta = uint32(r.Uint())
+		c.Meta = uint32(r.Uint64())
 		if r.Uint() == 1 {
 			d, err := decodeData(r)
 			if err != nil {
@@ -251,7 +251,7 @@ func DecodeLocale(b []byte) (*Locale, error) {
 		}
 		if r.Uint() == 1 {
 			var o Reordering
-			o.MinHighNoReorder = uint32(r.Uint())
+			o.MinHighNoReorder = uint32(r.Uint64())
 			table := r.String()
 			if len(table) != len(o.Table) && r.Err() == nil {
 				return nil, fmt.Errorf("colldata: a reordering table of %d bytes", len(table))

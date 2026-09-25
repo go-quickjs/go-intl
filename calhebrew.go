@@ -1,5 +1,7 @@
 package intl
 
+import "math"
+
 // The Hebrew calendar, as ICU 78 reckons it (hebrwcal.cpp): lunar months
 // kept to the solar year by a thirteenth month, Adar I, in seven years of
 // every nineteen, and a year that starts at the new moon of Tishri, put off
@@ -44,11 +46,12 @@ func hebrewLeap(year int) bool {
 }
 
 // hebrewYearStart is startOfYear: the day, from ICU's Hebrew epoch, Tishri 1
-// of a year falls on.
+// of a year falls on. The parts of a day since the epoch outgrow 32 bits,
+// and are counted in 64, as ICU counts them.
 func hebrewYearStart(year int) int {
-	months := floorDiv(235*year-234, 19)
+	months := int64(floorDiv(235*year-234, 19))
 	frac := months*hebrewMonthFract + hebrewBaharad
-	day := months*29 + frac/hebrewDayParts
+	day := int(months*29 + frac/hebrewDayParts)
 	frac %= hebrewDayParts
 	wd := day % 7 // 0 is Monday
 	switch {
@@ -87,9 +90,10 @@ func hebrewYearType(year int) int {
 // ICU's numbering from one (Adar I is 6 in any year), the day and the day
 // of the year.
 func hebrewDate(jd int) (year, month, day, dayOfYear int) {
+	// The estimate of the year is ICU's, in doubles.
 	d := jd - 347997
-	m := floorDiv(d*hebrewDayParts, hebrewMonthParts)
-	year = floorDiv(19*m+234, 235) + 1
+	m := math.Floor(float64(d) * float64(hebrewDayParts) / float64(hebrewMonthParts))
+	year = int(math.Floor((float64(19.*m)+234.)/235.) + 1.)
 	dayOfYear = d - hebrewYearStart(year)
 	for dayOfYear < 1 {
 		year--

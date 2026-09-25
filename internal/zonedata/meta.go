@@ -38,10 +38,12 @@ type MetaZone struct {
 }
 
 // A Use is a stretch of time a zone belonged to a metazone. From and To are
-// minutes since 1970 in UTC, plus one; zero means unbounded.
+// minutes since 1970 in UTC, plus one; zero means unbounded. They are 64
+// bits: ICU ends a use that has not ended at 9999-12-31, which is more
+// minutes than a 32-bit int holds.
 type Use struct {
 	Metazone string
-	From, To int
+	From, To int64
 }
 
 // An Alias maps one name to another: an identifier to its canonical zone, or
@@ -116,8 +118,8 @@ func EncodeMeta(m *Meta) []byte {
 		b.Uint(len(z.Uses))
 		for _, u := range z.Uses {
 			b.String(u.Metazone)
-			b.Uint(u.From)
-			b.Uint(u.To)
+			b.Uint64(u.From)
+			b.Uint64(u.To)
 		}
 	}
 	for _, list := range [][]Alias{m.Aliases, m.Primary} {
@@ -164,7 +166,7 @@ func DecodeMeta(data []byte) (*Meta, error) {
 		}
 		z.Uses = make([]Use, uses)
 		for j := range z.Uses {
-			z.Uses[j] = Use{Metazone: r.String(), From: r.Uint(), To: r.Uint()}
+			z.Uses[j] = Use{Metazone: r.String(), From: r.Uint64(), To: r.Uint64()}
 		}
 	}
 	for _, list := range []*[]Alias{&m.Aliases, &m.Primary} {

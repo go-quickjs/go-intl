@@ -125,7 +125,7 @@ func (info *zoneInfo) metazone(t time.Time) string {
 	if info.meta == nil {
 		return ""
 	}
-	m := int(t.Unix()/60) + 1
+	m := t.Unix()/60 + 1
 	if t.Unix() < 0 && t.Unix()%60 != 0 {
 		m-- // round toward the past
 	}
