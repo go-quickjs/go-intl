@@ -169,12 +169,13 @@ func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*Plura
 // loadPlurals walks the fallback chain until a locale has rules. A language
 // with none is not an error: the root has a single "other", which is right for
 // a language that makes no distinction.
+//
+// The chain is truncation alone, as ICU's PluralRules walks it
+// (getRuleFromResource, by uloc_getParent), not CLDR's parent locales: a
+// Serbian written in Latin, whose parent is the root, still counts as
+// Serbian does, so "1 sat" is singular.
 func loadPlurals(src Source, loc Locale) (*plurdata.Locale, error) {
-	chain := loc.Fallback()
-	if f, err := NewFallbacker(src); err == nil {
-		chain = f.Chain(loc.Data())
-	}
-	for _, d := range chain {
+	for _, d := range loc.Fallback() {
 		b, err := src.Open(MarkerPlurals, d)
 		if err != nil {
 			continue
