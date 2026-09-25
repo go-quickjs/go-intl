@@ -109,3 +109,36 @@ func TestJapaneseCalendar(t *testing.T) {
 		}
 	}
 }
+
+// TestISO8601Calendar pins the ISO 8601 calendar to Node: the root's own
+// patterns over the locale's names, and the era names ICU 78 is left with
+// for want of era rules -- none, but the narrow one before the common era.
+func TestISO8601Calendar(t *testing.T) {
+	dates := []time.Time{
+		time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC),
+		time.Date(-5, 1, 5, 0, 0, 0, 0, time.UTC),
+	}
+	for _, c := range []struct {
+		tag  string
+		opts intl.DateTimeFormatOptions
+		want []string
+	}{
+		{"en-u-ca-iso8601", intl.DateTimeFormatOptions{TimeZone: "UTC", Era: intl.WidthLong, Year: intl.WidthNumeric},
+			[]string{" 2024", " 6"}},
+		{"en-u-ca-iso8601", intl.DateTimeFormatOptions{TimeZone: "UTC", Era: intl.WidthNarrow, Year: intl.WidthNumeric},
+			[]string{" 2024", "B 6"}},
+		{"en-u-ca-iso8601", intl.DateTimeFormatOptions{TimeZone: "UTC", DateStyle: intl.LengthFull},
+			[]string{"2024 January 5, Friday", "6 January 5, Thursday"}},
+		{"en-u-ca-iso8601", intl.DateTimeFormatOptions{TimeZone: "UTC", DateStyle: intl.LengthShort},
+			[]string{"2024-01-05", "6-01-05"}},
+		{"de-u-ca-iso8601", intl.DateTimeFormatOptions{TimeZone: "UTC", DateStyle: intl.LengthMedium, TimeStyle: intl.LengthShort},
+			[]string{"2024 Jan. 5, 00:00", "6 Jan. 5, 00:00"}},
+	} {
+		f := newDateTime(t, c.tag, c.opts)
+		for i, d := range dates {
+			if got := f.Format(d); got != c.want[i] {
+				t.Errorf("%s %v = %q, want %q", c.tag, d.Format("2006-01-02"), got, c.want[i])
+			}
+		}
+	}
+}

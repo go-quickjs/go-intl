@@ -185,6 +185,10 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		if greg.IntervalFallback, greg.Intervals, err = intervalsFromICU(chain, "gregorian"); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		iso := isoCalendar(*greg, chain)
+		if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, "iso8601"); err != nil {
+			return fmt.Errorf("%s: iso8601: %w", e.Name(), err)
+		}
 		for i := range extras {
 			other, ok := packageOf(others, extras[i].pkg)
 			if !ok {
@@ -208,6 +212,7 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 				Name: extras[i].bcp47, Calendar: *c,
 			})
 		}
+		l.Calendars = append(l.Calendars, datedata.NamedCalendar{Name: "iso8601", Calendar: *iso})
 		built[e.Name()] = datedata.Encode(l)
 	}
 	if len(built) == 0 {

@@ -555,9 +555,9 @@ ICU uses").
 
 ### Calendars
 
-Twelve of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
+Thirteen of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
 Coptic, Ethiopic, Ethiopic Amete Alem, Indian, civil and tabular Islamic,
-ROC, Hebrew and Japanese. Each is ICU 78's arithmetic, from the ICU source named in its
+ROC, Hebrew, Japanese and ISO 8601. Each is ICU 78's arithmetic, from the ICU source named in its
 comments, and matches go-quickjs's arithmetic wherever both were compared.
 `testdata/datetime_calendars_node.js` records every calendar Node supports
 in forty locales, dates from 1900 to 2077; the implemented ones all match,
@@ -583,6 +583,14 @@ come) are subclasses and keep Julian dates before October 1582. And a
 calendar with one era counts its years back through zero before it, so the
 Islamic year of AD 200 is -435.
 
+ISO 8601 is the Gregorian arithmetic with the root's own patterns ("y MMMM
+d, EEEE", "y-MM-dd") over the locale's Gregorian names, weeks from Monday
+needing four days, and the Gregorian glue between date and time, which it
+has none of. Its era names are ICU's accident: supplementalData has no era
+rules for it, and DateFormatSymbols is left with no wide or abbreviated
+names and only the first narrow one, so Node writes " 2024" for an era and
+a year, and "B 6" before the common era in English.
+
 The algorithmic numbering systems date patterns name -- Roman numerals for
 Hawaiian months, Hebrew numerals, the Japanese era year that calls its first
 year 元, the Chinese calendar's days -- are ICU's rule-based number formats.
@@ -590,7 +598,7 @@ go-intl carries ICU's rules (`data/rbnf.bin`, 23 KB) and interprets them, as
 nfrule.cpp and nfrs.cpp do, for whole numbers. The hand-written Roman
 numerals it replaced agreed with it.
 
-The date data is 50 MB with twelve calendars, up from 9 MB with three: each
+The date data is 53 MB with thirteen calendars, up from 9 MB with three: each
 calendar keeps its own copy of names and patterns that often repeat the
 Gregorian ones, and every locale repeats the Japanese calendar's 237 era
 names in three widths. That is for the data-size decision below: storing
@@ -603,7 +611,6 @@ answers are not:
 
 | Calendar | Source |
 |---|---|
-| ISO 8601 | the Gregorian arithmetic, with ICU's root patterns |
 | Umm al-Qura | ICU's table of month lengths, from its source, as input data |
 | Islamic, Islamic (Saudi) | ICU's CalendarAstronomer, ported |
 | Chinese, Dangi | ICU's ChineseCalendar and CalendarAstronomer, ported; leap-month patterns and cyclic year names from CLDR |
@@ -629,7 +636,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 12 of 17 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 13 of 17 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -677,7 +684,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| DateTimeFormat | done | 5 calendars: ISO 8601, Islamic, Islamic (Saudi), Umm al-Qura, Chinese, Dangi; see "Calendars" |
+| DateTimeFormat | done | 5 calendars: Islamic, Islamic (Saudi), Umm al-Qura, Chinese, Dangi; see "Calendars" |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 

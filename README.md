@@ -44,7 +44,7 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 | Service | State |
 |---|---|
 | `NumberFormat` | Complete: every style, notation, rounding option and numbering system, exact decimal input (`ParseDecimal`, `FormatDecimal`), ranges |
-| `DateTimeFormat` | Complete in twelve calendars -- Gregorian, Buddhist, Persian, Coptic, Ethiopic (both eras), Indian, civil and tabular Islamic, ROC, Hebrew, Japanese: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges. ISO 8601, the astronomical Islamic ones, Chinese and Dangi are to come |
+| `DateTimeFormat` | Complete in thirteen calendars -- Gregorian, Buddhist, Persian, Coptic, Ethiopic (both eras), Indian, civil and tabular Islamic, ROC, Hebrew, Japanese, ISO 8601: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges. The astronomical Islamic ones, Umm al-Qura, Chinese and Dangi are to come |
 | `PluralRules` | Complete, with `SelectRange` |
 | `Collator` | Complete but for Korean `searchjl`: every other tailoring, sensitivity, numeric ordering, case order |
 | `ListFormat`, `RelativeTimeFormat`, `DisplayNames` | Complete |

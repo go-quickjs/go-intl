@@ -273,6 +273,11 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 	if hasWeek {
 		f.week = loadWeekRules(src, loc)
+		if system == ISO8601 {
+			// ISO8601Calendar's weeks start on Monday and need four days,
+			// wherever the locale is.
+			f.week = weekRules{firstDay: 1, minDays: 4}
+		}
 	}
 	// Most patterns write no zone, and the zone names are much the largest
 	// thing a formatter would otherwise read.

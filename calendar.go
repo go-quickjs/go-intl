@@ -45,6 +45,9 @@ const (
 	Hebrew CalendarSystem = "hebrew"
 	// Japanese counts the Gregorian years by the eras of Japan's reigns.
 	Japanese CalendarSystem = "japanese"
+	// ISO8601 is the Gregorian calendar written in ISO 8601's order, with
+	// weeks from Monday.
+	ISO8601 CalendarSystem = "iso8601"
 )
 
 // implemented lists the calendars this can reckon in. The rest of CLDR's are
@@ -62,6 +65,7 @@ var implemented = map[CalendarSystem]bool{
 	ROC:               true,
 	Hebrew:            true,
 	Japanese:          true,
+	ISO8601:           true,
 }
 
 // calendarPreferences maps a region to the calendar it reckons in, as lines of
