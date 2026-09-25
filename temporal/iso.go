@@ -39,7 +39,7 @@ func regulateISODate(year, month, day int, overflow Overflow) (ISODate, error) {
 		return ISODate{year, month, clamp(day, 1, gregorianMonthLength(year, month))}, nil
 	}
 	if !validISODate(year, month, day) {
-		return ISODate{}, rangeError("not a valid ISO date")
+		return ISODate{}, rangeError("not a valid ISO date.")
 	}
 	return ISODate{year, month, day}, nil
 }
@@ -52,7 +52,7 @@ func newISODate(year, month, day int, overflow Overflow) (ISODate, error) {
 		return ISODate{}, err
 	}
 	if !d.withinLimits() {
-		return ISODate{}, rangeError("date out of range")
+		return ISODate{}, rangeError("Date is not within ISO date time limits.")
 	}
 	return d, nil
 }
@@ -121,7 +121,7 @@ func addISODate(d ISODate, dur DateDuration, overflow Overflow) (ISODate, error)
 	}
 	days := ISODate{intermediate.Year, intermediate.Month, 1}.EpochDays() + int64(intermediate.Day) + dur.Days + 7*dur.Weeks - 1
 	if days > maxEpochDays || days < -maxEpochDays {
-		return ISODate{}, rangeError("epoch days exceed maximum range")
+		return ISODate{}, rangeError("epoch days exceed maximum range.")
 	}
 	return ISODateFromEpochDays(days), nil
 }

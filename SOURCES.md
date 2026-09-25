@@ -33,7 +33,7 @@ authority.
 | ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`); each service's available locales, from the locale and collation trees, their `LOCALE_DEPS.json` and `misc/plurals.txt`, and the collations, currencies and time zones `supportedValuesOf` lists, from the collation and currency trees, `keyTypeData.txt`, `zoneinfo64.txt` and `timezoneTypes.txt` (`availgen`) | yes |
 | ICU's compiled data | `icudt78l.dat` in `icu4c-78.3-sources.tgz` | the break rules and dictionaries (`segmentgen`) | yes: Node carries this data |
 | Unicode (UCD) properties | 17.0.0 `Scripts.txt`, `LineBreak.txt`, `extracted/DerivedGeneralCategory.txt` | the break engines' sets and the Script property (`segmentgen`) | yes, from node |
-| Temporal's crates | `temporal_rs` 0.2.3, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0 | the `temporal` package: Temporal's calendars and arithmetic | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
+| Temporal's crates | `temporal_rs` 0.2.3, `temporal_capi` 0.2.3, `ixdtf` 0.6.4, `timezone_provider` 0.2.3, `zoneinfo64` 0.3.0, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0, `icu_locale_core` 2.2.0 | the `temporal` package: Temporal's calendars, arithmetic, parsing and zones; Temporal's zone names (`tzidgen`) | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
 | V8 | as Node v26.10.0 vendors it, `deps/v8` | the `date` package: Date's offset cache, parser and strings, ported; no data | yes, from node |
 
 CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
@@ -115,12 +115,23 @@ Other URLs:
   `icu_calendar` 2.2.1 (sha256 `a2b2acc6263f494f1df50685b53ff8e57869e47d5c6fe39c23d518ae9a4f3e45`),
   `icu_calendar_data` 2.2.0 (`118577bcf3a0fa7c6ac0a7d6e951814da84ee56b9b1f68fb4d8d10b08cefaf4d`),
   `calendrical_calculations` 0.2.4 (`5abbd6eeda6885048d357edc66748eea6e0268e3dd11f326fff5bd248d779c26`)
-  and `temporal_rs` 0.2.3 (`9a902a45282e5175186b21d355efc92564601efe6e2d92818dc9e333d50bd4de`).
+  `temporal_rs` 0.2.3 (`9a902a45282e5175186b21d355efc92564601efe6e2d92818dc9e333d50bd4de`),
+  `temporal_capi` 0.2.3 (`8a2a1f001e756a9f5f2d175a9965c4c0b3a054f09f30de3a75ab49765f2deb36`),
+  `ixdtf` 0.6.4 (`84de9d95a6d2547d9b77ee3f25fa0ee32e3c3a6484d47a55adebc0439c077992`),
+  `timezone_provider` 0.2.3 (`c48f9b04628a2b813051e4dfe97c65281e49625eabd09ec343190e31e399a8c2`),
+  `zoneinfo64` 0.3.0 (`ed6eb2607e906160c457fd573e9297e65029669906b9ac8fb1b5cd5e055f0705`)
+  and `icu_locale_core` 2.2.0 (`92219b62b3e2b4d88ac5119f8904c10f8f61bf7e95b640d25ba3075e6cac2c29`).
   They are Temporal's implementation in Node, and the `temporal` package is
   ported from them at these versions, not from the ICU4X checkout, which is
-  newer. `temporalgen` reads `icu_calendar`'s crate, after checking its
-  checksum, for the four source files that are data: the Chinese, Korean
-  and Qing years and the Umm al-Qura years.
+  newer: temporal_rs's types and operations, temporal_capi's conversions
+  (built, as Node builds it, with `float64_representable_durations`),
+  ixdtf's parser, zoneinfo64's reading of ICU's zone data, and
+  icu_locale_core's parsing of a calendar name. `temporalgen` reads
+  `icu_calendar`'s crate, after checking its checksum, for the four source
+  files that are data: the Chinese, Korean and Qing years and the Umm
+  al-Qura years. `tzidgen` reads `timezone_provider`'s the same way, for
+  `src/data/iana_normalizer.rs.data`, the zone names Temporal takes and
+  their links, built from tz 2025c, into `data/temporalzones.bin`.
 - V8 as Node v26.10.0 vendors it, `https://github.com/nodejs/node/tree/v26.10.0/deps/v8`:
   `src/date/date.{h,cc}` (the offset cache, `ToDateString`, the day and
   year arithmetic), `src/date/dateparser*` (`Date.parse`),
@@ -128,7 +139,11 @@ Other URLs:
   `src/objects/js-objects.cc` (`JSDate`, which reads local time whenever
   its value is set) and `src/objects/intl-objects.cc`
   (`ICUTimezoneCache`). The `date` package is ported from these and reads
-  no data of its own: zones and zone names are go-intl's.
+  no data of its own: zones and zone names are go-intl's. For Temporal,
+  `src/objects/js-temporal-objects.cc` and `src/builtins/builtins-temporal.cc`
+  (how V8 reads JavaScript's values and options before it calls
+  temporal_rs, and the messages it throws itself), which the `temporal`
+  package's Node replay ports and the package leaves to the engine.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
   Five files are read, and all are vendored in `internal/icusrc`:

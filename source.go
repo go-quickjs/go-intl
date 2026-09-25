@@ -87,6 +87,9 @@ const (
 	// MarkerTemporalCalendars is ICU4X's tables of the Chinese, Korean and
 	// Umm al-Qura years, which the temporal package's calendars read.
 	MarkerTemporalCalendars Marker = "temporalcalendars"
+	// MarkerTemporalZones is the time zone names Temporal takes, from
+	// timezone_provider's table, and the primary name of each link.
+	MarkerTemporalZones Marker = "temporalzones"
 	// MarkerRBNF is ICU's rules for its algorithmic numbering systems, the
 	// Roman and Hebrew numerals among them.
 	MarkerRBNF Marker = "rbnf"

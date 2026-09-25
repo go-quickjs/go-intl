@@ -51,7 +51,7 @@ func (d arithDate) rataDie() int64 { return d.y.rataDie(d.month, d.day) }
 
 // fromFields is ArithmeticDate::from_fields.
 func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arithDate, error) {
-	notEnough := typeError("not enough fields")
+	notEnough := typeError("Insufficient fields.")
 	day := 0
 	switch {
 	case f.day != nil:
@@ -71,7 +71,7 @@ func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arit
 		}
 		m, ok := parseMonthCode(*f.monthCode)
 		if !ok {
-			return month{}, rangeError("invalid month code syntax")
+			return month{}, rangeError("Invalid month code.")
 		}
 		return m, nil
 	}
@@ -81,7 +81,7 @@ func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arit
 		switch {
 		case f.extendedYear != nil:
 			if *f.extendedYear < generousYearMin || *f.extendedYear > generousYearMax {
-				return arithDate{}, rangeError("year out of range")
+				return arithDate{}, rangeError("Date error.")
 			}
 			y = c.r.year(*f.extendedYear)
 		case missing == missingReject:
@@ -108,15 +108,15 @@ func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arit
 		}
 	case f.era != nil && f.eraYear != nil:
 		if *f.eraYear < generousYearMin || *f.eraYear > generousYearMax {
-			return arithDate{}, rangeError("year out of range")
+			return arithDate{}, rangeError("Date error.")
 		}
 		extended, ok := c.r.extendedFromEra(*f.era, *f.eraYear)
 		if !ok {
-			return arithDate{}, rangeError("unknown era %q", *f.era)
+			return arithDate{}, rangeError("Unknown era.")
 		}
 		y = c.r.year(extended)
 		if f.extendedYear != nil && *f.extendedYear != y.extended {
-			return arithDate{}, rangeError("year does not match era and eraYear")
+			return arithDate{}, rangeError("Inconsistent year.")
 		}
 	default:
 		// An era and an era year come together or not at all.
@@ -133,7 +133,7 @@ func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arit
 			return arithDate{}, err
 		}
 		if f.ordinalMonth != nil && *f.ordinalMonth != computed {
-			return arithDate{}, rangeError("month does not match monthCode")
+			return arithDate{}, rangeError("Inconsistent month/monthCode.")
 		}
 		ordinal = computed
 	} else {
@@ -142,17 +142,17 @@ func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arit
 	if overflow == Constrain {
 		ordinal = clamp(ordinal, 1, y.count)
 	} else if ordinal < 1 || ordinal > y.count {
-		return arithDate{}, rangeError("month %d out of range, the year has %d", ordinal, y.count)
+		return arithDate{}, rangeError("Month out of range")
 	}
 	n := y.monthLength(ordinal)
 	if overflow == Constrain {
 		day = clamp(day, 1, n)
 	} else if day < 1 || day > n {
-		return arithDate{}, rangeError("day %d out of range, the month has %d", day, n)
+		return arithDate{}, rangeError("Day out of range")
 	}
 	d := arithDate{y, ordinal, day}
 	if rd := d.rataDie(); rd < validRDMin || rd > validRDMax {
-		return arithDate{}, rangeError("date out of range")
+		return arithDate{}, rangeError("Date error.")
 	}
 	return d, nil
 }
@@ -160,9 +160,9 @@ func (c *Calendar) fromFields(f icuFields, overflow Overflow, missing int) (arit
 func monthError(e errMonth) error {
 	switch e {
 	case monthNotInCalendar:
-		return rangeError("month not in calendar")
+		return rangeError("Month code not in calendar.")
 	case monthNotInYear:
-		return rangeError("month not in year")
+		return rangeError("Month code not in year.")
 	}
 	return nil
 }
@@ -170,9 +170,9 @@ func monthError(e errMonth) error {
 func referenceError(e errReference) error {
 	switch e {
 	case referenceNotInCalendar:
-		return rangeError("month not in calendar")
+		return rangeError("Month code not in calendar.")
 	case referenceUseRegularIfConstrain:
-		return rangeError("month not in year")
+		return rangeError("Month code not in year.")
 	}
 	return nil
 }
@@ -238,29 +238,29 @@ func (d icuDuration) addWeeksAndDaysTo(day int) int {
 func (c *Calendar) added(d arithDate, dur icuDuration, overflow Overflow) (arithDate, error) {
 	if dur.years > generousMaxYears || dur.months > generousMaxMonths ||
 		dur.weeks*7+dur.days > generousMaxDays {
-		return arithDate{}, rangeError("duration out of range")
+		return arithDate{}, rangeError("Overflow during addition.")
 	}
 	extended := dur.addYearsTo(d.y.extended)
 	if extended < generousYearMin || extended > generousYearMax {
-		return arithDate{}, rangeError("year out of range")
+		return arithDate{}, rangeError("Overflow during addition.")
 	}
 	y0 := c.r.year(extended)
 	base := c.r.monthFromOrdinal(d.y, d.month)
 	m0, merr := c.r.ordinalFromMonth(y0, base, overflow == Constrain)
 	if merr != monthOK {
-		return arithDate{}, rangeError("month not in year")
+		return arithDate{}, rangeError("Month code not in year.")
 	}
 	endOfMonth := c.balance(y0, dur.addMonthsTo(m0)+1, 0)
 	regulated := d.day
 	if d.day > endOfMonth.day {
 		if overflow == Reject {
-			return arithDate{}, rangeError("day %d out of range, the month has %d", d.day, endOfMonth.day)
+			return arithDate{}, rangeError("Day out of range")
 		}
 		regulated = endOfMonth.day
 	}
 	out := c.balance(endOfMonth.y, endOfMonth.month, dur.addWeeksAndDaysTo(regulated))
 	if rd := out.rataDie(); rd < validRDMin || rd > validRDMax {
-		return arithDate{}, rangeError("date out of range")
+		return arithDate{}, rangeError("Overflow during addition.")
 	}
 	return out, nil
 }

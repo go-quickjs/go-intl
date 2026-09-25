@@ -36,6 +36,10 @@ type timeZone struct {
 	final      *finalZone
 	finalStart int64 // milliseconds: 1 January of the final rule's first year
 	finalYear  int
+	// finalRaw and finalRule are the final rule as zoneinfo64 has it: the
+	// raw offset and ICU's eleven numbers.
+	finalRaw  int
+	finalRule []int
 
 	// firstTrans is OlsonTimeZone's firstTZTransitionIdx: the first
 	// transition to a type other than the initial one.
@@ -163,6 +167,7 @@ func (z *timeZone) parse(b []byte) error {
 			}
 			z.final = f
 			z.finalYear = n[1]
+			z.finalRaw, z.finalRule = n[0], n[2:]
 			z.finalStart = gregoDay(n[1], 0, 1) * msPerDay
 		}
 	}

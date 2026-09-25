@@ -34,7 +34,7 @@ func (c *Calendar) YearMonthFromFields(f CalendarFields, overflow Overflow) (ISO
 		return newYearMonth(y, m, d, overflow)
 	}
 	if f.Year == nil && f.EraYear == nil {
-		return ISODate{}, typeError("must specify year for YearMonth")
+		return ISODate{}, typeError("Must specify year for YearMonth")
 	}
 	d, err := c.fromFields(toICUFields(&f), overflow, missingECMA)
 	if err != nil {
@@ -51,7 +51,7 @@ func newYearMonth(year, month, day int, overflow Overflow) (ISODate, error) {
 		return ISODate{}, err
 	}
 	if !yearMonthWithinLimits(d.Year, d.Month) {
-		return ISODate{}, rangeError("exceeded valid range")
+		return ISODate{}, rangeError("Exceeded valid range.")
 	}
 	return d, nil
 }
@@ -83,7 +83,7 @@ func (c *Calendar) MonthDayFromFields(f CalendarFields, overflow Overflow) (ISOD
 				return ISODate{}, err
 			}
 			if !isoFromRataDie(dlo.rataDie()).withinLimits() && !isoFromRataDie(dhi.rataDie()).withinLimits() {
-				return ISODate{}, rangeError("date out of range")
+				return ISODate{}, rangeError("Date is not within ISO date time limits.")
 			}
 			d, err := c.fromFields(toICUFields(&f), overflow, missingReject)
 			if err != nil {
@@ -101,7 +101,7 @@ func (c *Calendar) MonthDayFromFields(f CalendarFields, overflow Overflow) (ISOD
 		return newISODate(1972, m, d, overflow)
 	}
 	if f.Day == nil {
-		return ISODate{}, typeError("must specify day for MonthDay")
+		return ISODate{}, typeError("Must specify day for MonthDay")
 	}
 	fields := toICUFields(&f)
 	d, err := c.fromFields(fields, overflow, missingECMA)
@@ -128,7 +128,7 @@ func (c *Calendar) DateAdd(date ISODate, dur DateDuration, overflow Overflow) (I
 			return ISODate{}, err
 		}
 		if !d.withinLimits() {
-			return ISODate{}, rangeError("date out of range")
+			return ISODate{}, rangeError("Date is not within ISO date time limits.")
 		}
 		return d, nil
 	}
@@ -137,13 +137,13 @@ func (c *Calendar) DateAdd(date ISODate, dur DateDuration, overflow Overflow) (I
 		weeks: abs64(dur.Weeks), days: abs64(dur.Days)}
 	for _, v := range []int64{d.years, d.months, d.weeks, d.days} {
 		if v > 1<<32-1 {
-			return ISODate{}, rangeError("duration not valid")
+			return ISODate{}, rangeError("Duration was not valid.")
 		}
 	}
 	// early_constrain_date_duration: nothing so large can stay in range.
 	const years = 2 * (275760 + 271821)
 	if d.years > years || d.months > years*13 || d.weeks > years*390/7 || d.days > years*390 {
-		return ISODate{}, rangeError("intermediate date-time out of range")
+		return ISODate{}, rangeError("Intermediate ISO datetime was not within a valid range.")
 	}
 	start := c.arithDate(date.rataDie())
 	out, err := c.added(start, d, overflow)
@@ -159,7 +159,7 @@ func (c *Calendar) DateAdd(date ISODate, dur DateDuration, overflow Overflow) (I
 // Day.
 func (c *Calendar) DateUntil(one, two ISODate, largest Unit) (DateDuration, error) {
 	if largest != Year && largest != Month && largest != Week && largest != Day {
-		return DateDuration{}, typeError("found time unit when computing CalendarDateUntil")
+		return DateDuration{}, typeError("Found time unit when computing CalendarDateUntil.")
 	}
 	if c.id == "iso8601" {
 		return differenceISODate(one, two, largest)

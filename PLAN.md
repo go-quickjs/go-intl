@@ -570,7 +570,7 @@ every ICU name in three spellings and odd inputs, 1,889 in all, and every
 zone's offsets from 1800 to 2100, transition by transition, as Node's
 Temporal reports them: all match. Temporal refuses some names
 Intl.DateTimeFormat takes (Java's three-letter ones, SystemV's, Factory);
-that is the Temporal stage's to follow.
+the `temporal` package follows Temporal's own list (see 8c).
 
 `TimeZone` is the public face of it, for go-quickjs and for the `date` and
 `temporal` stages: `LoadTimeZone` by name or offset, `ID` as ICU spells the
@@ -878,6 +878,50 @@ differencing with each largest unit: all match. ICU4X balances a month
 count year by year, so `until` in months across millennia of Chinese years
 is slow, as it is in ICU4X.
 
+**The rest of Temporal: done.** `PlainDate`, `PlainTime`, `PlainDateTime`,
+`PlainYearMonth`, `PlainMonthDay`, `Instant`, `ZonedDateTime` and
+`Duration` are temporal_rs 0.2.3's, ported: construction, fields, `with`,
+adding, differencing with rounding and balancing (the nudge windows and
+bubbling of `Duration.round` and `total`, relative to a date or a zoned
+date-time), rounding, and the strings Temporal writes. temporal_rs keeps
+epoch nanoseconds and time durations in i128; the port has an `int128`
+with Rust's semantics (wrapping arithmetic, `div_euclid`, `as f64` to
+nearest-even, saturating casts back), checked against `math/big`. Node
+builds `temporal_capi` with `float64_representable_durations`, so a
+duration's microseconds and nanoseconds are held as float64, as there.
+Strings are parsed by a port of the `ixdtf` 0.6.4 parser, with its error
+messages, over the bytes V8 hands it: a one-byte JavaScript string as
+Latin-1, a two-byte one as UTF-8, a lone surrogate refused.
+
+Zones are what temporal_rs takes, which is not what Intl.DateTimeFormat
+takes: names from `timezone_provider` 0.2.3's normalizer, built from tz
+2025c (598 names, 152 of them links, spelled as the table spells them in
+any case asked, compared by primary name), which `tzidgen` copies out of
+the checksummed crate into `data/temporalzones.bin`; and offsets from
+ICU's zoneinfo64 read as the `zoneinfo64` 0.3.0 crate reads it, its own
+final-rule evaluation included, over the same tz 2026c data `intl` uses.
+`Data` loads calendars and zones once, eagerly, and is immutable after.
+
+What V8 does before it calls temporal_rs is V8's, not temporal_rs's, and
+the package leaves it to the engine: reading property bags in alphabetical
+order, `ToIntegerWithTruncation`, clamping a month or day to an int8 under
+`constrain`, the options and their order, and the messages it throws
+itself. The replay holds a port of that glue (`node_glue_test.go`,
+`node_ops_test.go`) so the expectations are Node's end to end, and
+go-quickjs's VM is to do what it does. `Temporal.Now` needs a clock and is
+the engine's; `toLocaleString` is Intl.DateTimeFormat's, which each type's
+`EpochNanosecondsForUTC` feeds.
+
+`testdata/temporal_node.js` records 368,399 calls: 1,166 strings parsed as
+all eight types; every `Duration` operation over 37 durations and 13
+`relativeTo`s; every method and getter of the other seven types, the dates
+in all sixteen calendars; zoned date-times about transitions in 20 zones
+with every disambiguation and offset option; and, for all 750 zone names,
+three spellings and twelve transitions each way. All match. ICU4X's
+`until` counts months one at a time, so differences across the whole of
+Temporal's range are recorded for ISO only: in the Chinese calendar one
+takes Node minutes.
+
 ### 9. Retire internal/icu
 
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
@@ -905,7 +949,7 @@ README's Intl section.
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
-| 8c. `temporal` package | calendars done: all 16, 96,659 years, and fields, adding and differencing, 311,526 cases, against node; the rest of Temporal left |
+| 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**

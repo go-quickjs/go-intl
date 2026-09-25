@@ -37,13 +37,13 @@ func String(v string) *string { return &v }
 func ParseMonthCode(s string) error {
 	switch {
 	case len(s) != 3 && len(s) != 4:
-		return rangeError("month codes must have 3 or 4 characters")
+		return rangeError("Month codes must have 3 or 4 characters.")
 	case s[0] != 'M':
-		return rangeError("first month code character must be 'M'")
+		return rangeError("First month code character must be 'M'.")
 	case s[1] < '0' || s[1] > '9' || s[2] < '0' || s[2] > '9':
-		return rangeError("invalid month code digit")
+		return rangeError("Invalid month code digit.")
 	case len(s) == 4 && s[3] != 'L':
-		return rangeError("leap month code must end with 'L'")
+		return rangeError("Leap month code must end with 'L'.")
 	}
 	return nil
 }
@@ -75,10 +75,10 @@ func validMonthCode(calendar, code string) bool {
 // ±300,000 is out of Temporal's range whatever the calendar.
 func (f *CalendarFields) checkYearRange() error {
 	if f.Year != nil && (*f.Year < -300000 || *f.Year >= 300000) {
-		return rangeError("date out of range")
+		return rangeError("Date is not within ISO date time limits.")
 	}
 	if f.EraYear != nil && (*f.EraYear < -300000 || *f.EraYear >= 300000) {
-		return rangeError("date out of range")
+		return rangeError("Date is not within ISO date time limits.")
 	}
 	return nil
 }
@@ -104,38 +104,37 @@ func resolveISOFields(f *CalendarFields, overflow Overflow, kind resolution) (ye
 	year = 1972
 	if kind != resolveMonthDay {
 		if f.Year == nil {
-			return 0, 0, 0, typeError("required year field is empty")
+			return 0, 0, 0, typeError("Required year field is empty.")
 		}
 		year = *f.Year
 	}
 	day = 1
 	if kind != resolveYearMonth {
 		if f.Day == nil {
-			return 0, 0, 0, typeError("required day field is empty")
+			return 0, 0, 0, typeError("Required day field is empty.")
 		}
 		day = *f.Day
 	}
 	switch {
 	case f.MonthCode != nil:
+		// MonthCode::validate refuses every leap month in ISO, so its own
+		// check for one after is never reached.
 		if !validMonthCode("iso8601", *f.MonthCode) {
-			if m, ok := parseMonthCode(*f.MonthCode); ok && m.leap {
-				return 0, 0, 0, rangeError("no leap months allowed for ISO calendar")
-			}
-			return 0, 0, 0, rangeError("monthCode was not valid for the current calendar")
+			return 0, 0, 0, rangeError("MonthCode was not valid for the current calendar.")
 		}
 		m, _ := parseMonthCode(*f.MonthCode)
 		if f.Month != nil && *f.Month != m.number {
-			return 0, 0, 0, rangeError("month does not match monthCode")
+			return 0, 0, 0, rangeError("Month does not match monthCode.")
 		}
 		month = m.number
 	case f.Month != nil:
 		month = *f.Month
 	default:
-		return 0, 0, 0, typeError("required month/monthCode field is empty")
+		return 0, 0, 0, typeError("Required month/monthCode field is empty.")
 	}
 	if month < 1 || month > 12 {
 		if overflow == Reject {
-			return 0, 0, 0, rangeError("month out of range")
+			return 0, 0, 0, rangeError("Month out of range.")
 		}
 		if month > 12 {
 			month = 12
@@ -147,7 +146,7 @@ func resolveISOFields(f *CalendarFields, overflow Overflow, kind resolution) (ye
 	if overflow == Constrain {
 		day = clamp(day, 1, n)
 	} else if day < 1 || day > n {
-		return 0, 0, 0, rangeError("day value is not in a valid range")
+		return 0, 0, 0, rangeError("day value is not in a valid range.")
 	}
 	return year, month, day, nil
 }
