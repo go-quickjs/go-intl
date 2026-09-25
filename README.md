@@ -1,17 +1,19 @@
 # go-intl
 
 A pure-Go implementation of ECMA-402, the JavaScript internationalization API:
-number, date, list, plural, relative-time and display-name formatting,
-collation and normalization, for every CLDR locale. It is built to give the
-same answers as ICU 78.3 as Node ships it, and to be usable by any Go program,
-not only a JavaScript engine.
+number, date, list, plural, relative-time, duration and display-name
+formatting, collation, segmentation, normalization, locale negotiation and
+canonicalization, for every locale ICU has data for. It is built to give the
+same answers as ICU 78.3 as Node 26 ships it, and to be usable by any Go
+program, not only a JavaScript engine.
 
-It is the base the [go-quickjs](https://github.com/go-quickjs/go-quickjs)
-engine will build `Intl` on. There is no cgo, no WebAssembly and no C
-compiler: it builds wherever Go does.
+It is the base of `Intl` in the [go-quickjs](https://github.com/go-quickjs/go-quickjs)
+engine, which is moving onto it a service at a time. There is no cgo, no
+WebAssembly and no C compiler: it builds wherever Go does.
 
-> **Status: pre-release.** The API may still change. go-quickjs does not use it
-> yet. See [PLAN.md](PLAN.md) for what is done and what is left.
+> **Status: pre-release.** Every service is done and held to Node, but the API
+> may still change while go-quickjs moves onto it. See [PLAN.md](PLAN.md) for
+> the state of each part.
 
 ```go
 import intl "github.com/go-quickjs/go-intl"
@@ -41,57 +43,75 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 
 ## Services
 
-| Service | State |
+| Service | What it covers |
 |---|---|
-| `NumberFormat` | Complete: every style, notation, rounding option and numbering system, exact decimal input (`ParseDecimal`, `FormatDecimal`), ranges |
-| `DateTimeFormat` | Complete in all eighteen calendars Node supports -- Gregorian, Buddhist, Persian, Coptic, Ethiopic (both eras), Indian, all five Islamic (civil, tabular, astronomical, Saudi, Umm al-Qura), ROC, Hebrew, Japanese, ISO 8601, Chinese, Dangi: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges |
-| `PluralRules` | Complete, with `SelectRange` |
-| `Collator` | Complete but for Korean `searchjl`: every other tailoring, sensitivity, numeric ordering, case order |
-| `ListFormat`, `RelativeTimeFormat`, `DisplayNames` | Complete |
+| `NumberFormat` | Every style, unit, notation, rounding option and numbering system, exact decimal input (`ParseDecimal`, `FormatDecimal`), ranges |
+| `DateTimeFormat` | All eighteen calendars Node supports -- Gregorian, Buddhist, Persian, Coptic, Ethiopic (both eras), Indian, the five Islamic ones, ROC, Hebrew, Japanese, ISO 8601, Chinese, Dangi -- with styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset zones, ranges, and Temporal values (`ForTemporal`) |
+| `PluralRules` | Cardinal and ordinal, with the digit options, and `SelectRange` |
+| `Collator` | Every tailoring ICU has, Korean `searchjl` and POSIX among them, sensitivity, numeric ordering, case order |
+| `Segmenter` | Graphemes, words and sentences, with ICU's rules and the dictionaries for Thai, Lao, Khmer, Burmese, Chinese and Japanese |
+| `ListFormat`, `RelativeTimeFormat`, `DisplayNames`, `DurationFormat` | Every option |
+| `Canonicalizer`, `LocaleMatcher` | `Intl.getCanonicalLocales`, and each service's available locales and locale negotiation, as V8 builds them from ICU's |
+| `LocaleInfo` | What `Intl.Locale` reports beyond its subtags: likely subtags, calendars, collations, hour cycles, numbering system, time zones, text direction, week |
+| `TimeZone` | ICU's zoneinfo64 (tz 2026c), the host's zone as ICU detects it, and the zone names formatting writes |
 | `Normalizer` | NFC, NFD, NFKC, NFKD, at Unicode 17.0.0 |
-| `DurationFormat` | Complete: every style and per-unit option, fractional digits, digital clocks with the locale's time separator, negative durations; as V8 writes them |
-| `Segmenter` | Not started |
+| `Calendars`, `Currencies`, ... | The lists `Intl.supportedValuesOf` returns |
 
-Every service has `ToParts` where ECMA-402 does, and a `ResolvedOptions`.
+Every formatter has `ToParts` where ECMA-402 does, and a `ResolvedOptions`.
 
-## How it is held to ICU
+Two packages beside it hold what a JavaScript engine needs apart from `Intl`:
+
+- [`date`](date) is JavaScript's `Date`: ECMA-262's time arithmetic, local
+  time as V8 reads it from ICU's zones, `Date.parse`, and the strings `Date`
+  writes.
+- [`temporal`](temporal) is Temporal's arithmetic, ported from the Rust crates
+  Node builds Temporal from (`temporal_rs` 0.2.3 over ICU4X's `icu_calendar`
+  2.2.1): the calendars, dates and times, durations with rounding, zoned time
+  and parsing. An engine keeps the objects and calls in.
+
+## How it is held to Node
 
 The answers are checked, not assumed:
 
-- **A golden corpus** of 7,949 cases taken from Node, run by `go test`.
-- **Sweeps against Node** over every locale Node supports, recorded under
-  [`testdata`](testdata) by the scripts beside them: about 515,000 cases across
-  dates, date ranges, calendars, zone names, durations, numbering systems, number
-  ranges, exact decimals, plural ranges and selection, and collation orders.
-  Every one matches except the named gaps: Dublin's zone names (Go's
-  time-zone data differs from ICU's for Ireland) and Korean `searchjl`
-  collation. A gap that
-  starts passing fails its test, so the entry gets removed.
-- **Every day from 1600 to 2400** in each non-Gregorian calendar, five
-  million days, against the dates Node gives them.
+- **A golden corpus** of 7,949 formatting calls taken from Node, run by
+  `go test`: all 7,949 match exactly.
+- **Recordings of Node** over every locale it supports, made by the scripts in
+  [`testdata`](testdata) and replayed by `go test`: more than two million
+  cases across dates and ranges in every calendar, zone names, Temporal
+  values, numbers, number ranges and exact decimals, plural ranges,
+  collation orders, segmentation, normalization, numbering systems,
+  durations, canonicalization, negotiation, `Date` in every zone Node knows,
+  and Temporal's calendars and operations. All of them match.
 
-Where Node and ECMA-402 disagree, the difference is a named entry in
-[`compat.go`](compat.go). The zero value of `Compat` is the standard, and
-`NodeICU` gives Node's behavior. There are two so far: V8 writes a plain
-space before AM and PM where ICU writes U+202F, and V8 adds a collation
-chosen by option to the resolved locale.
+Where Node and the standard disagree, the difference is a named divergence in
+[`compat.go`](compat.go), tested on both sides. `Compat` chooses them one by
+one; its zero value, `Standard`, is ECMA-402 in every one, and `NodeICU` is
+Node in every one. There are nine, among them the plain space V8 writes where
+ICU writes U+202F, V8's twelve-hour clock for Japanese, and the era V8 counts
+as a field asked for when it writes a Temporal value.
 
-Where ICU's implementation decides an answer, the implementation is ported.
-The pattern generator, the interval formatter, the number-range formatter
-and the time-zone name logic are ICU's algorithms, and their comments name the
-ICU functions they follow.
+Where ICU's implementation decides an answer, the implementation is ported:
+the pattern generator, the interval and number-range formatters, the zone
+name logic, the collation and break iterators are ICU's algorithms, and their
+comments name the ICU functions they follow.
 
 ## Data
 
-The tables are generated from CLDR 48.2.0 and the ICU 78.3 release by
-generators in [`internal`](internal). They hold CLDR's inputs, never ICU's
-answers: patterns, names and rules, not formatted strings. That is the
-project's one inviolable rule. [SOURCES.md](SOURCES.md) pins every input by
-checksum.
+The tables are generated from CLDR 48.2.0, ICU 78.3's sources and data, tz
+2026c and Unicode 17.0.0, by generators in [`internal`](internal). They hold
+the inputs to the algorithms, never ICU's answers: patterns, names and rules,
+not formatted strings. That is the project's one inviolable rule.
+[SOURCES.md](SOURCES.md) pins every input by checksum.
 
-The data is embedded with `go:embed`, about 94 MB, not yet compressed, half of it the date data. Every
-constructor has a `...From` variant that takes a `Source`, so a program can
-supply data from a directory or carry only the locales it needs:
+The data is embedded, 18.7 MB, with what locales share kept once. It is packed
+into one file and read where it lies: a formatter looks up what it needs
+rather than decoding tables, so building one is cheap -- in English a
+`NumberFormat` in about 8 µs, a `DateTimeFormat` in about 70 µs, a `Collator`
+in about 6 µs. There is no cache to warm up, because there is nothing to
+cache.
+
+Every constructor has a `...From` variant that takes a `Source`, so a program
+can supply the data from a directory, or carry only the locales it needs:
 
 ```go
 src := intl.NewFS(os.DirFS("/path/to/data"))
@@ -115,8 +135,9 @@ go test ./...
 ```
 
 Go 1.24 or later. Regenerating the data needs the pinned upstream archives
-named in [SOURCES.md](SOURCES.md). Each generator's doc comment gives its
-command.
+named in [SOURCES.md](SOURCES.md); each generator's doc comment gives its
+command, and `go run ./internal/packgen` repacks the embedded data after any
+of them.
 
 ## License
 
