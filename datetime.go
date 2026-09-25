@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/numdata"
 )
@@ -228,11 +229,17 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	if err != nil {
 		return nil, err
 	}
-	cal, ok := data.Calendar(string(system))
+	cal, ok, err := data.Calendar(string(system))
+	if err != nil {
+		return nil, fmt.Errorf("intl: the dates for %s: %w", loc, err)
+	}
 	if !ok {
 		// A locale with no data for the calendar its region uses falls back to
 		// the Gregorian one rather than to nothing.
-		if cal, ok = data.Calendar(string(Gregory)); !ok {
+		if cal, ok, err = data.Calendar(string(Gregory)); err != nil {
+			return nil, fmt.Errorf("intl: the dates for %s: %w", loc, err)
+		}
+		if !ok {
 			return nil, fmt.Errorf("intl: %s has no calendar data: %w", loc, ErrNotFound)
 		}
 		system, keep = Gregory, ""
@@ -356,12 +363,20 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 	if f, err := NewFallbacker(src); err == nil {
 		chain = f.ChainIn(treeLocales, loc.Data())
 	}
+	shared, err := src.Open(MarkerDatesShared, DataLocale{})
+	if err != nil {
+		return nil, fmt.Errorf("intl: the shared date data: %w", err)
+	}
+	pool, err := blob.ReadShared(shared, datedata.Version)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the shared date data: %w", err)
+	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerDates, d)
 		if err != nil {
 			continue
 		}
-		l, err := datedata.Decode(b)
+		l, err := datedata.Decode(b, pool)
 		if err != nil {
 			return nil, fmt.Errorf("intl: the dates for %s: %w", d, err)
 		}

@@ -15,7 +15,10 @@ import (
 )
 
 // A Writer builds a table.
-type Writer struct{ b []byte }
+type Writer struct {
+	b    []byte
+	pool *Pool
+}
 
 // NewWriter starts a table of the given version.
 func NewWriter(version byte) *Writer { return &Writer{b: []byte{version}} }
@@ -48,8 +51,9 @@ func (w *Writer) Bytes() []byte { return w.b }
 
 // A Reader takes a table apart.
 type Reader struct {
-	b   []byte
-	err error
+	b    []byte
+	err  error
+	pool *Shared
 }
 
 // NewReader starts reading a table, checking its version.
@@ -140,4 +144,182 @@ func (r *Reader) Err() error {
 		return fmt.Errorf("blob: %d bytes left over", len(r.b))
 	}
 	return nil
+}
+
+// Sharing: the parts many tables have in common, kept once.
+//
+// A data set kept per locale says much the same in every locale: the same
+// skeletons, the same interval patterns, the same month names in a
+// language's dozen regions. A generator writing such a set gives all its
+// writers one Pool. A part written through Shared or SharedString goes
+// into the pool once, however many tables write it, and each table holds
+// only its number. The pool is written beside the tables and read where it
+// lies: a part is found by its number without reading any other.
+
+// A Pool gathers the parts a data set's tables share, for a generator.
+// Parts are numbered in the order they are first written, so a generator
+// that writes its tables in a fixed order writes the same pool every time.
+type Pool struct {
+	version byte
+	index   map[string]int
+	parts   []string
+}
+
+// NewPool starts a pool for tables of the given version.
+func NewPool(version byte) *Pool {
+	return &Pool{version: version, index: map[string]int{}}
+}
+
+func (p *Pool) intern(b []byte) int {
+	if i, ok := p.index[string(b)]; ok {
+		return i
+	}
+	i := len(p.parts)
+	p.index[string(b)] = i
+	p.parts = append(p.parts, string(b))
+	return i
+}
+
+// Bytes returns the pool as it is written: the version, the number of
+// parts and where each ends, four bytes each, then the parts.
+func (p *Pool) Bytes() []byte {
+	size := 0
+	for _, s := range p.parts {
+		size += len(s)
+	}
+	out := make([]byte, 0, 1+4+4*len(p.parts)+size)
+	out = append(out, p.version)
+	out = binary.LittleEndian.AppendUint32(out, uint32(len(p.parts)))
+	end := 0
+	for _, s := range p.parts {
+		end += len(s)
+		out = binary.LittleEndian.AppendUint32(out, uint32(end))
+	}
+	for _, s := range p.parts {
+		out = append(out, s...)
+	}
+	return out
+}
+
+// NewPooledWriter starts a table whose shared parts go into pool.
+func NewPooledWriter(version byte, pool *Pool) *Writer {
+	return &Writer{b: []byte{version}, pool: pool}
+}
+
+// Shared writes a part through the pool: what write writes is kept once
+// in the pool, and the table holds its number.
+func (w *Writer) Shared(write func(*Writer)) {
+	sub := &Writer{pool: w.pool}
+	write(sub)
+	w.Uint(w.pool.intern(sub.b))
+}
+
+// SharedString writes a string through the pool.
+func (w *Writer) SharedString(s string) {
+	w.Uint(w.pool.intern([]byte(s)))
+}
+
+// A Shared is a pool read where it lies.
+type Shared struct {
+	ends []byte // four bytes a part
+	data []byte
+}
+
+// ReadShared checks a pool's version and layout.
+func ReadShared(b []byte, version byte) (Shared, error) {
+	if len(b) < 5 {
+		return Shared{}, fmt.Errorf("blob: a pool of %d bytes", len(b))
+	}
+	if b[0] != version {
+		return Shared{}, fmt.Errorf("blob: the pool is version %d, not %d", b[0], version)
+	}
+	n := int(binary.LittleEndian.Uint32(b[1:]))
+	if n < 0 || 5+4*n > len(b) {
+		return Shared{}, fmt.Errorf("blob: a pool of %d parts in %d bytes", n, len(b))
+	}
+	s := Shared{ends: b[5 : 5+4*n], data: b[5+4*n:]}
+	if n > 0 && int(binary.LittleEndian.Uint32(s.ends[4*(n-1):])) != len(s.data) {
+		return Shared{}, fmt.Errorf("blob: a pool whose parts do not fill it")
+	}
+	return s, nil
+}
+
+func (s Shared) part(i int) ([]byte, bool) {
+	if i < 0 || 4*i+4 > len(s.ends) {
+		return nil, false
+	}
+	start := 0
+	if i > 0 {
+		start = int(binary.LittleEndian.Uint32(s.ends[4*(i-1):]))
+	}
+	end := int(binary.LittleEndian.Uint32(s.ends[4*i:]))
+	if start > end || end > len(s.data) {
+		return nil, false
+	}
+	return s.data[start:end:end], true
+}
+
+// NewPooledReader starts reading a table whose shared parts are in pool.
+func NewPooledReader(b []byte, version byte, pool Shared) (*Reader, error) {
+	r, err := NewReader(b, version)
+	if err != nil {
+		return nil, err
+	}
+	r.pool = &pool
+	return r, nil
+}
+
+// Shared reads a part written by Writer.Shared, with read, which must read
+// all of it.
+func (r *Reader) Shared(read func(*Reader)) {
+	part := r.sharedPart()
+	if r.err != nil {
+		return
+	}
+	sub := &Reader{b: part, pool: r.pool}
+	read(sub)
+	if sub.err == nil && len(sub.b) != 0 {
+		sub.err = fmt.Errorf("blob: %d bytes of a shared part left over", len(sub.b))
+	}
+	if sub.err != nil {
+		r.err = sub.err
+	}
+}
+
+// SharedString reads a string written by Writer.SharedString.
+func (r *Reader) SharedString() string {
+	return string(r.sharedPart())
+}
+
+func (r *Reader) sharedPart() []byte {
+	i := r.Uint()
+	if r.err != nil {
+		return nil
+	}
+	if r.pool == nil {
+		r.err = fmt.Errorf("blob: a shared part in a table read without its pool")
+		return nil
+	}
+	part, ok := r.pool.part(i)
+	if !ok {
+		r.err = fmt.Errorf("blob: shared part %d is not in the pool", i)
+		return nil
+	}
+	return part
+}
+
+// SharedNumber reads the number of a part written by Writer.Shared,
+// without reading the part, for a reader that reads it later with Read or
+// not at all.
+func (r *Reader) SharedNumber() int { return r.Uint() }
+
+// Read reads part number i, with read, which must read all of it.
+func (s Shared) Read(i int, read func(*Reader)) error {
+	part, ok := s.part(i)
+	if !ok {
+		return fmt.Errorf("blob: shared part %d is not in the pool", i)
+	}
+	sub := &Reader{b: part, pool: &s}
+	read(sub)
+	return sub.Err()
 }

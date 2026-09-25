@@ -953,7 +953,7 @@ README's Intl section.
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
-| **Data size** | files written once, 105 MB to 57.1 MB; sharing lists and strings next |
+| **Data size** | files written once, 105 MB to 57.1 MB; dates shared through a pool, 28.3 MB; the other sets next |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
@@ -1190,7 +1190,19 @@ no data for, are no longer written. The collation root moved from
 `collation.bin` to `collation/und.bin`, where every other set keeps its root.
 105 MB became 57.1 MB.
 
-**Lists and strings shared: next,** dates first, then the other large sets.
+**Lists and strings shared: dates done.** `blob` has a pool: a generator
+gives every table of a set one, and a part written through `Shared` or
+`SharedString` is kept in it once, each table holding its number; the pool
+is laid out to be read where it lies, a part found by number without reading
+any other. Dates write every string, each list and each calendar through it,
+into `datesshared.bin`: 18.8 MB became 1.2 MB of pool and 57 KB of locale
+files, and the data 28.3 MB. A locale's calendars are read from the pool
+only when asked for, one of eighteen, and the embedded source serves the pool
+in place (a string embedded beside the file system, whose memory Source's
+readers never change) rather than copying it on every Open. A date formatter
+now builds in about 1.5 ms and allocates 1.35 MB, from 2.0 ms and 1.74 MB.
+
+Next: zone names, numbers, names, units and relative time the same way.
 
 ## Status
 
@@ -1215,7 +1227,7 @@ no data for, are no longer written. The collation root moved from
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
-| **Data size** | files written once, 105 MB to 57.1 MB; sharing lists and strings next |
+| **Data size** | files written once, 105 MB to 57.1 MB; dates shared through a pool, 28.3 MB; the other sets next |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**

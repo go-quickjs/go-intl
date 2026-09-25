@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 5
+const Version = 6
 
 // The widths a name may be written at, in the order they are stored.
 const (
@@ -249,6 +249,11 @@ type Locale struct {
 	// which ICU's interval formatter joins a date to a time range with
 	// whatever the calendar.
 	DateTimeGlue string
+
+	// pool and parts are the calendars of a locale Decode read, which
+	// Calendar reads one at a time.
+	pool  blob.Shared
+	parts []calendarPart
 }
 
 // Period returns the part of the day a time falls in, as minutes past
@@ -304,22 +309,43 @@ type NamedCalendar struct {
 	Calendar Calendar
 }
 
-// Calendar finds one by name.
-func (l *Locale) Calendar(name string) (*Calendar, bool) {
+// Calendar finds one by name, reporting whether the locale has it. A
+// locale Decode read has its calendars in the pool, and the one asked for
+// is read from there: a formatter needs one or two of the eighteen.
+func (l *Locale) Calendar(name string) (*Calendar, bool, error) {
 	for i := range l.Calendars {
 		if l.Calendars[i].Name == name {
-			return &l.Calendars[i].Calendar, true
+			return &l.Calendars[i].Calendar, true, nil
 		}
 	}
-	return nil, false
+	for _, p := range l.parts {
+		if p.name != name {
+			continue
+		}
+		c := new(Calendar)
+		if err := l.pool.Read(p.number, func(r *blob.Reader) { decodeCalendar(r, c) }); err != nil {
+			return nil, false, fmt.Errorf("datedata: calendar %s: %w", name, err)
+		}
+		return c, true, nil
+	}
+	return nil, false, nil
 }
 
-// Encode writes a locale's calendars.
-func Encode(l *Locale) []byte {
-	b := blob.NewWriter(Version)
+// A calendarPart is a calendar Decode found and left in the pool.
+type calendarPart struct {
+	name   string
+	number int
+}
+
+// Encode writes a locale's calendars, with what they share with other
+// locales' -- every string, each calendar and each of its lists -- in pool,
+// which the generator writes beside the locales and Decode is given.
+// Locales written in a fixed order write the same pool every time.
+func Encode(l *Locale, pool *blob.Pool) []byte {
+	b := blob.NewPooledWriter(Version, pool)
 	b.Uint(len(l.PeriodRules))
 	for _, r := range l.PeriodRules {
-		b.String(r.ID)
+		b.SharedString(r.ID)
 		b.Uint(r.From)
 		b.Uint(r.Before)
 		b.Uint(r.At)
@@ -329,100 +355,97 @@ func Encode(l *Locale) []byte {
 			b.Uint(0)
 		}
 	}
-	for _, name := range l.FieldNames {
-		b.String(name)
-	}
-	b.String(l.DateTimeGlue)
-	// A calendar a locale says exactly the same of as an earlier one -- the
-	// five Islamic calendars share their names and patterns -- is written as
-	// the number of that one, counting from one; zero is followed by the
-	// calendar itself.
+	b.Shared(func(b *blob.Writer) {
+		for _, name := range l.FieldNames {
+			b.SharedString(name)
+		}
+	})
+	b.SharedString(l.DateTimeGlue)
 	b.Uint(len(l.Calendars))
-	var written []string
 	for i := range l.Calendars {
-		b.String(l.Calendars[i].Name)
-		one := blob.NewWriter(0)
-		encodeCalendar(one, &l.Calendars[i].Calendar)
-		body := string(one.Bytes()[1:])
-		same := 0
-		for j, earlier := range written {
-			if earlier == body {
-				same = j + 1
-				break
-			}
-		}
-		written = append(written, body)
-		b.Uint(same)
-		if same == 0 {
-			encodeCalendar(b, &l.Calendars[i].Calendar)
-		}
+		b.SharedString(l.Calendars[i].Name)
+		b.Shared(func(b *blob.Writer) { encodeCalendar(b, &l.Calendars[i].Calendar) })
 	}
 	return b.Bytes()
 }
 
+// encodeCalendar writes a calendar as its lists, each shared: a calendar
+// differs from another in a locale's parent or in another calendar mostly
+// in one or two of them.
 func encodeCalendar(b *blob.Writer, c *Calendar) {
-	for _, sets := range [][]Names{c.Months[:], c.Days[:]} {
-		for _, n := range sets {
+	names := func(b *blob.Writer, n Names) {
+		b.Shared(func(b *blob.Writer) {
 			b.Uint(len(n.Text))
 			for _, s := range n.Text {
-				b.String(s)
+				b.SharedString(s)
+			}
+		})
+	}
+	b.Shared(func(b *blob.Writer) {
+		for _, sets := range [][]Names{c.Months[:], c.Days[:]} {
+			for _, n := range sets {
+				names(b, n)
 			}
 		}
-	}
-	for w := 0; w < Widths; w++ {
-		b.String(c.AM[w])
-		b.String(c.PM[w])
-		b.Uint(len(c.Periods[w]))
-		for _, p := range c.Periods[w] {
-			b.String(p.ID)
-			b.String(p.Text)
+	})
+	b.Shared(func(b *blob.Writer) {
+		for w := 0; w < Widths; w++ {
+			b.SharedString(c.AM[w])
+			b.SharedString(c.PM[w])
+			b.Uint(len(c.Periods[w]))
+			for _, p := range c.Periods[w] {
+				b.SharedString(p.ID)
+				b.SharedString(p.Text)
+			}
 		}
-	}
-	for _, n := range c.Eras {
-		b.Uint(len(n.Text))
-		for _, s := range n.Text {
-			b.String(s)
+	})
+	b.Shared(func(b *blob.Writer) {
+		for _, n := range c.Eras {
+			names(b, n)
 		}
-	}
-	for _, set := range [][Lengths]string{c.DateFormats, c.TimeFormats,
-		c.DateTimeFormats, c.AtTimeFormats} {
-		for _, s := range set {
-			b.String(s)
+	})
+	b.Shared(func(b *blob.Writer) {
+		for _, set := range [][Lengths]string{c.DateFormats, c.TimeFormats,
+			c.DateTimeFormats, c.AtTimeFormats, c.DateNumbers, c.TimeNumbers} {
+			for _, s := range set {
+				b.SharedString(s)
+			}
 		}
-	}
-	b.Uint(len(c.Available))
-	for _, s := range c.Available {
-		b.String(s.ID)
-		b.String(s.Pattern)
-	}
-	for _, item := range c.AppendItems {
-		b.String(item)
-	}
-	for _, set := range [][Lengths]string{c.DateNumbers, c.TimeNumbers} {
-		for _, s := range set {
-			b.String(s)
+		for _, item := range c.AppendItems {
+			b.SharedString(item)
 		}
-	}
-	b.String(c.IntervalFallback)
-	b.Uint(len(c.Intervals))
-	for _, iv := range c.Intervals {
-		b.String(iv.Skeleton)
-		for _, p := range iv.Patterns {
-			b.String(p)
+		b.SharedString(c.IntervalFallback)
+		for _, p := range c.LeapMonthPatterns {
+			b.SharedString(p)
 		}
-	}
-	for _, p := range c.LeapMonthPatterns {
-		b.String(p)
-	}
-	b.Uint(len(c.CyclicYears))
-	for _, s := range c.CyclicYears {
-		b.String(s)
-	}
+	})
+	b.Shared(func(b *blob.Writer) {
+		b.Uint(len(c.Available))
+		for _, s := range c.Available {
+			b.SharedString(s.ID)
+			b.SharedString(s.Pattern)
+		}
+	})
+	b.Shared(func(b *blob.Writer) {
+		b.Uint(len(c.Intervals))
+		for _, iv := range c.Intervals {
+			b.SharedString(iv.Skeleton)
+			for _, p := range iv.Patterns {
+				b.SharedString(p)
+			}
+		}
+	})
+	b.Shared(func(b *blob.Writer) {
+		b.Uint(len(c.CyclicYears))
+		for _, s := range c.CyclicYears {
+			b.SharedString(s)
+		}
+	})
 }
 
-// Decode reads what Encode wrote.
-func Decode(data []byte) (*Locale, error) {
-	r, err := blob.NewReader(data, Version)
+// Decode reads what Encode wrote, with the pool it wrote into.
+func Decode(data []byte, pool blob.Shared) (*Locale, error) {
+	r, err := blob.NewPooledReader(data, Version, pool)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +454,7 @@ func Decode(data []byte) (*Locale, error) {
 		l.PeriodRules = make([]PeriodRule, 0, n)
 		for i := 0; i < n; i++ {
 			var rule PeriodRule
-			rule.ID = r.String()
+			rule.ID = r.SharedString()
 			rule.From = r.Uint()
 			rule.Before = r.Uint()
 			rule.At = r.Uint()
@@ -439,26 +462,20 @@ func Decode(data []byte) (*Locale, error) {
 			l.PeriodRules = append(l.PeriodRules, rule)
 		}
 	}
-	for i := range l.FieldNames {
-		l.FieldNames[i] = r.String()
-	}
-	l.DateTimeGlue = r.String()
+	r.Shared(func(r *blob.Reader) {
+		for i := range l.FieldNames {
+			l.FieldNames[i] = r.SharedString()
+		}
+	})
+	l.DateTimeGlue = r.SharedString()
 	n := r.Uint()
 	if n < 0 || n > r.Left() {
 		n = 0
 	}
-	for i := 0; i < n; i++ {
-		name := r.String()
-		var c Calendar
-		switch same := r.Uint(); {
-		case same == 0:
-			decodeCalendar(r, &c)
-		case same <= len(l.Calendars):
-			c = l.Calendars[same-1].Calendar
-		default:
-			return nil, fmt.Errorf("datedata: calendar %s is the same as calendar %d of %d", name, same, len(l.Calendars))
-		}
-		l.Calendars = append(l.Calendars, NamedCalendar{Name: name, Calendar: c})
+	l.pool = pool
+	l.parts = make([]calendarPart, n)
+	for i := range l.parts {
+		l.parts[i] = calendarPart{name: r.SharedString(), number: r.SharedNumber()}
 	}
 	if err := r.Err(); err != nil {
 		return nil, err
@@ -466,93 +483,89 @@ func Decode(data []byte) (*Locale, error) {
 	return &l, nil
 }
 
-func decodeCalendar(r *blob.Reader, c *Calendar) {
-	for _, sets := range []*[Contexts * Widths]Names{&c.Months, &c.Days} {
-		for i := range sets {
-			n := r.Uint()
-			if n < 0 || n > r.Left() {
-				return
-			}
-			text := make([]string, 0, n)
-			for j := 0; j < n; j++ {
-				text = append(text, r.String())
-			}
-			sets[i].Text = text
-		}
-	}
-	for w := 0; w < Widths; w++ {
-		c.AM[w] = r.String()
-		c.PM[w] = r.String()
-		n := r.Uint()
-		if n < 0 || n > r.Left() {
-			return
-		}
-		periods := make([]DayPeriod, 0, n)
-		for i := 0; i < n; i++ {
-			id := r.String()
-			text := r.String()
-			periods = append(periods, DayPeriod{ID: id, Text: text})
-		}
-		c.Periods[w] = periods
-	}
-	for i := range c.Eras {
-		n := r.Uint()
-		if n < 0 || n > r.Left() {
-			return
-		}
-		text := make([]string, 0, n)
-		for j := 0; j < n; j++ {
-			text = append(text, r.String())
-		}
-		c.Eras[i].Text = text
-	}
-	for _, set := range []*[Lengths]string{&c.DateFormats, &c.TimeFormats,
-		&c.DateTimeFormats, &c.AtTimeFormats} {
-		for i := range set {
-			set[i] = r.String()
-		}
-	}
+// count reads a count, which cannot exceed the bytes left to hold what it
+// counts.
+func count(r *blob.Reader) int {
 	n := r.Uint()
 	if n < 0 || n > r.Left() {
-		return
+		return 0
 	}
-	c.Available = make([]Skeleton, 0, n)
-	for i := 0; i < n; i++ {
-		id := r.String()
-		pattern := r.String()
-		c.Available = append(c.Available, Skeleton{ID: id, Pattern: pattern})
+	return n
+}
+
+func decodeCalendar(r *blob.Reader, c *Calendar) {
+	names := func(r *blob.Reader, n *Names) {
+		r.Shared(func(r *blob.Reader) {
+			k := count(r)
+			if k == 0 {
+				return
+			}
+			n.Text = make([]string, k)
+			for i := range n.Text {
+				n.Text[i] = r.SharedString()
+			}
+		})
 	}
-	for i := range c.AppendItems {
-		c.AppendItems[i] = r.String()
-	}
-	for _, set := range []*[Lengths]string{&c.DateNumbers, &c.TimeNumbers} {
-		for i := range set {
-			set[i] = r.String()
+	r.Shared(func(r *blob.Reader) {
+		for _, sets := range []*[Contexts * Widths]Names{&c.Months, &c.Days} {
+			for i := range sets {
+				names(r, &sets[i])
+			}
 		}
-	}
-	c.IntervalFallback = r.String()
-	n = r.Uint()
-	if n < 0 || n > r.Left() {
-		return
-	}
-	c.Intervals = make([]Interval, n)
-	for i := range c.Intervals {
-		c.Intervals[i].Skeleton = r.String()
-		for j := range c.Intervals[i].Patterns {
-			c.Intervals[i].Patterns[j] = r.String()
+	})
+	r.Shared(func(r *blob.Reader) {
+		for w := 0; w < Widths; w++ {
+			c.AM[w] = r.SharedString()
+			c.PM[w] = r.SharedString()
+			if k := count(r); k > 0 {
+				c.Periods[w] = make([]DayPeriod, k)
+				for i := range c.Periods[w] {
+					c.Periods[w][i] = DayPeriod{ID: r.SharedString(), Text: r.SharedString()}
+				}
+			}
 		}
-	}
-	for i := range c.LeapMonthPatterns {
-		c.LeapMonthPatterns[i] = r.String()
-	}
-	n = r.Uint()
-	if n < 0 || n > r.Left() {
-		return
-	}
-	if n > 0 {
-		c.CyclicYears = make([]string, n)
-		for i := range c.CyclicYears {
-			c.CyclicYears[i] = r.String()
+	})
+	r.Shared(func(r *blob.Reader) {
+		for i := range c.Eras {
+			names(r, &c.Eras[i])
 		}
-	}
+	})
+	r.Shared(func(r *blob.Reader) {
+		for _, set := range []*[Lengths]string{&c.DateFormats, &c.TimeFormats,
+			&c.DateTimeFormats, &c.AtTimeFormats, &c.DateNumbers, &c.TimeNumbers} {
+			for i := range set {
+				set[i] = r.SharedString()
+			}
+		}
+		for i := range c.AppendItems {
+			c.AppendItems[i] = r.SharedString()
+		}
+		c.IntervalFallback = r.SharedString()
+		for i := range c.LeapMonthPatterns {
+			c.LeapMonthPatterns[i] = r.SharedString()
+		}
+	})
+	r.Shared(func(r *blob.Reader) {
+		c.Available = make([]Skeleton, count(r))
+		for i := range c.Available {
+			c.Available[i] = Skeleton{ID: r.SharedString(), Pattern: r.SharedString()}
+		}
+	})
+	r.Shared(func(r *blob.Reader) {
+		c.Intervals = make([]Interval, count(r))
+		for i := range c.Intervals {
+			c.Intervals[i].Skeleton = r.SharedString()
+			for j := range c.Intervals[i].Patterns {
+				c.Intervals[i].Patterns[j] = r.SharedString()
+			}
+		}
+	})
+	r.Shared(func(r *blob.Reader) {
+		if k := count(r); k > 0 {
+			c.CyclicYears = make([]string, k)
+			for i := range c.CyclicYears {
+				c.CyclicYears[i] = r.SharedString()
+			}
+		}
+	})
 }

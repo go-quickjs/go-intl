@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
@@ -169,6 +170,9 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		return err
 	}
 	built := map[string][]byte{}
+	// The locales share one pool of strings and lists, written beside
+	// them. ReadDir's order is sorted, so the pool is the same every run.
+	pool := blob.NewPool(datedata.Version)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -222,7 +226,7 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 			})
 		}
 		l.Calendars = append(l.Calendars, datedata.NamedCalendar{Name: "iso8601", Calendar: *iso})
-		built[e.Name()] = datedata.Encode(l)
+		built[e.Name()] = datedata.Encode(l, pool)
 	}
 	if len(built) == 0 {
 		return fmt.Errorf("no locales found under %s", main)
@@ -233,6 +237,9 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		return err
 	}
 	if err := datawrite.Locales(out, built); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "datesshared.bin"), pool.Bytes(), 0o644); err != nil {
 		return err
 	}
 	prefs, err := calendarPreferences()

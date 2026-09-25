@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"unsafe"
 )
 
 // Where the data comes from.
@@ -50,6 +51,9 @@ const (
 	MarkerNames Marker = "names"
 	// MarkerDates is one locale's calendar names and date patterns.
 	MarkerDates Marker = "dates"
+	// MarkerDatesShared is what the locales' date data shares: every
+	// string and list, kept once and read by number.
+	MarkerDatesShared Marker = "datesshared"
 	// MarkerZoneNames is what one locale calls the time zones.
 	MarkerZoneNames Marker = "zonenames"
 	// MarkerMetazones maps a zone to the metazone it belongs to, which is not
@@ -123,6 +127,10 @@ var ErrNotFound = errors.New("no data")
 // Data that is not kept per locale -- the likely subtags, which are one table
 // for everything -- is asked for at the root, and a source that has it answers
 // there.
+//
+// The bytes are read where they lie and never changed, by the package or by
+// anyone it hands them to; a source may answer with memory that cannot be
+// written.
 type Source interface {
 	Open(m Marker, d DataLocale) ([]byte, error)
 }
@@ -130,10 +138,37 @@ type Source interface {
 //go:embed data
 var embeddedData embed.FS
 
+// The shared parts of the data sets kept per locale, which every formatter
+// of a kind reads, are embedded as strings as well, so that they are read
+// in place rather than copied out of the file system on every Open.
+//
+//go:embed data/datesshared.bin
+var embeddedDatesShared string
+
 // Embedded is the data built into this package. It is the default, so that the
 // simple path needs no setting up, and it is only a default: anything taking a
 // Source can be given another.
-var Embedded Source = mustSub(embeddedData, "data")
+var Embedded Source = &embeddedSource{
+	fsSource: mustSub(embeddedData, "data").(fsSource),
+	shared: map[Marker]string{
+		MarkerDatesShared: embeddedDatesShared,
+	},
+}
+
+// embeddedSource serves the embedded data, the shared parts in place.
+type embeddedSource struct {
+	fsSource
+	shared map[Marker]string
+}
+
+func (s *embeddedSource) Open(m Marker, d DataLocale) ([]byte, error) {
+	if text, ok := s.shared[m]; ok && d.IsRoot() {
+		// The string's own memory, which is read-only: Source's bytes are
+		// never changed.
+		return unsafe.Slice(unsafe.StringData(text), len(text)), nil
+	}
+	return s.fsSource.Open(m, d)
+}
 
 func mustSub(fsys fs.FS, dir string) Source {
 	sub, err := fs.Sub(fsys, dir)

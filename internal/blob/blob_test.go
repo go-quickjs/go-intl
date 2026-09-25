@@ -49,3 +49,66 @@ func TestUintRefusesWhatAnIntCannotHold(t *testing.T) {
 		t.Errorf("Uint = %d, %v on a 32-bit platform, want a failure", got, r.Err())
 	}
 }
+
+// TestSharedRoundTrip writes two tables through one pool and reads them
+// back: a part both write is kept once, and each reads what it wrote.
+func TestSharedRoundTrip(t *testing.T) {
+	pool := NewPool(3)
+	write := func(tail string) []byte {
+		w := NewPooledWriter(3, pool)
+		w.Shared(func(sub *Writer) {
+			sub.SharedString("January")
+			sub.SharedString("February")
+			sub.Uint(7)
+		})
+		w.SharedString(tail)
+		return w.Bytes()
+	}
+	a, b := write("a"), write("b")
+	// January, February, the part, "a", "b".
+	if n := len(pool.parts); n != 5 {
+		t.Fatalf("the pool has %d parts, want 5", n)
+	}
+	shared, err := ReadShared(pool.Bytes(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		table []byte
+		tail  string
+	}{{a, "a"}, {b, "b"}} {
+		r, err := NewPooledReader(c.table, 3, shared)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var months []string
+		var n int
+		r.Shared(func(sub *Reader) {
+			months = append(months, sub.SharedString(), sub.SharedString())
+			n = sub.Uint()
+		})
+		tail := r.SharedString()
+		if err := r.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if months[0] != "January" || months[1] != "February" || n != 7 || tail != c.tail {
+			t.Errorf("read %v %d %q, want January February 7 %q", months, n, tail, c.tail)
+		}
+	}
+
+	// A part read short is an error, as a table read short is.
+	r, _ := NewPooledReader(a, 3, shared)
+	r.Shared(func(sub *Reader) { sub.SharedString() })
+	r.SharedString()
+	if r.Err() == nil {
+		t.Error("a shared part read short went unnoticed")
+	}
+	// A number past the pool's end is an error, not a panic.
+	w := NewPooledWriter(3, NewPool(3))
+	w.Uint(99)
+	r, _ = NewPooledReader(w.Bytes(), 3, shared)
+	r.SharedString()
+	if r.Err() == nil {
+		t.Error("a part past the pool's end went unnoticed")
+	}
+}
