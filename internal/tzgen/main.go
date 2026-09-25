@@ -2,7 +2,7 @@
 // ICU's zoneinfo64, from its time zone update 2026c, which is what Node runs
 // (see icusrc.TZSHA256).
 //
-//	go run ./internal/tzgen <icu4c-78.3-data.zip> <icu-tz-2026c dir>
+//	go run ./internal/tzgen <icu-tz-2026c dir>
 //
 // Each zone ICU knows by name has a file, data/tz/<name>.bin, the name in
 // lowercase, so that a name is valid when its file exists, in any case, as
@@ -31,6 +31,14 @@
 // numbers for the rule: start month, day, day of week, time and time mode,
 // the same for the end, and the saving.
 //
+// data/windowszones.bin is windowsZones.txt's mapTimezones, which ICU
+// consults to name the zone a Windows machine is set to: a line per Windows
+// zone and region, tab-separated, with the zones CLDR lists for it, the
+// first being the one ICU takes.
+//
+//	Eastern Standard Time	001	America/New_York
+//	Eastern Standard Time	US	America/New_York America/Detroit ...
+//
 // A name whose canonical zone is Etc/Unknown, as Etc/Unknown's and
 // Factory's are, has no file: V8 rejects it.
 //
@@ -43,6 +51,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -51,16 +60,21 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/tzgen <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/tzgen <icu-tz-2026c dir>")
 		os.Exit(2)
 	}
-	files, err := build(os.Args[2])
+	files, err := build(os.Args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "tzgen:", err)
 		os.Exit(1)
 	}
-	if err := write(files); err != nil {
+	windows, err := buildWindows(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "tzgen:", err)
+		os.Exit(1)
+	}
+	if err := write(files, windows); err != nil {
 		fmt.Fprintln(os.Stderr, "tzgen:", err)
 		os.Exit(1)
 	}
@@ -257,8 +271,32 @@ func writeZone(b *strings.Builder, z, rules *icutxt.Node) error {
 	return nil
 }
 
-// write replaces data/tz with the files, all built before any is written.
-func write(files map[string]string) error {
+// buildWindows writes windowsZones.txt's mapTimezones as lines.
+func buildWindows(dir string) ([]byte, error) {
+	n, err := read(dir, "windowsZones")
+	if err != nil {
+		return nil, err
+	}
+	m := n.Get("mapTimezones")
+	if m == nil || len(m.Children) == 0 {
+		return nil, fmt.Errorf("windowsZones.txt has no mapTimezones")
+	}
+	var lines []string
+	for _, zone := range m.Children {
+		for _, region := range zone.Children {
+			if strings.ContainsAny(zone.Key+region.Key+region.Value, "\t\n") || region.Value == "" {
+				return nil, fmt.Errorf("windowsZones.txt: %s %s: %q", zone.Key, region.Key, region.Value)
+			}
+			lines = append(lines, zone.Key+"\t"+region.Key+"\t"+region.Value)
+		}
+	}
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
+}
+
+// write replaces data/tz and data/windowszones.bin, all built before any is
+// written. The names are ICU's, and so safe as paths.
+func write(files map[string]string, windows []byte) error {
 	tmp := filepath.Join("data", "tz.tmp")
 	if err := os.RemoveAll(tmp); err != nil {
 		return err
@@ -272,9 +310,16 @@ func write(files map[string]string) error {
 			return err
 		}
 	}
+	winTmp := filepath.Join("data", "windowszones.bin.tmp")
+	if err := os.WriteFile(winTmp, windows, 0o644); err != nil {
+		return err
+	}
 	final := filepath.Join("data", "tz")
 	if err := os.RemoveAll(final); err != nil {
 		return err
 	}
-	return os.Rename(tmp, final)
+	if err := os.Rename(tmp, final); err != nil {
+		return err
+	}
+	return os.Rename(winTmp, filepath.Join("data", "windowszones.bin"))
 }

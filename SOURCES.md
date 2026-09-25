@@ -93,7 +93,8 @@ Other URLs:
   archive's copies, checking each checksum. Only the metazones differ in
   what go-intl carries: Casablanca and El Aaiun join the Western European
   metazone from 2026-09-20. `tzgen` writes each zone's offsets from
-  `zoneinfo64.txt`, with its canonical name from `timezoneTypes.txt`.
+  `zoneinfo64.txt`, with its canonical name from `timezoneTypes.txt`, and
+  the Windows zone mapping from `windowsZones.txt`.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
   Five files are read, and all are vendored in `internal/icusrc`:

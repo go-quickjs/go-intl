@@ -572,6 +572,28 @@ Temporal reports them: all match. Temporal refuses some names
 Intl.DateTimeFormat takes (Java's three-letter ones, SystemV's, Factory);
 that is the Temporal stage's to follow.
 
+`TimeZone` is the public face of it, for go-quickjs and for the `date` and
+`temporal` stages: `LoadTimeZone` by name or offset, `ID` as ICU spells the
+name, `Canonical` as resolvedOptions reports it, `Offset` with the raw
+offset and saving apart, `OffsetFromLocal` with `Former` or `Latter` for
+a skipped and a repeated time (V8's Date takes `Former` for both, which the
+tests hold to Node's), and `NextTransition` and `PreviousTransition`.
+
+`HostTimeZone` is ICU's `TimeZone::detectHostTimeZone`, which is Node's
+default zone, and `DefaultTimeZone` V8's name for it, "UTC" where ICU has
+none. On Windows (`hostzone_windows.go`) it ports `uprv_detectWindowsTimeZone`:
+the dynamic zone's key, looked up in CLDR's Windows mapping for the user's
+region (`data/windowszones.bin`, from the 2026c update, by `tzgen`), else
+001; `Etc/GMT` at the offset where daylight saving is turned off; and the
+registry search a remote session needs. TZ is not read there, as ICU does
+not read it. Elsewhere (`hostzone_other.go`) it ports `uprv_tzname`: TZ
+where ICU's `isValidOlsonID` takes it, then the zone `/etc/localtime` links
+to, then the zone file it is a copy of. ICU's last resort there, guessing
+from the C library's abbreviations, is not ported: Go has no such names, so
+that host is Etc/Unknown where ICU might name a zone. Then, as ICU does, a
+name ICU does not spell exactly so, or a three- or four-letter one at
+another raw offset, is a zone of the host's offset with no canonical name.
+
 ### Ranges
 
 **Done.** `FormatRange` and `FormatRangeToParts` are ICU's DateIntervalFormat,
@@ -771,7 +793,7 @@ README's Intl section.
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
 | **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
 | 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
-| **Time zones** | ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed. Public API for go-quickjs left |
+| **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | not started |
 | 8b. `date` package | not started |
 | 8c. `temporal` package | not started |
@@ -820,7 +842,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | ICU's zones, canonicalization and transitions are done (see Time zones); left is their public API for go-quickjs and Temporal: offsets and possible instants, the list of zones, the host's zone, the Windows zone map |
+| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | done (see Time zones): `TimeZone`, `HostTimeZone`, `DefaultTimeZone`, `TimeZones`; Temporal's possible instants belong to the `temporal` stage, and `LegacyZoneNameAt` to `date` |
 | Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
 
 The formatter surfaces come first: they are go-intl's own API, and each item

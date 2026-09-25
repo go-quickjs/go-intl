@@ -78,6 +78,12 @@ const (
 	MarkerAliases Marker = "aliases"
 	// MarkerUmmAlQura is the Umm al-Qura calendar's table of month lengths.
 	MarkerUmmAlQura Marker = "ummalqura"
+	// MarkerTimeZones is ICU's time zones, one data set per name in
+	// lowercase: MarkerTimeZones + "/" + "europe/paris", which is
+	// tz/europe/paris.bin, asked for at the root.
+	MarkerTimeZones Marker = "tz"
+	// MarkerWindowsZones is CLDR's mapping of Windows zones to ICU's.
+	MarkerWindowsZones Marker = "windowszones"
 	// MarkerRBNF is ICU's rules for its algorithmic numbering systems, the
 	// Roman and Hebrew numerals among them.
 	MarkerRBNF Marker = "rbnf"

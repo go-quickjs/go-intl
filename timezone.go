@@ -55,7 +55,7 @@ func loadTimeZone(src Source, name string) (*timeZone, error) {
 	if !zoneNameShaped(name) {
 		return nil, fmt.Errorf("intl: %q is %w", name, errNoZone)
 	}
-	b, err := src.Open(Marker("tz/"+strings.ToLower(name)), DataLocale{})
+	b, err := src.Open(MarkerTimeZones+Marker("/"+strings.ToLower(name)), DataLocale{})
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, fmt.Errorf("intl: %q is %w", name, errNoZone)
@@ -76,7 +76,7 @@ func loadTimeZone(src Source, name string) (*timeZone, error) {
 		}
 	}
 	if link != "" {
-		if b, err = src.Open(Marker("tz/"+link), DataLocale{}); err != nil {
+		if b, err = src.Open(MarkerTimeZones+Marker("/"+link), DataLocale{}); err != nil {
 			return nil, fmt.Errorf("intl: the time zone %s: %w", link, err)
 		}
 	}
