@@ -812,6 +812,20 @@ from ISO -3000 to 3000 and at both ends of Temporal's range, month by
 month, and the Japanese era of every day from 1868 to 2030: all 96,659
 years match.
 
+**Fields to dates, and date arithmetic: done.** `DateFromFields`,
+`YearMonthFromFields`, `MonthDayFromFields`, `DateAdd` and `DateUntil` are
+temporal_rs's calendar operations: the ISO calendar by the specification's
+algorithms, the others through ICU4X's `ArithmeticDate` (`from_fields` with
+its missing-field strategies and reference years, `added`, and `until`
+with its surpass checker), and errors as temporal_rs throws them,
+`ErrType` for missing fields and `ErrRange` for the rest.
+`testdata/temporal_fields_node.js` records 311,526 cases across the
+sixteen calendars, fields by ordinal month and by code, leap months, eras
+and their aliases, both overflows, adding durations of each unit and
+differencing with each largest unit: all match. ICU4X balances a month
+count year by year, so `until` in months across millennia of Chinese years
+is slow, as it is in ICU4X.
+
 ### 9. Retire internal/icu
 
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
@@ -839,7 +853,7 @@ README's Intl section.
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | not started |
 | 8b. `date` package | not started |
-| 8c. `temporal` package | calendars from ISO dates done: all 16, 96,659 years against node; fields to dates, arithmetic and the rest of Temporal left |
+| 8c. `temporal` package | calendars done: all 16, 96,659 years, and fields, adding and differencing, 311,526 cases, against node; the rest of Temporal left |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage so far: 7,809 of 7,949 cases, every one of them exact.** Only the Segmenter's 140 are left.
