@@ -755,7 +755,13 @@ equivalent year when outside 1970 to 2038, only whether it is daylight
 time kept, and `TimeZone::getDisplayName(daylight, LONG, default locale)`,
 which takes the metazone at the current time, not at the instant, and
 falls back to the localized GMT format of the zone's current raw offset
-and saving. So the package takes a clock and a default locale. Expectations
+and saving.
+
+Its constructor takes a locale and a time zone, both optional: the locale
+the bracketed names are written in, and the zone local time is reckoned in.
+Left out, they are the host's, as Node's are: the zone `HostTimeZone`
+finds, and the host's default locale. It takes a clock too, for the
+current time the names are chosen at, the system's by default. Expectations
 come from Node run under each zone (`process.env.TZ`); a default locale
 other than the host's needs Node on Linux, where `LANG` sets it.
 
