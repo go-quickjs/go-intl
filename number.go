@@ -332,11 +332,30 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 
 // loadNumbers walks the fallback chain until a locale has number data. The
 // root always does, so this always finds something or the data is broken.
+//
+// The currency names are ICU's currency tree's, which sends a locale or two
+// elsewhere than the number symbols' tree does: "sr-Cyrl-ME" writes Latin
+// currency names. Where it does, they are read from there.
 func loadNumbers(src Source, loc Locale) (*numdata.Locale, error) {
-	chain := loc.Fallback()
-	if f, err := NewFallbacker(src); err == nil {
-		chain = f.Chain(loc.Data())
+	f, err := NewFallbacker(src)
+	if err != nil {
+		return loadNumbersAlong(src, loc, loc.Fallback())
 	}
+	data, err := loadNumbersAlong(src, loc, f.ChainIn(treeLocales, loc.Data()))
+	if err != nil {
+		return nil, err
+	}
+	if curr := f.ChainIn(treeCurr, loc.Data()); curr[0] != f.ChainIn(treeLocales, loc.Data())[0] {
+		names, err := loadNumbersAlong(src, loc, curr)
+		if err != nil {
+			return nil, err
+		}
+		data.Currencies = names.Currencies
+	}
+	return data, nil
+}
+
+func loadNumbersAlong(src Source, loc Locale, chain []DataLocale) (*numdata.Locale, error) {
 	for _, d := range chain {
 		b, err := src.Open(MarkerNumbers, d)
 		if err != nil {

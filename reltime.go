@@ -128,7 +128,7 @@ func NewRelativeTimeFormatFrom(src Source, loc Locale, opts RelativeTimeFormatOp
 func loadRelativeTime(src Source, loc Locale) (*reltimedata.Locale, error) {
 	chain := loc.Fallback()
 	if fb, err := NewFallbacker(src); err == nil {
-		chain = fb.Chain(loc.Data())
+		chain = fb.ChainIn(treeLocales, loc.Data())
 	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerRelativeTime, d)

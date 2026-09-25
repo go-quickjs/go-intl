@@ -760,7 +760,6 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| Locale negotiation | `Has`, `Resolve`, `ResolveTag`, `TagAliases` | ICU's per-tree fallback where it differs from CLDR's (sr-Cyrl-ME units and currency names, ku-TR). Canonicalization, available locales, `Resolve` and `Supported` are done: see "Canonicalization" and "Negotiation" |
 | `Intl.supportedValuesOf` | `Calendars`, `Collations`, `Currencies`, `Units`, `Zones` | the lists, from CLDR's BCP 47 data; `NumberingSystems` is done |
 | `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
@@ -811,6 +810,18 @@ short and without its script, in nine services: all 9,747 agree.
 fit is behind a flag Node leaves off, and across every available locale,
 alone and in pairs, Node's two matchers answer alike. With negotiation the
 DurationFormat sweep's 21 locale gaps close.
+
+Data is read from the bundle ICU opens, per tree of ICU's data, where that
+is neither the locale's own nor a shorter form of it (`redirect` lines in
+`data/available.bin`, 381 of them, followed by `Fallbacker.ChainIn`). ICU
+opens an alias bundle as the one it names and otherwise drops a default
+script, where CLDR's chain truncates: "zh-TW" had been written in
+simplified Chinese from "zh", and is now "zh-Hant-TW"'s traditional; "sr-ME"
+is Serbian in Latin and "uz-AF" Uzbek in Arabic; "sr-Cyrl-ME" keeps its
+Cyrillic dates and names but writes Latin units and currency names, ICU's
+unit and currency trees having no bundle of its own. Zone names are the
+exception: zonegen already resolves ICU's zone and region trees for each
+locale it writes, so only a locale without a file is redirected.
 
 ## Resuming cold
 

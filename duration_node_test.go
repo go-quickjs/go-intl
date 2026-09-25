@@ -96,10 +96,7 @@ var durationGaps = []struct{ duration, why string }{
 
 // durationLocaleGaps are locales Node writes otherwise, for reasons that
 // belong to the data rather than to DurationFormat.
-var durationLocaleGaps = map[string]string{
-	"sr-Cyrl-ME": "ICU's unit tree has no sr_Cyrl_ME, and ICU's fallback reads sr_Latn_ME " +
-		"for it: Latin unit names beside Cyrillic list patterns",
-}
+var durationLocaleGaps = map[string]string{}
 
 // TestDurationFormatMatchesNode replays testdata/duration_node.js.
 func TestDurationFormatMatchesNode(t *testing.T) {

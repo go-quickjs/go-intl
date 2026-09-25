@@ -86,7 +86,7 @@ func NewListFormatFrom(src Source, loc Locale, opts ListFormatOptions) (*ListFor
 func loadLists(src Source, loc Locale) (*listdata.Locale, error) {
 	chain := loc.Fallback()
 	if f, err := NewFallbacker(src); err == nil {
-		chain = f.Chain(loc.Data())
+		chain = f.ChainIn(treeLocales, loc.Data())
 	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerLists, d)

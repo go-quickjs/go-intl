@@ -104,7 +104,13 @@ func NewDisplayNames(loc Locale, opts DisplayNamesOptions) (*DisplayNames, error
 
 // NewDisplayNamesFrom builds one from a source of the caller's own.
 func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*DisplayNames, error) {
-	data, err := loadNames(src, loc)
+	// ICU keeps language, script and region names in trees of their own,
+	// and the redirects differ between them only a little.
+	tree := treeLang
+	if opts.Kind == DisplayRegion {
+		tree = treeRegion
+	}
+	data, err := loadNames(src, loc, tree)
 	if err != nil {
 		return nil, err
 	}
@@ -127,10 +133,10 @@ func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*Dis
 	return d, nil
 }
 
-func loadNames(src Source, loc Locale) (*namedata.Locale, error) {
+func loadNames(src Source, loc Locale, tree string) (*namedata.Locale, error) {
 	chain := loc.Fallback()
 	if f, err := NewFallbacker(src); err == nil {
-		chain = f.Chain(loc.Data())
+		chain = f.ChainIn(tree, loc.Data())
 	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerNames, d)

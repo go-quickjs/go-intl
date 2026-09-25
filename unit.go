@@ -77,7 +77,7 @@ func sortStrings(s []string) {
 func loadUnits(src Source, loc Locale) (*unitdata.Locale, error) {
 	chain := loc.Fallback()
 	if f, err := NewFallbacker(src); err == nil {
-		chain = f.Chain(loc.Data())
+		chain = f.ChainIn(treeUnit, loc.Data())
 	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerUnits, d)

@@ -17,7 +17,8 @@
 // bundle of the tree but root and a few deprecated names, and, in the list
 // V8 asks for, the alias bundles LOCALE_DEPS.json names.
 //
-// The file is lines of a service and a tag: "number zh-Hant-HK".
+// The file is lines of a service and a tag: "number zh-Hant-HK"; and the
+// redirects ICU's bundles make, per tree (see redirectLines).
 package main
 
 import (
@@ -232,5 +233,67 @@ func build(zip string) ([]byte, error) {
 		}
 	}
 	sort.Strings(lines)
+
+	redirects, err := redirectLines(zip, sets["all"])
+	if err != nil {
+		return nil, err
+	}
+	lines = append(lines, redirects...)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
+}
+
+// redirectTrees are the trees whose bundles a service's data comes from.
+var redirectTrees = []string{"locales", "unit", "curr", "lang", "region", "zone"}
+
+// redirectLines are the locales ICU reads another locale's bundle for, in
+// each tree, as "redirect <tree> <tag> <bundle>": "redirect locales zh-TW
+// zh-Hant-TW", "redirect unit sr-Cyrl-ME sr-Latn-ME". ICU opens a locale's
+// own bundle if the tree has it, an alias bundle as the bundle it names, and
+// otherwise the one its fallback finds, which drops a default script; CLDR's
+// chain goes elsewhere for these. A bundle that is only a shorter form of
+// the tag, which CLDR's chain reaches too, is not written, nor a tag with a
+// variant, which a data locale cannot hold.
+func redirectLines(zip string, available map[string]bool) ([]string, error) {
+	fb, err := icusrc.ICUFallback()
+	if err != nil {
+		return nil, err
+	}
+	var tags []string
+	for tag := range available {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	var out []string
+	for _, tree := range redirectTrees {
+		t, err := icusrc.OpenTree(zip, tree)
+		if err != nil {
+			return nil, err
+		}
+		for _, tag := range tags {
+			name := strings.ReplaceAll(tag, "-", "_")
+			if strings.Contains(tag, "_u_") || strings.Contains(name, "_u_") || hasVariant(name) {
+				continue
+			}
+			bundle := t.Bundle(name, fb)
+			if bundle == name || bundle == "root" || strings.HasPrefix(name+"_", bundle+"_") || hasVariant(bundle) {
+				continue
+			}
+			out = append(out, "redirect "+tree+" "+tag+" "+strings.ReplaceAll(bundle, "_", "-"))
+		}
+		t.Close()
+	}
+	return out, nil
+}
+
+// hasVariant reports whether an ICU locale name is more than a language,
+// script and region: "no_NO_NY", whose "NY" is ICU's legacy variant.
+func hasVariant(name string) bool {
+	parts := strings.Split(name, "_")[1:]
+	if len(parts) > 0 && len(parts[0]) == 4 {
+		parts = parts[1:]
+	}
+	if len(parts) > 0 && (len(parts[0]) == 2 || len(parts[0]) == 3 && parts[0][0] >= '0' && parts[0][0] <= '9') {
+		parts = parts[1:]
+	}
+	return len(parts) > 0
 }

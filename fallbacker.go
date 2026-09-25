@@ -1,6 +1,9 @@
 package intl
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // The fallback chain, once CLDR has a say in it.
 //
@@ -18,13 +21,32 @@ import "fmt"
 //     and "zh-Hant-TW" are looked for in one place rather than two.
 //
 // The two compose: maximize first if the identifier is partial, then chain.
+//
+// A third table says where ICU looks instead, which is what Node answers
+// with: for the locales negotiation can hand a service, the bundle ICU opens
+// when it is neither the locale's own nor a shorter form of it -- an alias
+// bundle, "sr-ME" being "sr-Latn-ME", or the one ICU's fallback finds,
+// "zh-TW" being "zh-Hant-TW" -- per tree of ICU's data, since the trees
+// differ ("sr-Cyrl-ME" has its own dates but Latin units). ChainIn follows
+// it before chaining.
 
 // A Fallbacker answers where to look for data. It is read-only once built and
 // safe for concurrent use.
 type Fallbacker struct {
-	parents pairTable
-	likely  pairTable
+	parents   pairTable
+	likely    pairTable
+	redirects map[string]map[DataLocale]DataLocale
 }
+
+// The trees of ICU's data a service's data comes from, for ChainIn.
+const (
+	treeLocales = "locales"
+	treeUnit    = "unit"
+	treeCurr    = "curr"
+	treeLang    = "lang"
+	treeRegion  = "region"
+	treeZone    = "zone"
+)
 
 // NewFallbacker reads the tables it needs from a source.
 func NewFallbacker(src Source) (*Fallbacker, error) {
@@ -36,7 +58,36 @@ func NewFallbacker(src Source) (*Fallbacker, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Fallbacker{parents: parents, likely: likely}, nil
+	f := &Fallbacker{parents: parents, likely: likely, redirects: map[string]map[DataLocale]DataLocale{}}
+	// The redirects are optional, so that a source carrying only the two
+	// tables above still works.
+	if b, err := src.Open(MarkerAvailable, DataLocale{}); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) != 4 || fields[0] != "redirect" {
+				continue
+			}
+			from, err1 := ParseLocale(fields[2])
+			to, err2 := ParseLocale(fields[3])
+			if err1 != nil || err2 != nil {
+				return nil, fmt.Errorf("loading %s: %q", MarkerAvailable, line)
+			}
+			if f.redirects[fields[1]] == nil {
+				f.redirects[fields[1]] = map[DataLocale]DataLocale{}
+			}
+			f.redirects[fields[1]][from.Data()] = to.Data()
+		}
+	}
+	return f, nil
+}
+
+// ChainIn is Chain for data read from one of ICU's trees: from the bundle
+// ICU opens instead, where it opens another.
+func (f *Fallbacker) ChainIn(tree string, d DataLocale) []DataLocale {
+	if to, ok := f.redirects[tree][d]; ok {
+		d = to
+	}
+	return f.Chain(d)
 }
 
 func loadPairs(src Source, m Marker) (pairTable, error) {

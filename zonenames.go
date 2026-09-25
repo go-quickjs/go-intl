@@ -48,7 +48,13 @@ func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
 	chain := loc.Fallback()
 	fb, fbErr := NewFallbacker(src)
 	if fbErr == nil {
-		chain = fb.Chain(loc.Data())
+		// zonegen resolves ICU's zone and region trees itself for every
+		// locale it writes, so only a locale without a file of its own, such
+		// as the alias "sr-ME", is redirected.
+		chain = fb.ChainIn(treeZone, loc.Data())
+		if _, err := src.Open(MarkerZoneNames, loc.Data()); err == nil {
+			chain = fb.Chain(loc.Data())
+		}
 	}
 	var data *zonedata.Locale
 	for _, d := range chain {
