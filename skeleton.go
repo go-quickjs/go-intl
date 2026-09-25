@@ -205,6 +205,22 @@ func (f *DateTimeFormat) styleOverrides(src Source) {
 	}
 	f.overrides = overrides
 	f.systems, _ = loadNumberingSystems(src)
+	// The systems not written with ten digits are written by rules.
+	for _, system := range overrides {
+		numeric := false
+		for _, s := range f.systems {
+			numeric = numeric || s.Name == system
+		}
+		if numeric || f.rbnf[system].rules != nil {
+			continue
+		}
+		if rules, set, err := loadRBNF(src, system); err == nil {
+			if f.rbnf == nil {
+				f.rbnf = map[string]rbnfSystem{}
+			}
+			f.rbnf[system] = rbnfSystem{rules, set}
+		}
+	}
 }
 
 // hourCycleFromPattern is the cycle of the first hour letter outside quotes.

@@ -583,6 +583,13 @@ come) are subclasses and keep Julian dates before October 1582. And a
 calendar with one era counts its years back through zero before it, so the
 Islamic year of AD 200 is -435.
 
+The algorithmic numbering systems date patterns name -- Roman numerals for
+Hawaiian months, Hebrew numerals, the Japanese era year that calls its first
+year 元, the Chinese calendar's days -- are ICU's rule-based number formats.
+go-intl carries ICU's rules (`data/rbnf.bin`, 23 KB) and interprets them, as
+nfrule.cpp and nfrs.cpp do, for whole numbers. The hand-written Roman
+numerals it replaced agreed with it.
+
 The date data is 32 MB with ten calendars, up from 9 MB with three, because
 each calendar keeps its own copy of names and patterns that often repeat the
 Gregorian ones. That is for the data-size decision below.

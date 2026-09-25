@@ -61,6 +61,9 @@ const (
 	// MarkerTimeData is CLDR's hour-cycle preferences, by region or by
 	// language and region.
 	MarkerTimeData Marker = "timedata"
+	// MarkerRBNF is ICU's rules for its algorithmic numbering systems, the
+	// Roman and Hebrew numerals among them.
+	MarkerRBNF Marker = "rbnf"
 	// MarkerWeekData is CLDR's week conventions by region: the first day of
 	// the week, the days the first week of a year needs, the weekend.
 	MarkerWeekData Marker = "weekdata"

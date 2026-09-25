@@ -2,7 +2,6 @@ package intl
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -190,6 +189,8 @@ type DateTimeFormat struct {
 	// systems are the numeric numbering systems, read when an override
 	// names one.
 	systems []numdata.NumberingSystem
+	// rbnf are the rule-based numbering systems overrides name, by name.
+	rbnf map[string]rbnfSystem
 	// zones are the locale's zone names and zone the formatter's zone as
 	// they see it.
 	zones *zoneNames
@@ -449,11 +450,13 @@ func (f *DateTimeFormat) signedNumber(p *dateParts, letter byte, v, width int) s
 
 func (f *DateTimeFormat) number(p *dateParts, letter byte, v, width int) string {
 	if system, ok := p.overrides[letter]; ok {
-		switch system {
-		case "romanlow":
-			return roman(v, true)
-		case "roman":
-			return roman(v, false)
+		if rules, ok := f.rbnf[system]; ok {
+			// SimpleDateFormat writes a Hebrew year of this millennium
+			// without its thousands: 5784 is תשפ״ד.
+			if system == "hebr" && (letter == 'y' || letter == 'Y') && v > 5000 && v < 6000 {
+				v -= 5000
+			}
+			return rules.rules.format(rules.set, int64(v))
 		}
 		for _, s := range f.systems {
 			if s.Name == system {
@@ -464,29 +467,10 @@ func (f *DateTimeFormat) number(p *dateParts, letter byte, v, width int) string 
 	return f.digits(pad(v, width))
 }
 
-// roman writes a number in Roman numerals, as ICU's rule-based %roman-upper
-// and %roman-lower do for the numbers a date has: one to 3,999, and anything
-// outside that in plain digits.
-func roman(v int, lower bool) string {
-	if v <= 0 || v >= 4000 {
-		return strconv.Itoa(v)
-	}
-	numerals := []struct {
-		value int
-		text  string
-	}{{1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"}, {100, "C"}, {90, "XC"},
-		{50, "L"}, {40, "XL"}, {10, "X"}, {9, "IX"}, {5, "V"}, {4, "IV"}, {1, "I"}}
-	var b strings.Builder
-	for _, n := range numerals {
-		for v >= n.value {
-			b.WriteString(n.text)
-			v -= n.value
-		}
-	}
-	if lower {
-		return strings.ToLower(b.String())
-	}
-	return b.String()
+// rbnfSystem is a rule-based numbering system and the rule set it starts at.
+type rbnfSystem struct {
+	rules *rbnfRules
+	set   string
 }
 
 // The fields an override without a letter applies to, ICU's kDateFields and
