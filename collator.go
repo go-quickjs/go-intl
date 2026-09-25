@@ -303,18 +303,22 @@ type collationSearch []*colldata.Locale
 // collationChain reads the collation data along a locale's chain in the
 // collation tree.
 func collationChain(src Source, d DataLocale) (collationSearch, error) {
-	tree, err := loadCollationTree(src)
-	if err != nil {
-		return nil, err
-	}
-	steps := tree.chain(d)
 	// ICU's index of the collation tree, where there is one, also knows
 	// where ICU goes for a locale it has no bundle for: "ar-Latn" is the
-	// root's, not Arabic's.
+	// root's, not Arabic's. The collation tree's own pairs are for a source
+	// without it.
+	var steps []DataLocale
 	if fb, err := NewFallbacker(src); err == nil {
 		if _, ok := fb.icuTree(treeColl); ok {
 			steps = fb.ChainIn(treeColl, d)
 		}
+	}
+	if steps == nil {
+		tree, err := loadCollationTree(src)
+		if err != nil {
+			return nil, err
+		}
+		steps = tree.chain(d)
 	}
 	var chain collationSearch
 	for _, step := range steps {

@@ -149,3 +149,45 @@ func TestCollatorResolvedOptions(t *testing.T) {
 		}
 	}
 }
+
+// withoutMarker is a source that has no data under one marker.
+type withoutMarker struct {
+	intl.Source
+	hidden intl.Marker
+}
+
+func (s withoutMarker) Open(m intl.Marker, d intl.DataLocale) ([]byte, error) {
+	if m == s.hidden {
+		return nil, intl.ErrNotFound
+	}
+	return s.Source.Open(m, d)
+}
+
+// A source without ICU's index of the collation tree finds a locale's
+// collation along the collation tree's own pairs, which only such a source
+// reads.
+func TestCollatorWithoutICUIndex(t *testing.T) {
+	src := withoutMarker{intl.Embedded, "icutree-coll"}
+	for _, tc := range []struct {
+		locale string
+		a, b   string
+		want   int
+	}{
+		// Swedish sorts ö after z; the root sorts it with o.
+		{"sv", "ö", "z", 1},
+		{"sv-FI", "ö", "z", 1},
+		{"en", "ö", "z", -1},
+	} {
+		loc, err := intl.ParseLocale(tc.locale)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := intl.NewCollatorFrom(src, loc, intl.CollatorOptions{})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.locale, err)
+		}
+		if got := c.Compare(tc.a, tc.b); got != tc.want {
+			t.Errorf("%s: Compare(%q, %q) = %d, want %d", tc.locale, tc.a, tc.b, got, tc.want)
+		}
+	}
+}

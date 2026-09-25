@@ -1254,7 +1254,7 @@ In English now, against where this started:
 
 | Built | Then | Now |
 |---|---|---|
-| Collator | 344 µs | 26 µs |
+| Collator | 344 µs | 6 µs |
 | ListFormat | 151 µs | 2.5 µs |
 | PluralRules | | 2.7 µs |
 | NumberFormat | 148 µs | 8 µs |
