@@ -105,7 +105,9 @@ Other URLs:
   and `temporal_rs` 0.2.3 (`9a902a45282e5175186b21d355efc92564601efe6e2d92818dc9e333d50bd4de`).
   They are Temporal's implementation in Node, and the `temporal` package is
   ported from them at these versions, not from the ICU4X checkout, which is
-  newer.
+  newer. `temporalgen` reads `icu_calendar`'s crate, after checking its
+  checksum, for the four source files that are data: the Chinese, Korean
+  and Qing years and the Umm al-Qura years.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
   Five files are read, and all are vendored in `internal/icusrc`:

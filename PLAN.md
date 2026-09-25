@@ -797,6 +797,21 @@ starts with the calendars: a date's fields from its ISO date and back, with
 Temporal's overflow; then adding to a date and the difference between two;
 then the rest of Temporal.
 
+**The calendars, ISO date to fields: done.** `temporal.Calendar` reckons
+all sixteen of Temporal's calendars as `icu_calendar` 2.2.1 does, each as
+ICU4X's `DateFieldsResolver` over a year laid out as its first day and its
+months: the Gregorian ones with their eras (the Japanese from Meiji 6, CE
+and BCE before), Coptic and the two Ethiopian eras, Indian, the "fast"
+Persian with its 78 corrections, the tabular Islamic from either epoch,
+Hebrew, and Umm al-Qura, Chinese and Korean from ICU4X's tables
+(`data/temporalcalendars.bin`, which `temporalgen` copies out of the
+checksummed crate) and, outside them, its mean-motion approximation, ported
+in its integer arithmetic, with the six-bit new-year offset it packs.
+`testdata/temporal_calendars_node.js` records every year of every calendar
+from ISO -3000 to 3000 and at both ends of Temporal's range, month by
+month, and the Japanese era of every day from 1868 to 2030: all 96,659
+years match.
+
 ### 9. Retire internal/icu
 
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
@@ -824,7 +839,7 @@ README's Intl section.
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | not started |
 | 8b. `date` package | not started |
-| 8c. `temporal` package | not started |
+| 8c. `temporal` package | calendars from ISO dates done: all 16, 96,659 years against node; fields to dates, arithmetic and the rest of Temporal left |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage so far: 7,809 of 7,949 cases, every one of them exact.** Only the Segmenter's 140 are left.

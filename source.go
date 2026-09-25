@@ -84,6 +84,9 @@ const (
 	MarkerTimeZones Marker = "tz"
 	// MarkerWindowsZones is CLDR's mapping of Windows zones to ICU's.
 	MarkerWindowsZones Marker = "windowszones"
+	// MarkerTemporalCalendars is ICU4X's tables of the Chinese, Korean and
+	// Umm al-Qura years, which the temporal package's calendars read.
+	MarkerTemporalCalendars Marker = "temporalcalendars"
 	// MarkerRBNF is ICU's rules for its algorithmic numbering systems, the
 	// Roman and Hebrew numerals among them.
 	MarkerRBNF Marker = "rbnf"
