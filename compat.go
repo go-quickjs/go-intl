@@ -12,8 +12,8 @@ import "strings"
 //
 // The choice is made divergence by divergence, because a host may want Node
 // in most places and the standard in a few: go-quickjs answers as Node does
-// but for the Japanese twelve-hour clock, the Islamic eras and Temporal's
-// formats. Standard and NodeICU are the two ends.
+// but for the Japanese twelve-hour clock, the Islamic eras, Temporal's
+// formats and the keyword value "yes". Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -48,6 +48,9 @@ const (
 	// TemporalFormats writes a Temporal value with V8's formats, which
 	// count an era as a field asked for and keep no hour cycle.
 	TemporalFormats
+	// YesValues leaves "yes" out of any Unicode extension keyword, as ICU
+	// does, rather than only where it stands for "true".
+	YesValues
 )
 
 const (
@@ -56,7 +59,7 @@ const (
 	// NodeICU reproduces Node's and ICU4C's observable behavior in every
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
-		TwelveHourCycle | IslamicEras | TemporalFormats
+		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -147,6 +150,16 @@ var Divergences = []Divergence{
 			"resolved hour cycle is the value's too (hour12: false writes \"00:00:00\")",
 		Node: "V8 counts an era among the fields asked for, writing \"A\" alone, and makes " +
 			"the value's format with no hour cycle, writing \"12:00:00 AM\" for hour12: false",
+	},
+	{
+		Name: "YesValues", Flag: YesValues,
+		Area: "Locale",
+		What: "a Unicode extension keyword whose value is \"yes\"",
+		Standard: "UTS #35 replaces \"yes\" by its canonical \"true\", and leaves \"true\" out, " +
+			"only for the keys whose BCP 47 data has that alias -- kb, kc, kh, kk and kn -- " +
+			"so \"und-u-ka-yes\" stays as it is",
+		Node: "ICU takes \"yes\" for any key as \"true\" and leaves it out: " +
+			"\"und-u-ka-yes\" is \"und-u-ka\"",
 	},
 }
 

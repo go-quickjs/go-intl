@@ -148,3 +148,33 @@ func TestTemporalFormats(t *testing.T) {
 		}
 	}
 }
+
+// "yes" as a keyword's value: UTS #35 makes it "true", and leaves that out,
+// only for the keys whose BCP 47 data has the alias; ICU does it for every
+// key. The expectations are test262's (unicode-ext-canonicalize-yes-to-true)
+// and Node's.
+func TestYesValues(t *testing.T) {
+	for _, c := range []struct {
+		compat intl.Compat
+		want   []string
+	}{
+		{intl.Standard, []string{"und-u-kb", "und-u-kc", "und-u-kh", "und-u-kk", "und-u-kn",
+			"und-u-ka-yes", "und-u-kf-yes", "und-u-kr-yes", "und-u-ks-yes", "und-u-kv-yes"}},
+		{intl.YesValues, []string{"und-u-kb", "und-u-kc", "und-u-kh", "und-u-kk", "und-u-kn",
+			"und-u-ka", "und-u-kf", "und-u-kr", "und-u-ks", "und-u-kv"}},
+	} {
+		canon, err := intl.NewCanonicalizer(intl.Embedded, intl.CanonicalizeOptions{Compat: c.compat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, key := range []string{"kb", "kc", "kh", "kk", "kn", "ka", "kf", "kr", "ks", "kv"} {
+			l, err := canon.Canonicalize("und-u-" + key + "-yes")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := l.String(); got != c.want[i] {
+				t.Errorf("%v: und-u-%s-yes is %q, want %q", c.compat, key, got, c.want[i])
+			}
+		}
+	}
+}

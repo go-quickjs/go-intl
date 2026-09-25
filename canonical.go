@@ -192,9 +192,10 @@ func (c *Canonicalizer) CanonicalizeLocale(l Locale) Locale {
 		if (k.Key == "sd" || k.Key == "rg") && value != "" {
 			value = c.replaceSubdivision(value)
 		}
-		// "true", and "yes", which ICU takes as a typeless keyword's value,
-		// are left out.
-		if value == "true" || value == "yes" {
+		// "true" is left out, and so is "yes" where the key's data makes it
+		// "true". ICU takes "yes" as any keyword's value and leaves it out
+		// everywhere (YesValues).
+		if value == "true" || value == "yes" && c.opts.Compat.Has(YesValues) {
 			value = ""
 		}
 		out.Keywords = append(out.Keywords, Keyword{Key: k.Key, Value: value})
