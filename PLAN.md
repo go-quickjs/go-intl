@@ -1263,7 +1263,7 @@ In English now, against where this started:
 | DurationFormat | 575 µs | 23 µs |
 | DisplayNames | 224 µs | 2.8 µs |
 | DateTimeFormat, fields | 1.07 ms | 66 µs |
-| DateTimeFormat, full styles and a zone name | 1.19 ms | 130 µs |
+| DateTimeFormat, full styles and a zone name | 1.19 ms | 109 µs |
 | Canonicalizer | 392 µs | 1 µs |
 | LocaleMatcher | 201 µs | 0.36 µs |
 

@@ -7,29 +7,25 @@
 // Each zone ICU knows by name has a file, data/tz/<name>.bin, the name in
 // lowercase, so that a name is valid when its file exists, in any case, as
 // ECMA-402 matches names, and a formatter reads only its own zone. A file is
-// lines of text:
+// a tzdata.Zone:
 //
-//	name Asia/Calcutta
-//	canonical Asia/Calcutta
-//	link asia/kolkata
+//	name       Europe/Paris
+//	canonical  Europe/Paris
+//	types      561,0 0,0 0,3600 0,7200 3600,0 3600,3600
+//	trans      -1855958961:1 -1689814800:2 -1680397200:1 ...
+//	final      3600 1997 2 -31 -1 3600 2 9 -31 -1 3600 2 3600
 //
-//	name Europe/Paris
-//	canonical Europe/Paris
-//	types 561,0 0,0 0,3600 0,7200 3600,0 3600,3600
-//	trans -1855958961:1 -1689814800:2 -1680397200:1 ...
-//	final 3600 1997 2 -31 -1 3600 2 9 -31 -1 3600 2 3600
-//
-// "name" is the name as ICU spells it. "canonical" is the name
-// ZoneMeta::getCanonicalCLDRID gives it, which
-// resolvedOptions reports and zone names are keyed by. A name that is a link
-// in the tz data has "link", the zone whose rules it keeps, and nothing
-// else. A zone has its offsets as ICU's OlsonTimeZone keeps them: "types",
-// each a raw offset and a daylight saving, in seconds, the first in force
-// before any transition; "trans", each transition's instant, in seconds
-// since 1970, and the type it starts; and "final", when the zone ends in a
-// rule, the raw offset, the year the rule governs from, and ICU's eleven
-// numbers for the rule: start month, day, day of week, time and time mode,
-// the same for the end, and the saving.
+// The name is as ICU spells it, and the canonical name the one
+// ZoneMeta::getCanonicalCLDRID gives it, which resolvedOptions reports and
+// zone names are keyed by. A name that is a link in the tz data has the zone
+// whose rules it keeps, "asia/kolkata" for Asia/Calcutta, and nothing else.
+// A zone has its offsets as ICU's OlsonTimeZone keeps them: the types, each
+// a raw offset and a daylight saving, in seconds, the first in force before
+// any transition; the transitions, each an instant, in seconds since 1970,
+// and the type it starts; and, when the zone ends in a rule, the raw offset,
+// the year the rule governs from, and ICU's eleven numbers for the rule:
+// start month, day, day of week, time and time mode, the same for the end,
+// and the saving.
 //
 // data/windowszones.bin is windowsZones.txt's mapTimezones, which ICU
 // consults to name the zone a Windows machine is set to: a line per Windows
@@ -57,6 +53,7 @@ import (
 
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/tzdata"
 )
 
 func main() {
@@ -93,7 +90,7 @@ func read(dir, name string) (*icutxt.Node, error) {
 	return n, nil
 }
 
-func build(dir string) (map[string]string, error) {
+func build(dir string) (map[string][]byte, error) {
 	info, err := read(dir, "zoneinfo64")
 	if err != nil {
 		return nil, err
@@ -154,7 +151,7 @@ func build(dir string) (map[string]string, error) {
 		return target
 	}
 
-	files := map[string]string{}
+	files := map[string][]byte{}
 	for i, name := range names.Values {
 		canonical := canonicalOf(i)
 		if canonical == "Etc/Unknown" {
@@ -164,27 +161,23 @@ func build(dir string) (map[string]string, error) {
 		if _, dup := files[key]; dup {
 			return nil, fmt.Errorf("zoneinfo64.txt: two names are %s in lowercase", key)
 		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "name %s\ncanonical %s\n", name, canonical)
+		zone := &tzdata.Zone{Name: name, Canonical: canonical}
 		t := linkTarget(i)
 		if t < 0 {
 			return nil, fmt.Errorf("zoneinfo64.txt: %s links nowhere", name)
 		}
 		if t != i {
-			fmt.Fprintf(&b, "link %s\n", strings.ToLower(names.Values[t]))
-			files[key] = b.String()
-			continue
-		}
-		if err := writeZone(&b, zones.Children[i], rules); err != nil {
+			zone.Link = strings.ToLower(names.Values[t])
+		} else if err := readZone(zone, zones.Children[i], rules); err != nil {
 			return nil, fmt.Errorf("zoneinfo64.txt: %s: %w", name, err)
 		}
-		files[key] = b.String()
+		files[key] = tzdata.Encode(zone)
 	}
 	return files, nil
 }
 
-// writeZone writes an OlsonTimeZone's offsets.
-func writeZone(b *strings.Builder, z, rules *icutxt.Node) error {
+// readZone reads an OlsonTimeZone's offsets.
+func readZone(out *tzdata.Zone, z, rules *icutxt.Node) error {
 	ints := func(key string) ([]int64, error) {
 		n := z.Get(key)
 		if n == nil {
@@ -230,11 +223,13 @@ func writeZone(b *strings.Builder, z, rules *icutxt.Node) error {
 	if len(offsets) == 0 || len(offsets)%2 != 0 {
 		return fmt.Errorf("%d type offsets", len(offsets))
 	}
-	b.WriteString("types")
 	for i := 0; i < len(offsets); i += 2 {
-		fmt.Fprintf(b, " %d,%d", offsets[i], offsets[i+1])
+		raw, dst, err := int32s(offsets[i], offsets[i+1])
+		if err != nil {
+			return fmt.Errorf("type offsets: %w", err)
+		}
+		out.Types = append(out.Types, tzdata.Offset{Raw: raw, DST: dst})
 	}
-	b.WriteString("\n")
 
 	if len(trans) > 0 {
 		m := z.Get("typeMap")
@@ -245,15 +240,14 @@ func writeZone(b *strings.Builder, z, rules *icutxt.Node) error {
 		if len(hex) != 2*len(trans) {
 			return fmt.Errorf("%d transitions, a type map of %d", len(trans), len(hex)/2)
 		}
-		b.WriteString("trans")
 		for i, t := range trans {
 			typ, err := strconv.ParseUint(hex[2*i:2*i+2], 16, 8)
 			if err != nil {
 				return fmt.Errorf("type map %q", hex)
 			}
-			fmt.Fprintf(b, " %d:%d", t, typ)
+			out.Trans = append(out.Trans, t)
+			out.TransTypes = append(out.TransTypes, uint8(typ))
 		}
-		b.WriteString("\n")
 	}
 
 	if r := z.Get("finalRule"); r != nil && r.Value != "" {
@@ -262,13 +256,23 @@ func writeZone(b *strings.Builder, z, rules *icutxt.Node) error {
 		if rule == nil || len(rule.Values) != 11 || raw == nil || year == nil {
 			return fmt.Errorf("final rule %s", r.Value)
 		}
-		fmt.Fprintf(b, "final %s %s", strings.TrimSpace(raw.Value), strings.TrimSpace(year.Value))
-		for _, v := range rule.Values {
-			fmt.Fprintf(b, " %s", strings.TrimSpace(v))
+		for _, v := range append([]string{raw.Value, year.Value}, rule.Values...) {
+			n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 32)
+			if err != nil {
+				return fmt.Errorf("final rule %s: %q", r.Value, v)
+			}
+			out.Final = append(out.Final, int32(n))
 		}
-		b.WriteString("\n")
 	}
 	return nil
+}
+
+// int32s narrows two offsets, which ICU keeps as 32-bit numbers.
+func int32s(a, b int64) (int32, int32, error) {
+	if a != int64(int32(a)) || b != int64(int32(b)) {
+		return 0, 0, fmt.Errorf("%d,%d do not fit 32 bits", a, b)
+	}
+	return int32(a), int32(b), nil
 }
 
 // buildWindows writes windowsZones.txt's mapTimezones as lines.
@@ -296,17 +300,17 @@ func buildWindows(dir string) ([]byte, error) {
 
 // write replaces data/tz and data/windowszones.bin, all built before any is
 // written. The names are ICU's, and so safe as paths.
-func write(files map[string]string, windows []byte) error {
+func write(files map[string][]byte, windows []byte) error {
 	tmp := filepath.Join("data", "tz.tmp")
 	if err := os.RemoveAll(tmp); err != nil {
 		return err
 	}
-	for name, text := range files {
+	for name, b := range files {
 		target := filepath.Join(tmp, filepath.FromSlash(name)+".bin")
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(target, []byte(text), 0o644); err != nil {
+		if err := os.WriteFile(target, b, 0o644); err != nil {
 			return err
 		}
 	}

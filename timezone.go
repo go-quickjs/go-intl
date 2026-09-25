@@ -3,8 +3,9 @@ package intl
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/go-quickjs/go-intl/internal/tzdata"
 )
 
 // Time zones as ICU reckons them, which is what Node formats with: the
@@ -66,25 +67,20 @@ func loadTimeZone(src Source, name string) (*timeZone, error) {
 		}
 		return nil, fmt.Errorf("intl: the time zone %q: %w", name, err)
 	}
-	z := &timeZone{}
-	link := ""
-	for _, line := range strings.Split(string(b), "\n") {
-		key, rest, _ := strings.Cut(line, " ")
-		switch key {
-		case "name":
-			z.name = rest
-		case "canonical":
-			z.id = rest
-		case "link":
-			link = rest
+	d, err := tzdata.Decode(b)
+	if err != nil {
+		return nil, fmt.Errorf("intl: the time zone %q: %w", name, err)
+	}
+	z := &timeZone{name: d.Name, id: d.Canonical}
+	if d.Link != "" {
+		if b, err = src.Open(MarkerTimeZones+Marker("/"+d.Link), DataLocale{}); err != nil {
+			return nil, fmt.Errorf("intl: the time zone %s: %w", d.Link, err)
+		}
+		if d, err = tzdata.Decode(b); err != nil {
+			return nil, fmt.Errorf("intl: the time zone %s: %w", z.name, err)
 		}
 	}
-	if link != "" {
-		if b, err = src.Open(MarkerTimeZones+Marker("/"+link), DataLocale{}); err != nil {
-			return nil, fmt.Errorf("intl: the time zone %s: %w", link, err)
-		}
-	}
-	if err := z.parse(b); err != nil {
+	if err := z.load(d); err != nil {
 		return nil, fmt.Errorf("intl: the time zone %s: %w", z.name, err)
 	}
 	return z, nil
@@ -123,53 +119,26 @@ func (z *timeZone) resolvedID() string {
 	return z.id
 }
 
-func (z *timeZone) parse(b []byte) error {
-	for _, line := range strings.Split(string(b), "\n") {
-		key, rest, _ := strings.Cut(line, " ")
-		fields := strings.Fields(rest)
-		switch key {
-		case "types":
-			for _, f := range fields {
-				r, d, ok := strings.Cut(f, ",")
-				raw, err1 := strconv.Atoi(r)
-				dst, err2 := strconv.Atoi(d)
-				if !ok || err1 != nil || err2 != nil {
-					return fmt.Errorf("types %q", f)
-				}
-				z.types = append(z.types, zoneOffset{raw, dst})
-			}
-		case "trans":
-			for _, f := range fields {
-				t, typ, ok := strings.Cut(f, ":")
-				sec, err1 := strconv.ParseInt(t, 10, 64)
-				i, err2 := strconv.Atoi(typ)
-				if !ok || err1 != nil || err2 != nil || i < 0 || i > 255 {
-					return fmt.Errorf("transition %q", f)
-				}
-				z.trans = append(z.trans, sec)
-				z.transTypes = append(z.transTypes, uint8(i))
-			}
-		case "final":
-			if len(fields) != 13 {
-				return fmt.Errorf("final %q", rest)
-			}
-			n := make([]int, 13)
-			for i, f := range fields {
-				v, err := strconv.Atoi(f)
-				if err != nil {
-					return fmt.Errorf("final %q", rest)
-				}
-				n[i] = v
-			}
-			f, err := newFinalZone(n[0], n[2:])
-			if err != nil {
-				return fmt.Errorf("final %q: %w", rest, err)
-			}
-			z.final = f
-			z.finalYear = n[1]
-			z.finalRaw, z.finalRule = n[0], n[2:]
-			z.finalStart = gregoDay(n[1], 0, 1) * msPerDay
+// load takes a zone's offsets from its file, and checks them.
+func (z *timeZone) load(d *tzdata.Zone) error {
+	z.types = make([]zoneOffset, len(d.Types))
+	for i, t := range d.Types {
+		z.types[i] = zoneOffset{int(t.Raw), int(t.DST)}
+	}
+	z.trans, z.transTypes = d.Trans, d.TransTypes
+	if len(d.Final) > 0 {
+		n := make([]int, len(d.Final))
+		for i, v := range d.Final {
+			n[i] = int(v)
 		}
+		f, err := newFinalZone(n[0], n[2:])
+		if err != nil {
+			return fmt.Errorf("final %v: %w", n, err)
+		}
+		z.final = f
+		z.finalYear = n[1]
+		z.finalRaw, z.finalRule = n[0], n[2:]
+		z.finalStart = gregoDay(n[1], 0, 1) * msPerDay
 	}
 	if len(z.types) == 0 {
 		return fmt.Errorf("no offsets")
