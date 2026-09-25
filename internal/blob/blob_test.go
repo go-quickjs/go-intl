@@ -228,3 +228,28 @@ func TestSharedTableWideNumbers(t *testing.T) {
 		}
 	}
 }
+
+func TestStringsShareTheTable(t *testing.T) {
+	pool := NewPool(1)
+	w := NewPooledWriter(1, pool)
+	w.String("plain")
+	w.SharedString("pooled")
+	shared, err := ReadShared(pool.Bytes(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := w.Bytes()
+	var plain, pooled string
+	allocs := testing.AllocsPerRun(100, func() {
+		r := &Reader{b: data[1:], pool: &shared}
+		plain, pooled = r.String(), r.SharedString()
+	})
+	if plain != "plain" || pooled != "pooled" {
+		t.Fatalf("read %q and %q", plain, pooled)
+	}
+	// The reader itself is the only allocation: the strings are the
+	// table's own memory.
+	if allocs > 1 {
+		t.Errorf("reading two strings made %v allocations", allocs)
+	}
+}

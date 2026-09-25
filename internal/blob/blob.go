@@ -7,12 +7,25 @@
 //
 // Every table begins with a version byte, so data written by an older command
 // is refused rather than misread.
+//
+// A table is read where it lies: the strings a Reader returns share the
+// table's memory rather than copying it, so the bytes a Reader is given
+// must never change for as long as anything read from them is kept.
 package blob
 
 import (
 	"encoding/binary"
 	"fmt"
+	"unsafe"
 )
+
+// str is b as a string, sharing its memory, which never changes.
+func str(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	return unsafe.String(&b[0], len(b))
+}
 
 // A Writer builds a table.
 type Writer struct {
@@ -79,7 +92,7 @@ func (r *Reader) String() string {
 		r.err = fmt.Errorf("blob: a string of %d bytes with %d left", n, len(r.b))
 		return ""
 	}
-	s := string(r.b[:n])
+	s := str(r.b[:n])
 	r.b = r.b[n:]
 	return s
 }
@@ -288,7 +301,7 @@ func (r *Reader) Shared(read func(*Reader)) {
 
 // SharedString reads a string written by Writer.SharedString.
 func (r *Reader) SharedString() string {
-	return string(r.sharedPart())
+	return str(r.sharedPart())
 }
 
 func (r *Reader) sharedPart() []byte {

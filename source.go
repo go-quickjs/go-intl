@@ -4,10 +4,11 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/go-quickjs/go-intl/internal/blob"
-	"github.com/go-quickjs/go-intl/internal/datapack"
 	"io/fs"
 	"unsafe"
+
+	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/datapack"
 )
 
 // Where the data comes from.
@@ -140,9 +141,10 @@ var ErrNotFound = errors.New("no data")
 // for everything -- is asked for at the root, and a source that has it answers
 // there.
 //
-// The bytes are read where they lie and never changed, by the package or by
-// anyone it hands them to; a source may answer with memory that cannot be
-// written.
+// The bytes are read where they lie and never changed, by the package, by
+// anyone it hands them to, or by the source: what a formatter reads from
+// them it keeps without copying, for as long as it lives. A source may
+// answer with memory that cannot be written.
 type Source interface {
 	Open(m Marker, d DataLocale) ([]byte, error)
 }

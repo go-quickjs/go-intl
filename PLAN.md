@@ -1247,12 +1247,29 @@ the display names, the units and the currencies' names are tables the same
 way, for 58, 41 and 22 KB more, and a relative-time field is read from its
 pool when a format asks for it.
 Building no longer decodes any of them into maps; it looks up what it needs.
-In English now: a Collator 32 µs, a ListFormat or PluralRules 3.3 µs, a
-NumberFormat 10 µs, a Segmenter 21 µs, a RelativeTimeFormat 18 µs, a
-DurationFormat 33 µs, DisplayNames 3 µs rather than 92, a DateTimeFormat of fields 0.11 ms
-and one of both full styles, with a zone name, 0.17 ms, down from 0.47; a
-Canonicalizer 1 µs rather than 0.31 ms, and a LocaleMatcher 0.35 µs rather
-than 0.18 ms.
+And a string read from the data is the data's own memory rather than a copy
+(a Source's bytes never change), which halved what most builds allocate.
+
+In English now, against where this started:
+
+| Built | Then | Now |
+|---|---|---|
+| Collator | 344 µs | 26 µs |
+| ListFormat | 151 µs | 2.5 µs |
+| PluralRules | | 2.7 µs |
+| NumberFormat | 148 µs | 8 µs |
+| Segmenter | 1.82 ms | 21 µs |
+| RelativeTimeFormat | 303 µs | 14 µs |
+| DurationFormat | 575 µs | 23 µs |
+| DisplayNames | 224 µs | 2.8 µs |
+| DateTimeFormat, fields | 1.07 ms | 101 µs |
+| DateTimeFormat, full styles and a zone name | 1.19 ms | 130 µs |
+| Canonicalizer | 392 µs | 1 µs |
+| LocaleMatcher | 201 µs | 0.36 µs |
+
+What a DateTimeFormat still spends is spread out: reading its calendar,
+building the pattern generator from the locale's skeletons, and the range
+patterns, each as ICU builds them.
 
 What is left is mostly text no two locales share -- translated names of
 languages, regions, zones, cities and currencies, about 9 MB -- and ICU's
