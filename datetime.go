@@ -165,7 +165,7 @@ type DateTimeFormat struct {
 	system   CalendarSystem
 	numbers  *numberDigits
 
-	location *time.Location
+	tz *timeZone
 	// zoneName is the zone as resolvedOptions reports it, and zoneID the
 	// identifier its names are found by, empty for a zone that has none.
 	zoneName string
@@ -249,7 +249,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 			return nil, err
 		}
 	}
-	if f.location, f.zoneName, f.zoneID, err = loadZone(opts.TimeZone); err != nil {
+	if f.tz, f.zoneName, f.zoneID, err = loadZone(src, opts.TimeZone); err != nil {
 		return nil, err
 	}
 	if numbers, err := loadNumbers(src, loc); err == nil {
@@ -291,7 +291,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		if f.zones, err = loadZoneNames(src, loc); err != nil {
 			return nil, err
 		}
-		f.zone = f.zones.zone(f.zoneID, f.location)
+		f.zone = f.zones.zone(f.zoneID, f.tz)
 	}
 	return f, nil
 }
@@ -372,9 +372,9 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 // name is UTC, which is what ECMA-402 falls back to when the host says
 // nothing. It returns the zone, the name resolvedOptions reports, and the
 // identifier the zone is named by.
-func loadZone(name string) (*time.Location, string, string, error) {
+func loadZone(src Source, name string) (*timeZone, string, string, error) {
 	if name == "" {
-		return time.UTC, "UTC", "UTC", nil
+		name = "UTC"
 	}
 	if seconds, resolved, ok := parseOffsetZone(name); ok {
 		// V8 hands ICU an offset as a custom zone, "GMT+05:30", which has
@@ -385,13 +385,13 @@ func loadZone(name string) (*time.Location, string, string, error) {
 		if seconds == 0 {
 			id = "GMT"
 		}
-		return time.FixedZone(resolved, seconds), resolved, id, nil
+		return fixedZone(seconds), resolved, id, nil
 	}
-	loc, err := time.LoadLocation(name)
+	z, err := loadTimeZone(src, name)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("intl: %q is not a time zone: %w", name, err)
+		return nil, "", "", err
 	}
-	return loc, name, name, nil
+	return z, z.resolvedID(), z.id, nil
 }
 
 // parseOffsetZone reads an offset time zone as ECMA-402 allows one: a sign

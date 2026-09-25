@@ -496,9 +496,10 @@ type dateSeg struct {
 
 // instant reckons a moment in the formatter's zone and calendar.
 func (f *DateTimeFormat) instant(t time.Time) dateParts {
-	local := t.In(f.location)
+	offset := f.tz.offsetAt(t.UnixMilli()).total()
+	local := t.In(time.FixedZone("", offset))
 	p := reckon(local, f.system, f.rules)
-	_, p.zoneOffset = local.Zone()
+	p.zoneOffset = offset
 	p.instant = local
 	return p
 }

@@ -1,0 +1,4 @@
+name Asia/Pyongyang
+canonical Asia/Pyongyang
+types 30180,0 30600,0 32400,0
+trans -1948782180:1 -1830414600:2 1439564400:1 1525446000:2

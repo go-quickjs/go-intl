@@ -1,0 +1,4 @@
+name America/Bogota
+canonical America/Bogota
+types -17776,0 -18000,0 -18000,3600
+trans -1739041424:1 704869200:2 729057600:1

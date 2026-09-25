@@ -1,0 +1,4 @@
+name America/Cayenne
+canonical America/Cayenne
+types -12560,0 -14400,0 -10800,0
+trans -1846269040:1 -71092800:2

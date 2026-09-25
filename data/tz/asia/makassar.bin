@@ -1,0 +1,4 @@
+name Asia/Makassar
+canonical Asia/Makassar
+types 28656,0 28800,0 32400,0
+trans -1172908656:1 -880272000:2 -766054800:1

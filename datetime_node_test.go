@@ -21,18 +21,7 @@ import (
 var dateTimeGaps = []struct {
 	zone, style, calendar string
 	why                   string
-}{
-	// Ireland's summer is its standard time and its winter a negative
-	// daylight saving in the tz database, which is how Go's copy has it.
-	// ICU builds from the rearguard form, where summer is daylight time as
-	// everywhere else, so Node calls a January instant Greenwich Mean Time
-	// and go-intl Irish Standard Time. Taking offsets and seasons from ICU's
-	// zoneinfo64 rather than Go's tzdata is the fix; see PLAN.md.
-	{"Europe/Dublin", "short", "", "Go's tzdata has Ireland's negative DST"},
-	{"Europe/Dublin", "long", "", "Go's tzdata has Ireland's negative DST"},
-
-	// The calendars not implemented yet; see PLAN.md.
-}
+}{}
 
 // dateTimeGap returns why a case is a known gap, if it is one.
 func dateTimeGap(opts map[string]any) (string, bool) {

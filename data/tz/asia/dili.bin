@@ -1,0 +1,4 @@
+name Asia/Dili
+canonical Asia/Dili
+types 30140,0 28800,0 32400,0
+trans -1830412800:1 -879152400:2 199897200:1 969120000:2

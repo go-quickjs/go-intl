@@ -1,0 +1,4 @@
+name Pacific/Kiritimati
+canonical Pacific/Kiritimati
+types -37760,0 -38400,0 -36000,0 50400,0
+trans -2177415040:1 307622400:2 788868000:3

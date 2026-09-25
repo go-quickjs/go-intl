@@ -37,6 +37,9 @@ import (
 // zoneNames is a locale's zone data together with the tables every locale
 // shares.
 type zoneNames struct {
+	// src is where the reference zones a metazone's name stands for are
+	// read from.
+	src    Source
 	locale *zonedata.Locale
 	meta   *zonedata.Meta
 	// region is the region the reader is in, which decides whether a
@@ -86,7 +89,7 @@ func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
 		data.FallbackFormat = "{1} ({0})"
 	}
 
-	out := &zoneNames{locale: data, meta: &zonedata.Meta{}}
+	out := &zoneNames{src: src, locale: data, meta: &zonedata.Meta{}}
 	if b, err := src.Open(MarkerMetazones, DataLocale{}); err == nil {
 		if out.meta, err = zonedata.DecodeMeta(b); err != nil {
 			return nil, fmt.Errorf("intl: the zone table: %w", err)
@@ -108,14 +111,14 @@ func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
 type zoneInfo struct {
 	// id is the zone's canonical identifier, empty for one ICU does not
 	// know, which is then written only as an offset.
-	id       string
-	meta     *zonedata.MetaZone
-	own      zonedata.ZoneEntry
-	location *time.Location
+	id   string
+	meta *zonedata.MetaZone
+	own  zonedata.ZoneEntry
+	tz   *timeZone
 }
 
-func (z *zoneNames) zone(name string, loc *time.Location) zoneInfo {
-	info := zoneInfo{location: loc}
+func (z *zoneNames) zone(name string, tz *timeZone) zoneInfo {
+	info := zoneInfo{tz: tz}
 	id, ok := z.meta.Canonical(name)
 	if !ok {
 		return info
@@ -194,13 +197,14 @@ func (z *zoneNames) specific(info *zoneInfo, t time.Time, long bool) string {
 	if info.id == "" {
 		return ""
 	}
+	daylight := info.tz.offsetAt(t.UnixMilli()).dst != 0
 	typ := shortStandard
 	switch {
-	case long && t.IsDST():
+	case long && daylight:
 		typ = longDaylight
 	case long:
 		typ = longStandard
-	case t.IsDST():
+	case daylight:
 		typ = shortDaylight
 	}
 	return z.displayName(info, typ, t)
@@ -218,9 +222,10 @@ func (z *zoneNames) generic(info *zoneInfo, t time.Time, long bool) string {
 	return z.locationName(info.id)
 }
 
-// dstCheckRange is how near summer time has to be for ICU to call a zone's
-// winter by its generic name rather than its standard one.
-const dstCheckRange = 184 * 24 * time.Hour
+// dstCheckRange is how near, in milliseconds, summer time has to be for
+// ICU to call a zone's winter by its generic name rather than its standard
+// one.
+const dstCheckRange = 184 * msPerDay
 
 // genericNonLocation is TZGNCore::formatGenericNonLocationName.
 func (z *zoneNames) genericNonLocation(info *zoneInfo, t time.Time, long bool) string {
@@ -235,11 +240,12 @@ func (z *zoneNames) genericNonLocation(info *zoneInfo, t time.Time, long bool) s
 	if metazone == "" {
 		return ""
 	}
-	local := t.In(info.location)
+	ms := t.UnixMilli()
+	offset := info.tz.offsetAt(ms)
 	// A zone that keeps no summer time around the instant is called by its
 	// standard name, "Greenwich Mean Time" rather than "GMT Time", unless the
 	// two are the same.
-	if !local.IsDST() && !summerNear(local) {
+	if offset.dst == 0 && !info.tz.summerNear(ms) {
 		if name := z.displayName(info, std, t); name != "" &&
 			!strings.EqualFold(name, z.metazoneName(metazone, typ)) {
 			return name
@@ -256,32 +262,27 @@ func (z *zoneNames) genericNonLocation(info *zoneInfo, t time.Time, long bool) s
 	if golden == "" || golden == info.id {
 		return name
 	}
-	gloc, err := time.LoadLocation(golden)
+	gz, err := loadTimeZone(z.src, golden)
 	if err != nil {
 		return name
 	}
-	_, offset := local.Zone()
-	wall := t.Add(time.Duration(offset) * time.Second).UTC()
-	there := time.Date(wall.Year(), wall.Month(), wall.Day(), wall.Hour(), wall.Minute(),
-		wall.Second(), wall.Nanosecond(), gloc)
-	_, goldenOffset := there.Zone()
-	if goldenOffset == offset && there.IsDST() == local.IsDST() {
+	// The reference zone's offset at the same wall time, which, read as a
+	// local time, is not muddled by a repeated hour.
+	if gz.localOffset(ms+int64(offset.total())*1000) == offset {
 		return name
 	}
 	return z.partialLocationName(info, metazone, name)
 }
 
-// summerNear reports whether a zone left summer time or goes into it within
-// ICU's range of the instant.
-func summerNear(local time.Time) bool {
-	start, end := local.ZoneBounds()
-	if !start.IsZero() && local.Sub(start) < dstCheckRange && start.Add(-time.Second).In(local.Location()).IsDST() {
+// summerNear is TZGNCore's check that a zone in standard time keeps summer
+// time around the instant: that it left summer time, or goes into it, within
+// ICU's range.
+func (z *timeZone) summerNear(ms int64) bool {
+	if before, ok := z.previousTransition(ms, true); ok && ms-before.at < dstCheckRange && before.from.dst != 0 {
 		return true
 	}
-	if !end.IsZero() && end.Sub(local) < dstCheckRange && end.In(local.Location()).IsDST() {
-		return true
-	}
-	return false
+	after, ok := z.nextTransition(ms, false)
+	return ok && after.at-ms < dstCheckRange && after.to.dst != 0
 }
 
 // partialLocationName is TZGNCore::getPartialLocationName: a metazone's name

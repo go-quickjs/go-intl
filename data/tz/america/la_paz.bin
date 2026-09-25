@@ -1,0 +1,4 @@
+name America/La_Paz
+canonical America/La_Paz
+types -16356,0 -16356,3600 -14400,0
+trans -1205954844:1 -1192307244:2

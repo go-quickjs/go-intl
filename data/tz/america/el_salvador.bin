@@ -1,0 +1,4 @@
+name America/El_Salvador
+canonical America/El_Salvador
+types -21408,0 -21600,0 -21600,3600
+trans -1546279392:1 547020000:2 559717200:1 578469600:2 591166800:1

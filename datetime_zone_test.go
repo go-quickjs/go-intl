@@ -108,3 +108,71 @@ func TestCasablancaMetazone2026c(t *testing.T) {
 		}
 	}
 }
+
+// TestDublinSeasonsFromICU is Ireland as ICU's zone data has it, which is
+// the tz database's rearguard form: summer is the daylight time, Irish
+// Standard Time, and winter Greenwich Mean Time. Go's own copy of the tz
+// database has the winter as a negative daylight saving, and go-intl had
+// called January Irish Standard Time. In 1970 Ireland kept one offset all
+// year, which is standard time, and the zone's metazone then has no name
+// for it. The expectations are Node 26's.
+func TestDublinSeasonsFromICU(t *testing.T) {
+	loc, err := intl.ParseLocale("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		style intl.ZoneStyle
+		when  time.Time
+		want  string
+	}{
+		{intl.ZoneLong, time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC), "1/15/2026, Greenwich Mean Time"},
+		{intl.ZoneShort, time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC), "1/15/2026, GMT"},
+		{intl.ZoneLong, time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC), "7/15/2026, Irish Standard Time"},
+		{intl.ZoneShort, time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC), "7/15/2026, GMT+1"},
+		{intl.ZoneLongGeneric, time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC), "1/15/2026, Ireland Time"},
+		{intl.ZoneLong, time.Date(1970, 1, 15, 12, 0, 0, 0, time.UTC), "1/15/1970, GMT+01:00"},
+	} {
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{TimeZone: "Europe/Dublin", TimeZoneName: c.style})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.Format(c.when); got != c.want {
+			t.Errorf("%v at %s = %q, want %q", c.style, c.when.Format("2006-01-02"), got, c.want)
+		}
+	}
+}
+
+// TestZoneResolvedAsICUCanonical is the zone resolvedOptions reports: ICU's
+// canonical name, whatever the case of the one given, and "UTC" for
+// Etc/UTC and Etc/GMT, as V8 reports them. The expectations are Node 26's.
+func TestZoneResolvedAsICUCanonical(t *testing.T) {
+	for in, want := range map[string]string{
+		"Asia/Kolkata":          "Asia/Calcutta",
+		"europe/kyiv":           "Europe/Kiev",
+		"US/PACIFIC":            "America/Los_Angeles",
+		"EST":                   "America/Panama",
+		"etc/gmt+5":             "Etc/GMT+5",
+		"GMT":                   "UTC",
+		"Etc/GMT0":              "UTC",
+		"Antarctica/South_Pole": "Antarctica/McMurdo",
+		"america/port_of_spain": "America/Port_of_Spain",
+		"SYSTEMV/AST4ADT":       "SystemV/AST4ADT",
+		"+0530":                 "+05:30",
+		"-00:00":                "+00:00",
+	} {
+		f, err := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{TimeZone: in})
+		if err != nil {
+			t.Errorf("%s: %v", in, err)
+			continue
+		}
+		if got := f.ResolvedOptions().TimeZone; got != want {
+			t.Errorf("%s resolved as %q, want %q", in, got, want)
+		}
+	}
+	for _, in := range []string{"Etc/Unknown", "Factory", "Europe/", "Europe//Paris", "UTC ", "Etc/GMT+15", "+24:00", "../tz/utc"} {
+		if _, err := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{TimeZone: in}); err == nil {
+			t.Errorf("%q is a time zone, want an error", in)
+		}
+	}
+}

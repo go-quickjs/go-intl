@@ -28,7 +28,7 @@ authority.
 | ICU | 78.3 | the anchor; the golden corpus oracle | yes, from node |
 | CLDR (`cldr-json`) | **48.2.0** | numbers, dates, units, names, plurals, zones | yes, by the corpus |
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
-| IANA tzdb | 2026b | zone rules | yes, from node — but see below |
+| IANA tzdb | 2026c, as ICU's `zoneinfo64` | zone rules (`tzgen`) | yes, from node |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
 | ICU data sources | `icu4c-78.3-data.zip` | the collation tree, defaults and search jamo rules (`collgen`); numbering-system entries (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`); each service's available locales, from the locale and collation trees, their `LOCALE_DEPS.json` and `misc/plurals.txt`, and the collations, currencies and time zones `supportedValuesOf` lists, from the collation and currency trees, `keyTypeData.txt`, `zoneinfo64.txt` and `timezoneTypes.txt` (`availgen`) | yes |
 | LSTM models | `v0.1.0` | Thai, Khmer, Lao, Burmese word breaking | not version-tied to ICU |
@@ -88,11 +88,12 @@ Other URLs:
   `timezoneTypes.txt` (`38b441f390473e353502a3fbd98f46a479fe3aef77d78fb4eef502623db46039`)
   and `windowsZones.txt` (`7addd9b95977b860d540d29796a655b8fe7247a0fdf9641f6f759b5442041312`).
   Node 26 runs tz 2026c (`process.versions.tz`) over ICU 78.3, whose data
-  archive carries 2026a; `zonegen`, `aliasgen` and `availgen` take the
+  archive carries 2026a; `zonegen`, `aliasgen`, `availgen` and `tzgen` take the
   directory these were downloaded to and read them in place of the
   archive's copies, checking each checksum. Only the metazones differ in
   what go-intl carries: Casablanca and El Aaiun join the Western European
-  metazone from 2026-09-20.
+  metazone from 2026-09-20. `tzgen` writes each zone's offsets from
+  `zoneinfo64.txt`, with its canonical name from `timezoneTypes.txt`.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
   Five files are read, and all are vendored in `internal/icusrc`:
@@ -207,14 +208,15 @@ Two choices it seemed to force, both settled:
 `internal/icu/timezones.go` calls the bundle "the same version used by the
 Node/ICU release", which is no longer accurate; `TestBundledTimeZoneMatchesICURelease`
 does not actually check the version, only that every zone loads and one
-Vancouver rule holds. Nothing currently fails because of it. go-intl should pin
-deliberately rather than inherit the drift.
+Vancouver rule holds. Nothing currently fails because of it. go-intl pins
+deliberately rather than inheriting the drift: ICU's own 2026c update, which
+is what Node 26 runs.
 
 The zone data format matters as well as the version. The tz database gives
 Ireland a negative daylight saving in winter; ICU builds `zoneinfo64` from
-the rearguard form, where Irish summer is daylight time. go-intl reads Go's
-zone data today and so disagrees with Node about Dublin's specific names, a
-named gap in PLAN.md.
+the rearguard form, where Irish summer is daylight time. go-intl reads
+ICU's `zoneinfo64` from the 2026c update Node runs, not Go's zone data or
+go-quickjs's bundle, and so agrees with Node about Dublin.
 
 ## Known defects in the data go-intl inherits
 

@@ -1,0 +1,4 @@
+name America/Puerto_Rico
+canonical America/Puerto_Rico
+types -15865,0 -14400,0 -14400,3600
+trans -2233035335:1 -873057600:2 -765399600:1

@@ -536,12 +536,41 @@ The day period ("B") is noon only when the time as written is exactly noon,
 its minutes and seconds zero where the pattern writes them. ICU never writes
 midnight.
 
-**Known gap:** Ireland. The tz database gives it a negative daylight saving
-in winter, and Go's zone data follows it, so go-intl calls January "Irish
-Standard Time"; ICU builds from the rearguard form and calls it "Greenwich
-Mean Time". The fix is to take offsets and seasons from ICU's own
-`zoneinfo64` rather than Go's zone data, which is part of the time-zone work
-below.
+Ireland had been a known gap: the tz database gives it a negative daylight
+saving in winter, and Go's zone data followed it, so go-intl called January
+"Irish Standard Time" where ICU, built from the rearguard form, says
+"Greenwich Mean Time". Zones are now ICU's own (see Time zones below), and
+all 36 of Dublin's cases match.
+
+### Time zones
+
+A zone is read from ICU's `zoneinfo64`, from the time zone update Node runs
+(2026c), not from the host's or Go's tz data: `tzgen` writes one file per
+name ICU knows, `data/tz/<name>.bin` in lowercase, with the name as ICU
+spells it, its canonical name (`ZoneMeta::getCanonicalCLDRID`), and either
+the zone it links to or its offsets as `OlsonTimeZone` keeps them: raw
+offset and daylight saving apart, the transitions, and the final rule. 637
+names, 1.3 MB. A name is valid when its file exists, in any case, as
+ECMA-402 and V8 now match names; Etc/Unknown and Factory, whose canonical
+zone is Etc/Unknown, have none. resolvedOptions reports the canonical name,
+"UTC" for Etc/UTC and Etc/GMT.
+
+`timezone.go` ports what ICU computes from them: `OlsonTimeZone::getOffset`,
+`getOffsetFromLocal` with ICU's options for skipped and repeated local
+times, and `getNextTransition`/`getPreviousTransition`, which skip
+transitions that change nothing except the one into the final rule;
+`SimpleTimeZone`'s rule evaluation (`compareToRule`) and its
+`AnnualTimeZoneRule` transitions. The formatter reckons local time with the
+offset, and zone names ask the zone, not Go, whether it is daylight time,
+whether summer time is within 184 days (TZGNCore), and what the reference
+zone's offset is at the same wall time.
+
+`testdata/timezone_node.js` records what Intl.DateTimeFormat resolves for
+every ICU name in three spellings and odd inputs, 1,889 in all, and every
+zone's offsets from 1800 to 2100, transition by transition, as Node's
+Temporal reports them: all match. Temporal refuses some names
+Intl.DateTimeFormat takes (Java's three-letter ones, SystemV's, Factory);
+that is the Temporal stage's to follow.
 
 ### Ranges
 
@@ -690,6 +719,34 @@ recorded are ported.
 Needs the LSTM models and the dictionaries for Chinese, Japanese, Thai, Khmer,
 Lao and Burmese. Last because it is the most self-contained.
 
+### 8b. `date`: JavaScript's Date
+
+A supplementary package, `github.com/go-quickjs/go-intl/date`, with Date's
+semantics apart from any engine: time values and ECMA-262's MakeDay,
+MakeTime, LocalTime and UTC over ICU's zones as V8 reads them
+(`getOffsetFromLocal` with kFormer for both skipped and repeated times),
+`Date.parse` as V8's date parser takes strings, and the strings Date
+writes. `toString`, `toDateString`, `toTimeString` and `toUTCString` must
+match Node exactly for every locale and zone. The zone's name in brackets
+is V8's `ICUTimezoneCache::LocalTimezone`: the instant mapped to an
+equivalent year when outside 1970 to 2038, only whether it is daylight
+time kept, and `TimeZone::getDisplayName(daylight, LONG, default locale)`,
+which takes the metazone at the current time, not at the instant, and
+falls back to the localized GMT format of the zone's current raw offset
+and saving. So the package takes a clock and a default locale. Expectations
+come from Node run under each zone (`process.env.TZ`); a default locale
+other than the host's needs Node on Linux, where `LANG` sets it.
+
+### 8c. `temporal`: Temporal
+
+A supplementary package, `github.com/go-quickjs/go-intl/temporal`, with
+Temporal's abstract operations apart from any engine: ISO date and time
+arithmetic, durations and rounding, parsing, and zoned time over ICU's zones
+(possible instants, disambiguation, transitions), with the non-ISO
+calendars' arithmetic (the calendar arithmetic row above). go-quickjs's VM
+keeps the objects and calls in. Temporal's own choice of zones, narrower
+than Intl.DateTimeFormat's, is followed.
+
 ### 9. Retire internal/icu
 
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
@@ -714,7 +771,10 @@ README's Intl section.
 | **Normalizer** | **done** - Unicode 17.0.0, 779,392 cases against node |
 | **Numbering systems** | **done** - 78 systems, 37,998 cases against node |
 | 7. Collator | **done** - 1,805/1,805, and 2,901/2,903 orders against node |
+| **Time zones** | ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed. Public API for go-quickjs left |
 | 8. Segmenter | not started |
+| 8b. `date` package | not started |
+| 8c. `temporal` package | not started |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage so far: 7,809 of 7,949 cases, every one of them exact.** Only the Segmenter's 140 are left.
@@ -760,7 +820,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
+| Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | ICU's zones, canonicalization and transitions are done (see Time zones); left is their public API for go-quickjs and Temporal: offsets and possible instants, the list of zones, the host's zone, the Windows zone map |
 | Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
 
 The formatter surfaces come first: they are go-intl's own API, and each item
