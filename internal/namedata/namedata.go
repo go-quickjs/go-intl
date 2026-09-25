@@ -9,13 +9,11 @@
 package namedata
 
 import (
-	"sort"
-
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 2
+const Version = 3
 
 // The kinds of name, in the order they are stored.
 const (
@@ -41,23 +39,17 @@ type Entry struct {
 	Name string
 }
 
-// A Set is every name of one kind at one width, sorted by code.
+// A Set is every name of one kind at one width.
 type Set struct {
 	Entries []Entry
 }
 
-// Name finds one.
-func (s *Set) Name(code string) (string, bool) {
-	i := sort.Search(len(s.Entries), func(i int) bool { return s.Entries[i].Code >= code })
-	if i < len(s.Entries) && s.Entries[i].Code == code {
-		return s.Entries[i].Name, s.Entries[i].Name != ""
-	}
-	return "", false
-}
-
-// Locale holds every kind at every width, plus the patterns that join a
-// language to the region or script it is qualified by.
-type Locale struct {
+// Built is what a generator builds for a locale: every kind at every
+// width, plus the patterns that join a language to the region or script it
+// is qualified by. A width holds only the names that differ from the next
+// wider one's, which is what CLDR's own inheritance does: a locale gives a
+// short name only where it differs from the long one.
+type Built struct {
 	Sets [Kinds * Widths]Set
 
 	// Pattern puts a qualifier beside a language, "{0} ({1})", and Separator
@@ -66,26 +58,28 @@ type Locale struct {
 	Separator string
 }
 
-// Set returns one kind at one width, falling back to the wider forms, which is
-// what CLDR's own inheritance does: a locale gives a short name only where it
-// differs from the long one.
-func (l *Locale) Set(kind, width int) *Set {
-	if kind < 0 || kind >= Kinds {
-		kind = Language
-	}
-	for w := width; w > Long; w-- {
-		if s := &l.Sets[kind*Widths+w]; len(s.Entries) > 0 {
-			return s
-		}
-	}
-	return &l.Sets[kind*Widths+Long]
+// Locale is a locale's names read where they lie: a DisplayNames names one
+// code at a time, so each kind at each width is a table it looks the code up
+// in rather than a list read whole.
+type Locale struct {
+	sets [Kinds * Widths]blob.Table
+
+	Pattern   string
+	Separator string
 }
 
 // Lookup finds a name at a width, falling back through the narrower forms to
 // the long one, entry by entry rather than set by set.
 func (l *Locale) Lookup(kind, width int, code string) (string, bool) {
+	if kind < 0 || kind >= Kinds || width < Long || width >= Widths {
+		return "", false
+	}
 	for w := width; w >= Long; w-- {
-		if name, ok := l.Sets[kind*Widths+w].Name(code); ok {
+		r, ok := l.sets[kind*Widths+w].Find(code)
+		if !ok {
+			continue
+		}
+		if name := r.SharedString(); name != "" && r.Err() == nil {
 			return name, true
 		}
 	}
@@ -95,18 +89,18 @@ func (l *Locale) Lookup(kind, width int, code string) (string, bool) {
 // Encode writes a locale's names, with what it shares with other locales --
 // every string and each set -- in pool, which the generator writes beside
 // the locales and Decode is given.
-func Encode(l *Locale, pool *blob.Pool) []byte {
+func Encode(l *Built, pool *blob.Pool) []byte {
 	b := blob.NewPooledWriter(Version, pool)
 	b.SharedString(l.Pattern)
 	b.SharedString(l.Separator)
 	for _, s := range l.Sets {
-		b.Shared(func(b *blob.Writer) {
-			b.Uint(len(s.Entries))
-			for _, e := range s.Entries {
-				b.SharedString(e.Code)
-				b.SharedString(e.Name)
-			}
-		})
+		names := map[string]string{}
+		codes := make([]string, 0, len(s.Entries))
+		for _, e := range s.Entries {
+			names[e.Code] = e.Name
+			codes = append(codes, e.Code)
+		}
+		b.SharedTable(codes, func(code string, b *blob.Writer) { b.SharedString(names[code]) })
 	}
 	return b.Bytes()
 }
@@ -120,18 +114,8 @@ func Decode(data []byte, pool blob.Shared) (*Locale, error) {
 	var l Locale
 	l.Pattern = r.SharedString()
 	l.Separator = r.SharedString()
-	for i := range l.Sets {
-		r.Shared(func(r *blob.Reader) {
-			n := r.Uint()
-			if n < 0 || n > r.Left() {
-				return
-			}
-			entries := make([]Entry, n)
-			for j := range entries {
-				entries[j] = Entry{Code: r.SharedString(), Name: r.SharedString()}
-			}
-			l.Sets[i].Entries = entries
-		})
+	for i := range l.sets {
+		l.sets[i] = r.SharedTable()
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

@@ -112,8 +112,8 @@ var alternates = map[string]int{
 	"menu":    namedata.Long,
 }
 
-func read(main, datesMain, name string) (*namedata.Locale, error) {
-	var out namedata.Locale
+func read(main, datesMain, name string) (*namedata.Built, error) {
+	var out namedata.Built
 	any := false
 
 	raw, err := os.ReadFile(filepath.Join(main, name, "languages.json"))
@@ -205,7 +205,7 @@ func read(main, datesMain, name string) (*namedata.Locale, error) {
 
 // fill sorts CLDR's names into the widths, by the alternate suffix each key
 // carries.
-func fill(out *namedata.Locale, kind int, source map[string]string) {
+func fill(out *namedata.Built, kind int, source map[string]string) {
 	byWidth := make([]map[string]string, namedata.Widths)
 	for i := range byWidth {
 		byWidth[i] = map[string]string{}

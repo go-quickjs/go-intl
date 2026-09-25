@@ -1242,11 +1242,12 @@ zones' shared metadata, the locale aliases and the services' available
 locales. A locale's names of metazones, zones and
 regions are tables in their pool (`blob.Table`): records of pool numbers,
 the key's first, all of one width, so a name is found by binary search
-without an index of offsets, for 133 KB more pool than the lists read whole.
+without an index of offsets, for 133 KB more pool than the lists read whole;
+the display names are tables the same way, for 58 KB more.
 Building no longer decodes any of them into maps; it looks up what it needs.
 In English now: a Collator 32 µs, a ListFormat or PluralRules 3.3 µs, a
 NumberFormat 22 µs, a Segmenter 21 µs, a RelativeTimeFormat 40 µs, a
-DurationFormat 75 µs, DisplayNames 92 µs, a DateTimeFormat of fields 0.11 ms
+DurationFormat 75 µs, DisplayNames 3 µs rather than 92, a DateTimeFormat of fields 0.11 ms
 and one of both full styles, with a zone name, 0.17 ms, down from 0.47; a
 Canonicalizer 1 µs rather than 0.31 ms, and a LocaleMatcher 0.35 µs rather
 than 0.18 ms.
