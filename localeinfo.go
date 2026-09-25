@@ -1,0 +1,271 @@
+package intl
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// What Intl.Locale says of a locale beyond its subtags: its likely full and
+// shortest forms, the calendars, collations, hour cycles, numbering systems
+// and time zones in use there, which way its script runs, and its week.
+// Each is answered as V8 answers it from ICU (js-locale.cc).
+
+// LocaleInfo answers Intl.Locale's questions. It never changes after it is
+// built and is safe for any number of goroutines to share.
+type LocaleInfo struct {
+	src    Source
+	likely *Fallbacker
+}
+
+// NewLocaleInfo reads what it needs from a source.
+func NewLocaleInfo(src Source) (*LocaleInfo, error) {
+	fb, err := NewFallbacker(src)
+	if err != nil {
+		return nil, err
+	}
+	return &LocaleInfo{src: src, likely: fb}, nil
+}
+
+// withBase is the locale with another language, script and region, its
+// variants and extensions kept.
+func withBase(l Locale, d DataLocale) Locale {
+	l.Language, l.Script, l.Region = d.Language, d.Script, d.Region
+	return l
+}
+
+// Maximize is Intl.Locale.prototype.maximize: the locale with the likely
+// script and region filled in, "en" as "en-Latn-US".
+func (i *LocaleInfo) Maximize(l Locale) Locale {
+	full, ok := i.likely.Maximize(l.Data())
+	if !ok {
+		return l
+	}
+	return withBase(l, full)
+}
+
+// Minimize is Intl.Locale.prototype.minimize: the shortest form that
+// maximizes to the same locale, "zh-Hant-TW" as "zh-TW".
+func (i *LocaleInfo) Minimize(l Locale) Locale {
+	short, ok := i.likely.Minimize(l.Data())
+	if !ok {
+		return l
+	}
+	return withBase(l, short)
+}
+
+// supplementalRegion is ulocimp_getRegionForSupplementalData: the region of
+// "-u-rg-", else the region subtag, else, when inferring, that of "-u-sd-"
+// or the likely region.
+func (i *LocaleInfo) supplementalRegion(l Locale, infer bool) string {
+	fromKey := func(key string) string {
+		v, ok := l.Keyword(key)
+		if ok && len(v) >= 3 && len(v) <= 6 && isAlpha(v[0]) && isAlpha(v[1]) {
+			return strings.ToUpper(v[:2])
+		}
+		return ""
+	}
+	if r := fromKey("rg"); r != "" {
+		return r
+	}
+	if !l.Region.IsZero() || !infer {
+		return l.Region.String()
+	}
+	if r := fromKey("sd"); r != "" {
+		return r
+	}
+	if full, ok := i.likely.Maximize(l.Data()); ok {
+		return full.Region.String()
+	}
+	return ""
+}
+
+// Calendars is getCalendars: the "-u-ca-" keyword's calendar, else those
+// the region reckons in, most preferred first (Calendar::
+// getKeywordValuesForLocale, commonly used).
+func (i *LocaleInfo) Calendars(l Locale) []string {
+	if ca, ok := l.Keyword("ca"); ok && ca != "" {
+		return []string{ca}
+	}
+	b, err := i.src.Open(MarkerCalendarPrefs, DataLocale{})
+	if err != nil {
+		return []string{string(Gregory)}
+	}
+	prefs := calendarPreferences(b)
+	if list := prefs.all(i.supplementalRegion(l, true)); len(list) > 0 {
+		return list
+	}
+	if list := prefs.all("001"); len(list) > 0 {
+		return list
+	}
+	return []string{string(Gregory)}
+}
+
+// Collations is getCollations: the "-u-co-" keyword's collation, else every
+// collation the collation tree has along the locale's chain, but "standard"
+// and "search", sorted (Collator::getKeywordValuesForLocale).
+func (i *LocaleInfo) Collations(l Locale) ([]string, error) {
+	if co, ok := l.Keyword("co"); ok && co != "" {
+		return []string{co}, nil
+	}
+	chain, err := collationChain(i.src, l.Data())
+	if err != nil {
+		return nil, err
+	}
+	// The collation data names them as ICU's data does; the list is in
+	// BCP 47's spelling, "phonebk" for "phonebook".
+	bcp := map[string]string{}
+	if b, err := i.src.Open(MarkerValues, DataLocale{}); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(line); len(f) == 3 && f[0] == "cotype" {
+				bcp[f[1]] = f[2]
+			}
+		}
+	}
+	set := map[string]bool{}
+	for _, loc := range chain {
+		for _, c := range loc.Collations {
+			if namedCollation(c.Name) != "" && !strings.HasPrefix(c.Name, "private-") {
+				name := c.Name
+				if to, ok := bcp[name]; ok {
+					name = to
+				}
+				set[name] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for name := range set {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// HourCycles is getHourCycles: the "-u-hc-" keyword's cycle, else the
+// pattern generator's default for the locale.
+func (i *LocaleInfo) HourCycles(l Locale) ([]string, error) {
+	if hc, ok := l.Keyword("hc"); ok && hc != "" {
+		return []string{hc}, nil
+	}
+	f, err := NewDateTimeFormatFrom(i.src, l, DateTimeFormatOptions{Hour: WidthNumeric, TimeZone: "UTC"})
+	if err != nil {
+		return nil, err
+	}
+	name := map[HourCycle]string{H11: "h11", H12: "h12", H23: "h23", H24: "h24"}[f.ResolvedOptions().HourCycle]
+	return []string{name}, nil
+}
+
+// NumberingSystems is getNumberingSystems: the "-u-nu-" keyword's system,
+// else the locale's default.
+func (i *LocaleInfo) NumberingSystems(l Locale) ([]string, error) {
+	if nu, ok := l.Keyword("nu"); ok && nu != "" {
+		return []string{nu}, nil
+	}
+	data, err := loadNumbers(i.src, l)
+	if err != nil {
+		return nil, err
+	}
+	return []string{data.NumberingSystem}, nil
+}
+
+// TimeZones is getTimeZones: the canonical zones of the locale's region
+// subtag, sorted, and false for a locale without one, where ECMA-402
+// answers undefined.
+func (i *LocaleInfo) TimeZones(l Locale) ([]string, bool, error) {
+	if l.Region.IsZero() {
+		return nil, false, nil
+	}
+	b, err := i.src.Open(MarkerValues, DataLocale{})
+	if err != nil {
+		return nil, false, fmt.Errorf("intl: the time zones: %w", err)
+	}
+	prefix := "zone " + l.Region.String() + " "
+	out := []string{}
+	for _, line := range strings.Split(string(b), "\n") {
+		if zone, ok := strings.CutPrefix(line, prefix); ok {
+			out = append(out, zone)
+		}
+	}
+	return out, true, nil
+}
+
+// langDirections is uloc_isRightToLeft's shortcut for common languages
+// written without a script: "+" after one that runs right to left, "-"
+// otherwise. It is ICU's string, and matched as ICU matches it, as a
+// substring.
+const langDirections = "root-en-es-pt-zh-ja-ko-de-fr-it-ar+he+fa+ru-nl-pl-th-tr-"
+
+// RightToLeft is getTextInfo's direction: whether the locale's script, or
+// its likely script, runs right to left (uloc_isRightToLeft).
+func (i *LocaleInfo) RightToLeft(l Locale) (bool, error) {
+	script := l.Script
+	if script.IsZero() {
+		if lang := l.Language.String(); l.Language != Und {
+			if at := strings.Index(langDirections, lang); at >= 0 {
+				switch langDirections[at+len(lang)] {
+				case '-':
+					return false, nil
+				case '+':
+					return true, nil
+				}
+			}
+		}
+		full, ok := i.likely.Maximize(l.Data())
+		if !ok || full.Script.IsZero() {
+			return false, nil
+		}
+		script = full.Script
+	}
+	b, err := i.src.Open(MarkerValues, DataLocale{})
+	if err != nil {
+		return false, fmt.Errorf("intl: the script directions: %w", err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if line == "rtl "+script.String() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// WeekInfo is getWeekInfo: the first day of the week and the weekend days,
+// numbered from Monday as one to Sunday as seven. The "-u-fw-" keyword
+// chooses the first day; the region's week data does the rest.
+func (i *LocaleInfo) WeekInfo(l Locale) (firstDay int, weekend []int, err error) {
+	b, err := i.src.Open(MarkerWeekData, DataLocale{})
+	if err != nil {
+		return 0, nil, fmt.Errorf("intl: the week data: %w", err)
+	}
+	values := parseWeekData(b)
+	region := i.supplementalRegion(l, true)
+	get := func(field string) int {
+		if v, ok := values[field][region]; ok {
+			return v
+		}
+		return values[field]["001"]
+	}
+	iso := func(sundayZero int) int {
+		if sundayZero == 0 {
+			return 7
+		}
+		return sundayZero
+	}
+	firstDay = iso(get("firstDay"))
+	if fw, ok := l.Keyword("fw"); ok {
+		for d, name := range [...]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"} {
+			if fw == name {
+				firstDay = iso(d)
+			}
+		}
+	}
+	start, end := get("weekendStart"), get("weekendEnd")
+	for d := start; ; d = (d + 1) % 7 {
+		weekend = append(weekend, iso(d))
+		if d == end || len(weekend) == 7 {
+			break
+		}
+	}
+	sort.Ints(weekend)
+	return firstDay, weekend, nil
+}

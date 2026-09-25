@@ -290,9 +290,10 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	return nil
 }
 
-// calendarPreferences writes which calendar each region reckons in, as lines
-// of "region calendar", sorted. Only the first is kept: the rest are calendars
-// a region also uses rather than ones it defaults to.
+// calendarPreferences writes the calendars each region reckons in, most
+// preferred first, as lines of "region calendar...", sorted by region: the
+// first is the one it defaults to, and the whole list is what
+// Intl.Locale.prototype.getCalendars answers.
 func calendarPreferences() ([]byte, error) {
 	var res struct {
 		Supplemental struct {
@@ -317,13 +318,19 @@ func calendarPreferences() ([]byte, error) {
 		if len(list) == 0 {
 			continue
 		}
-		name := list[0]
-		// CLDR writes the Gregorian calendar's name in full where BCP-47
-		// shortens it, and the short one is what ECMA-402 uses.
-		if name == "gregorian" {
-			name = "gregory"
+		names := make([]string, len(list))
+		for i, name := range list {
+			// CLDR writes some calendars' names in full where BCP-47
+			// shortens them, and the short ones are what ECMA-402 uses.
+			switch name {
+			case "gregorian":
+				name = "gregory"
+			case "ethiopic-amete-alem":
+				name = "ethioaa"
+			}
+			names[i] = name
 		}
-		fmt.Fprintf(&b, "%s %s\n", region, name)
+		fmt.Fprintf(&b, "%s %s\n", region, strings.Join(names, " "))
 	}
 	return []byte(b.String()), nil
 }

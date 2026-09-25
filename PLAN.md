@@ -760,7 +760,6 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Area | What go-quickjs calls | What it needs |
 |---|---|---|
-| `Intl.Locale` info | `LocaleCollations`, `LocaleHourCycles`, `LocaleNumberingSystem`, `ScriptDirection`, `TerritoryInfo*`, `WeekInfoForLocale` | CLDR's week data, time data and script metadata |
 | Time zones | `CanonicalZone`, `Zones`, `SystemZone`, `LoadTimeZone`, `LoadLocation`, `OffsetName`, `LegacyZoneNameAt`, the Windows zone map | a pinned tzdb with transitions for Temporal, and zone canonicalization; ICU's `zoneinfo64` is the candidate, which would also close the Ireland gap |
 | Calendar arithmetic | `Date`, `DateIn`, `DateInfo`, `ResolveDate`, `MonthsInYear`, `MonthsBetweenYears` | Temporal's non-ISO calendars: Chinese, Dangi, Hebrew, the Islamic variants, Persian, Indian, Ethiopic, Coptic, Japanese, ROC, Buddhist |
 
@@ -810,17 +809,49 @@ fit is behind a flag Node leaves off, and across every available locale,
 alone and in pairs, Node's two matchers answer alike. With negotiation the
 DurationFormat sweep's 21 locale gaps close.
 
-Data is read from the bundle ICU opens, per tree of ICU's data, where that
-is neither the locale's own nor a shorter form of it (`redirect` lines in
-`data/available.bin`, 381 of them, followed by `Fallbacker.ChainIn`). ICU
+Data is read along the chain ICU reads, per tree of ICU's data:
+`Fallbacker.ChainIn` resolves a locale as `ures_open` does, in ICU's own
+index of the tree (`data/icutree-<tree>.bin`: its bundles, aliases and
+parents) and, for a bundle that does not exist, ICU's default scripts and
+parent locales (`data/icufallback.bin`), all written by `availgen`. ICU
 opens an alias bundle as the one it names and otherwise drops a default
 script, where CLDR's chain truncates: "zh-TW" had been written in
 simplified Chinese from "zh", and is now "zh-Hant-TW"'s traditional; "sr-ME"
 is Serbian in Latin and "uz-AF" Uzbek in Arabic; "sr-Cyrl-ME" keeps its
 Cyrillic dates and names but writes Latin units and currency names, ICU's
-unit and currency trees having no bundle of its own. Zone names are the
-exception: zonegen already resolves ICU's zone and region trees for each
-locale it writes, so only a locale without a file is redirected.
+unit and currency trees having no bundle of its own; and "az-Arab", which
+ICU has no data for, is the root's, as it is for a service that is handed
+it without negotiation. The collator reads the collation tree the same way.
+Zone names are the exception: zonegen already resolves ICU's zone and
+region trees for each locale it writes, so only a locale without a file is
+resolved at run time. The index is read by the resolution that needs it,
+one tree's file of about 10 KB, so building a formatter costs no more than
+it did.
+
+The root's data had never been read: a root data locale opened the
+marker's shared file, `dates.bin`, which a per-locale marker has none of,
+so a chain that ran out of locales failed rather than ending at the root.
+It now opens `<marker>/und.bin`, and "und", "und-TW" and the like format.
+
+### Locale info
+
+`LocaleInfo` answers what `Intl.Locale` says beyond a locale's subtags, as
+V8 answers it from ICU (js-locale.cc): `Maximize` and `Minimize`; the
+calendars the region reckons in, most preferred first (calendarprefs.bin
+now keeps the whole list); the collations along the collation tree's
+chain, in BCP 47's spelling; the pattern generator's default hour cycle;
+the default numbering system; the canonical zones of the region subtag,
+SystemV's among them for 001, as ICU counts a zone canonical when it is
+neither an alias nor a tz link; the direction of the locale's, or its
+likely, script, from ICU's script properties (uscript_props.cpp, vendored)
+and uloc_isRightToLeft's shortcut for common languages; and the first day
+of the week and the weekend. Each takes its keyword ("-u-ca-", "-u-co-",
+"-u-hc-", "-u-nu-", "-u-fw-") where one is given, and the region for
+supplemental data as ICU finds it: "-u-rg-", the region, "-u-sd-", the
+likely region. `Minimize` had tried the request's own region and script
+rather than the maximized ones; it now gives "zh-TW" for "zh-Hant", as ICU
+does. `testdata/localeinfo_node.js` records 690 locales: all nine answers
+match for every one.
 
 ### Supported values
 

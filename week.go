@@ -32,6 +32,23 @@ func loadWeekRules(src Source, loc Locale) weekRules {
 			}
 		}
 	}
+	values := parseWeekData(b)
+	pick := func(field string, into *int) {
+		if v, ok := values[field][region]; ok {
+			*into = v
+		} else if v, ok := values[field]["001"]; ok {
+			*into = v
+		}
+	}
+	pick("firstDay", &rules.firstDay)
+	pick("minDays", &rules.minDays)
+	return rules
+}
+
+// parseWeekData reads data/weekdata.bin: by field, "firstDay", "minDays",
+// "weekendStart" and "weekendEnd", the value for each region, days counted
+// from Sunday as zero.
+func parseWeekData(b []byte) map[string]map[string]int {
 	values := map[string]map[string]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -47,16 +64,7 @@ func loadWeekRules(src Source, loc Locale) weekRules {
 		}
 		values[fields[0]][fields[1]] = v
 	}
-	pick := func(field string, into *int) {
-		if v, ok := values[field][region]; ok {
-			*into = v
-		} else if v, ok := values[field]["001"]; ok {
-			*into = v
-		}
-	}
-	pick("firstDay", &rules.firstDay)
-	pick("minDays", &rules.minDays)
-	return rules
+	return values
 }
 
 // weekYear is the year of the week a date falls in, as ICU's

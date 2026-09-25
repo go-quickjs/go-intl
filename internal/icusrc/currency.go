@@ -45,3 +45,27 @@ func CurrencyList() ([]Currency, error) {
 	}
 	return out, nil
 }
+
+// uscript_props.cpp.txt is ICU 78.3's source/common/uscript_props.cpp,
+// vendored likewise: each script's properties, which say whether it is
+// written right to left, are compiled into it (SCRIPT_PROPS).
+//
+//go:embed uscript_props.cpp.txt
+var uscriptPropsSource string
+
+var scriptProps = regexp.MustCompile(`(?m)^\s*0x[0-9A-Fa-f]+ \|([^/\n]*)// ([A-Z][a-z]{3})\s*$`)
+
+// RightToLeftScripts lists the scripts SCRIPT_PROPS marks RTL, by their
+// four-letter codes.
+func RightToLeftScripts() ([]string, error) {
+	var out []string
+	for _, m := range scriptProps.FindAllStringSubmatch(uscriptPropsSource, -1) {
+		if strings.Contains(m[1], "RTL") {
+			out = append(out, m[2])
+		}
+	}
+	if len(out) < 20 {
+		return nil, fmt.Errorf("uscript_props.cpp: only %d right-to-left scripts", len(out))
+	}
+	return out, nil
+}

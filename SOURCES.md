@@ -84,7 +84,7 @@ Other URLs:
   `collgen` checks both checksums before reading either archive.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
-  Four files are read, and all are vendored in `internal/icusrc`:
+  Five files are read, and all are vendored in `internal/icusrc`:
   `source/common/localefallback_data.h`, ICU's tables of parent locales and
   default scripts, which ICU's resource fallback consults;
   `source/i18n/islamcal.cpp`, as `islamcal.cpp.txt` since Go refuses C++
@@ -92,8 +92,9 @@ Other URLs:
   month lengths and year-start corrections; and `source/common/uloc_tag.cpp`,
   as `uloc_tag.cpp.txt`, for the legacy and redundant tags ICU's parser
   rewrites before anything else; and `source/common/ucurr.cpp`, as
-  `ucurr.cpp.txt`, for the list of ISO currencies with their flags. None is
-  in the data archive.
+  `ucurr.cpp.txt`, for the list of ISO currencies with their flags; and
+  `source/common/uscript_props.cpp`, as `uscript_props.cpp.txt`, for which
+  scripts run right to left. None is in the data archive.
 - `https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt` - sha256
   `2e1efc1dcb59c575...`, vendored in `internal/normgen`
 - `https://www.unicode.org/Public/17.0.0/ucd/CompositionExclusions.txt` -

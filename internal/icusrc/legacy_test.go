@@ -32,3 +32,17 @@ func TestCurrencyList(t *testing.T) {
 		t.Errorf("first %s, %d common and current", list[0].Code, common)
 	}
 }
+
+func TestRightToLeftScripts(t *testing.T) {
+	rtl, err := RightToLeftScripts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, s := range rtl {
+		have[s] = true
+	}
+	if len(rtl) != 37 || !have["Arab"] || !have["Hebr"] || !have["Adlm"] || have["Latn"] {
+		t.Errorf("%d scripts: %v", len(rtl), rtl)
+	}
+}

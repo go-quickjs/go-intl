@@ -67,6 +67,10 @@ const (
 	// MarkerValues is the collations, currencies and time zones
 	// Intl.supportedValuesOf lists.
 	MarkerValues Marker = "values"
+	// MarkerICUFallback is the default scripts and parent locales ICU's
+	// resource fallback reads for a bundle that does not exist. Beside it,
+	// "icutree-<tree>" is ICU's index of one of its trees.
+	MarkerICUFallback Marker = "icufallback"
 	// MarkerAvailable is the locales each service is available in.
 	MarkerAvailable Marker = "available"
 	// MarkerAliases is CLDR's aliases for locale subtags and extension types,
@@ -141,6 +145,10 @@ func (s fsSource) Open(m Marker, d DataLocale) ([]byte, error) {
 	name := string(m) + ".bin"
 	if !d.IsRoot() {
 		name = path.Join(string(m), d.String()+".bin")
+	} else if _, err := fs.Stat(s.fsys, name); errors.Is(err, fs.ErrNotExist) {
+		// A data set kept per locale has the root's as "und", where the
+		// fallback chain ends.
+		name = path.Join(string(m), "und.bin")
 	}
 	b, err := fs.ReadFile(s.fsys, name)
 	if err != nil {

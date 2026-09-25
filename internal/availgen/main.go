@@ -17,8 +17,9 @@
 // bundle of the tree but root and a few deprecated names, and, in the list
 // V8 asks for, the alias bundles LOCALE_DEPS.json names.
 //
-// The file is lines of a service and a tag: "number zh-Hant-HK"; and the
-// redirects ICU's bundles make, per tree (see redirectLines).
+// The file is lines of a service and a tag: "number zh-Hant-HK". The index
+// of ICU's trees its resource fallback reads is written beside it (see
+// writeIndex).
 package main
 
 import (
@@ -238,66 +239,80 @@ func build(zip string) ([]byte, error) {
 	}
 	sort.Strings(lines)
 
-	redirects, err := redirectLines(zip, sets["all"])
-	if err != nil {
+	if err := writeIndex(zip); err != nil {
 		return nil, err
 	}
-	lines = append(lines, redirects...)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
-// redirectTrees are the trees whose bundles a service's data comes from.
-var redirectTrees = []string{"locales", "unit", "curr", "lang", "region", "zone"}
+// indexTrees are the trees of ICU's data go-intl's data mirrors, whose index
+// the runtime resolves a locale in as ICU does.
+var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "coll"}
 
-// redirectLines are the locales ICU reads another locale's bundle for, in
-// each tree, as "redirect <tree> <tag> <bundle>": "redirect locales zh-TW
-// zh-Hant-TW", "redirect unit sr-Cyrl-ME sr-Latn-ME". ICU opens a locale's
-// own bundle if the tree has it, an alias bundle as the bundle it names, and
-// otherwise the one its fallback finds, which drops a default script; CLDR's
-// chain goes elsewhere for these. A bundle that is only a shorter form of
-// the tag, which CLDR's chain reaches too, is not written, nor a tag with a
-// variant, which a data locale cannot hold.
-func redirectLines(zip string, available map[string]bool) ([]string, error) {
-	fb, err := icusrc.ICUFallback()
-	if err != nil {
-		return nil, err
-	}
-	var tags []string
-	for tag := range available {
-		tags = append(tags, tag)
-	}
-	sort.Strings(tags)
-	var out []string
-	for _, tree := range redirectTrees {
+// writeIndex writes what ICU's resource fallback reads, so that go-intl can
+// open, for any locale, the bundle ICU opens. Each tree has a file,
+// data/icutree-<tree>.bin: its bundles ("bundles <name>..."), those that are
+// aliases ("alias <name> <target>") and those that name their parent
+// ("parent <name> <parent>"). data/icufallback.bin holds the tables ICU
+// consults when a bundle does not exist: the default scripts
+// ("defaultscript sr_ME Latn") and parent locales ("icuparent en_150
+// en_001"). ICU opens an alias bundle as the one it names and, for one that
+// does not exist, drops a default script, so "sr-ME" is Serbian in Latin,
+// "zh-TW" traditional Chinese and "az-Arab", which ICU has no data for, the
+// root.
+func writeIndex(zip string) error {
+	files := map[string][]string{}
+	for _, tree := range indexTrees {
 		t, err := icusrc.OpenTree(zip, tree)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		for _, tag := range tags {
-			name := strings.ReplaceAll(tag, "-", "_")
-			if strings.Contains(tag, "_u_") || strings.Contains(name, "_u_") || hasVariant(name) {
+		names := t.Names()
+		out := []string{"bundles " + strings.Join(names, " ")}
+		for _, name := range names {
+			n, err := t.Get(name)
+			if err != nil {
+				t.Close()
+				return err
+			}
+			if n == nil {
 				continue
 			}
-			bundle := t.Bundle(name, fb)
-			if bundle == name || bundle == "root" || strings.HasPrefix(name+"_", bundle+"_") || hasVariant(bundle) {
-				continue
+			if a := n.Get("%%ALIAS"); a != nil && a.Value != "" {
+				out = append(out, "alias "+name+" "+a.Value)
 			}
-			out = append(out, "redirect "+tree+" "+tag+" "+strings.ReplaceAll(bundle, "_", "-"))
+			if p := n.Get("%%Parent"); p != nil && p.Value != "" {
+				out = append(out, "parent "+name+" "+p.Value)
+			}
 		}
 		t.Close()
+		files["icutree-"+tree+".bin"] = out
 	}
-	return out, nil
-}
-
-// hasVariant reports whether an ICU locale name is more than a language,
-// script and region: "no_NO_NY", whose "NY" is ICU's legacy variant.
-func hasVariant(name string) bool {
-	parts := strings.Split(name, "_")[1:]
-	if len(parts) > 0 && len(parts[0]) == 4 {
-		parts = parts[1:]
+	defaults, parents, err := icusrc.FallbackTables()
+	if err != nil {
+		return err
 	}
-	if len(parts) > 0 && (len(parts[0]) == 2 || len(parts[0]) == 3 && parts[0][0] >= '0' && parts[0][0] <= '9') {
-		parts = parts[1:]
+	var tables []string
+	for k, v := range defaults {
+		tables = append(tables, "defaultscript "+k+" "+v)
 	}
-	return len(parts) > 0
+	for k, v := range parents {
+		tables = append(tables, "icuparent "+k+" "+v)
+	}
+	sort.Strings(tables)
+	files["icufallback.bin"] = tables
+	// Every file is built before any is written.
+	for name, lines := range files {
+		target := filepath.Join("data", name)
+		if err := os.WriteFile(target+".tmp", []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+			return err
+		}
+	}
+	for name := range files {
+		target := filepath.Join("data", name)
+		if err := os.Rename(target+".tmp", target); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -19,26 +19,35 @@ import (
 //go:embed localefallback_data.h
 var localeFallbackData string
 
-// ICUFallback returns the fallback ICU's resource bundles use, from its own
-// tables.
-func ICUFallback() (Fallback, error) {
+// FallbackTables are the two tables ICU's resource fallback consults: the
+// default script of a language, or of a language in a region ("sr_ME"), and
+// the parent locales.
+func FallbackTables() (defaults, parents map[string]string, err error) {
 	scripts, err := cStrings("scriptCodeChars")
 	if err != nil {
-		return Fallback{}, err
+		return nil, nil, err
 	}
 	ids, err := cStrings("dsLocaleIDChars")
 	if err != nil {
-		return Fallback{}, err
+		return nil, nil, err
 	}
-	defaults, err := pairs("defaultScriptTable", ids, scripts)
-	if err != nil {
-		return Fallback{}, err
+	if defaults, err = pairs("defaultScriptTable", ids, scripts); err != nil {
+		return nil, nil, err
 	}
 	parentChars, err := cStrings("parentLocaleChars")
 	if err != nil {
-		return Fallback{}, err
+		return nil, nil, err
 	}
-	parents, err := pairs("parentLocaleTable", parentChars, parentChars)
+	if parents, err = pairs("parentLocaleTable", parentChars, parentChars); err != nil {
+		return nil, nil, err
+	}
+	return defaults, parents, nil
+}
+
+// ICUFallback returns the fallback ICU's resource bundles use, from its own
+// tables.
+func ICUFallback() (Fallback, error) {
+	defaults, parents, err := FallbackTables()
 	if err != nil {
 		return Fallback{}, err
 	}

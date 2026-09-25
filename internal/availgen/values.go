@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -13,8 +14,11 @@ import (
 
 // writeValues writes data/values.bin: the lists Intl.supportedValuesOf
 // answers with for collations, currencies and time zones, as V8 builds them
-// from ICU (intl-objects.cc), one "<key> <value>" line each. Calendars,
-// numbering systems and units are go-intl's own lists.
+// from ICU (intl-objects.cc), one "<key> <value>" line each; and for
+// Intl.Locale, each region's canonical zones ("zone <region> <id>"), the
+// collation types' BCP 47 spellings ("cotype phonebook phonebk") and the
+// scripts ICU writes right to left ("rtl Arab"). Calendars, numbering
+// systems and units are go-intl's own lists.
 func writeValues(zip string) error {
 	var lines []string
 	collations, err := collationValues(zip)
@@ -37,6 +41,35 @@ func writeValues(zip string) error {
 	}
 	for _, v := range zones {
 		lines = append(lines, "timezone "+v)
+	}
+	regional, err := regionZones(zip)
+	if err != nil {
+		return err
+	}
+	lines = append(lines, regional...)
+	// The collation types' BCP 47 spellings where ICU's data spells them
+	// otherwise, "cotype phonebook phonebk", for the names Intl.Locale lists.
+	keyTypes, err := readMisc(zip, "keyTypeData")
+	if err != nil {
+		return err
+	}
+	if t := keyTypes.Get("typeMap", "collation"); t != nil {
+		var cotypes []string
+		for _, e := range t.Children {
+			if e.Value != "" && e.Value != e.Key {
+				cotypes = append(cotypes, "cotype "+e.Key+" "+e.Value)
+			}
+		}
+		sort.Strings(cotypes)
+		lines = append(lines, cotypes...)
+	}
+	rtl, err := icusrc.RightToLeftScripts()
+	if err != nil {
+		return err
+	}
+	sort.Strings(rtl)
+	for _, script := range rtl {
+		lines = append(lines, "rtl "+script)
 	}
 	target := filepath.Join("data", "values.bin")
 	if err := os.WriteFile(target+".tmp", []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
@@ -178,15 +211,13 @@ func zoneValues(zip string) ([]string, error) {
 	if names == nil || regions == nil || len(names.Values) != len(regions.Values) {
 		return nil, fmt.Errorf("zoneinfo64.txt: Names and Regions do not agree")
 	}
-	canonical := map[string]bool{}
-	if t := types.Get("typeMap", "timezone"); t != nil {
-		for _, e := range t.Children {
-			canonical[strings.ReplaceAll(e.Key, ":", "/")] = true
-		}
+	canonical, err := canonicalZones(zip, types, names.Values)
+	if err != nil {
+		return nil, err
 	}
 	set := map[string]bool{}
 	for i, id := range names.Values {
-		if id == "Etc/Unknown" || !canonical[id] || regions.Values[i] == "001" {
+		if id == "Etc/Unknown" || !canonical(id) || regions.Values[i] == "001" {
 			continue
 		}
 		set[id] = true
@@ -201,4 +232,76 @@ func sorted(set map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// regionZones is what TimeZone::createTimeZoneIDEnumeration lists for a
+// region with UCAL_ZONE_TYPE_CANONICAL: the canonical zones, aliases and
+// Etc/Unknown left out, whose region it is, as "zone <region> <id>" lines
+// sorted by region and zone.
+func regionZones(zip string) ([]string, error) {
+	info, err := readMisc(zip, "zoneinfo64")
+	if err != nil {
+		return nil, err
+	}
+	types, err := readMisc(zip, "timezoneTypes")
+	if err != nil {
+		return nil, err
+	}
+	names, regions := info.Get("Names"), info.Get("Regions")
+	canonical, err := canonicalZones(zip, types, names.Values)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for i, id := range names.Values {
+		if id == "Etc/Unknown" || !canonical(id) {
+			continue
+		}
+		out = append(out, "zone "+regions.Values[i]+" "+id)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// canonicalZones is ZoneMeta::getCanonicalCLDRID's test of whether a zone is
+// its own canonical ID: it is a canonical type in keyTypeData, or it is
+// neither an alias there nor a link in the tz data, as the SystemV zones are.
+func canonicalZones(zip string, types *icutxt.Node, names []string) (func(string) bool, error) {
+	typeMap := map[string]bool{}
+	if t := types.Get("typeMap", "timezone"); t != nil {
+		for _, e := range t.Children {
+			typeMap[strings.ReplaceAll(e.Key, ":", "/")] = true
+		}
+	}
+	typeAlias := map[string]bool{}
+	if t := types.Get("typeAlias", "timezone"); t != nil {
+		for _, e := range t.Children {
+			typeAlias[strings.ReplaceAll(e.Key, ":", "/")] = true
+		}
+	}
+	l, err := icusrc.OpenLocales(zip)
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+	raw, err := l.ReadMisc("zoneinfo64")
+	if err != nil {
+		return nil, err
+	}
+	// The Zones array holds each name's entry in Names' order: a table for
+	// a zone, an integer, the index of its target, for a link.
+	links := map[string]bool{}
+	entry := regexp.MustCompile(`(?m)^  /\* (\S+) \*/ :(int|table) \{`)
+	matches := entry.FindAllStringSubmatch(string(raw), -1)
+	if len(matches) != len(names) {
+		return nil, fmt.Errorf("zoneinfo64.txt: %d zone entries for %d names", len(matches), len(names))
+	}
+	for _, m := range matches {
+		if m[2] == "int" {
+			links[m[1]] = true
+		}
+	}
+	return func(id string) bool {
+		return typeMap[id] || !typeAlias[id] && !links[id]
+	}, nil
 }

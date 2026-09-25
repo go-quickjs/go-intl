@@ -90,16 +90,24 @@ var implemented = map[CalendarSystem]bool{
 type calendarPreferences string
 
 func (p calendarPreferences) of(region string) (CalendarSystem, bool) {
-	if region == "" {
-		return "", false
-	}
-	for line := range strings.SplitSeq(strings.TrimRight(string(p), "\n"), "\n") {
-		name, calendar, ok := strings.Cut(line, " ")
-		if ok && name == region {
-			return CalendarSystem(calendar), true
-		}
+	if list := p.all(region); len(list) > 0 {
+		return CalendarSystem(list[0]), true
 	}
 	return "", false
+}
+
+// all is every calendar the region reckons in, most preferred first.
+func (p calendarPreferences) all(region string) []string {
+	if region == "" {
+		return nil
+	}
+	for line := range strings.SplitSeq(strings.TrimRight(string(p), "\n"), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 1 && fields[0] == region {
+			return fields[1:]
+		}
+	}
+	return nil
 }
 
 // chooseCalendar settles which calendar a formatter reckons in, as

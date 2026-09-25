@@ -22,20 +22,65 @@ import (
 //
 // The two compose: maximize first if the identifier is partial, then chain.
 //
-// A third table says where ICU looks instead, which is what Node answers
-// with: for the locales negotiation can hand a service, the bundle ICU opens
-// when it is neither the locale's own nor a shorter form of it -- an alias
-// bundle, "sr-ME" being "sr-Latn-ME", or the one ICU's fallback finds,
-// "zh-TW" being "zh-Hant-TW" -- per tree of ICU's data, since the trees
-// differ ("sr-Cyrl-ME" has its own dates but Latin units). ChainIn follows
-// it before chaining.
+// ICU's own index says where ICU looks instead, which is what Node answers
+// with. For each tree of ICU's data it lists the bundles, the aliases among
+// them and the parents they name, with the default scripts and parent
+// locales ICU's fallback reads for a bundle that does not exist. ChainIn
+// resolves a locale in it as ures_open does: an alias bundle is the bundle it
+// names, "sr-ME" Serbian in Latin; a locale without a bundle drops a default
+// script, "zh-TW" being "zh-Hant-TW", or falls to the root, as "az-Arab",
+// which ICU has no data for, does. The trees differ: "sr-Cyrl-ME" has its own
+// dates, but Latin units.
 
 // A Fallbacker answers where to look for data. It is read-only once built and
 // safe for concurrent use.
 type Fallbacker struct {
-	parents   pairTable
-	likely    pairTable
-	redirects map[string]map[DataLocale]DataLocale
+	parents pairTable
+	likely  pairTable
+	src     Source
+}
+
+// icuTree is ICU's index of one of its trees, read when a locale is
+// resolved in it and searched as the resolution needs it: the tree's
+// bundles, aliases and parents, and, only if a bundle is missing, the
+// tables ICU's fallback then reads.
+type icuTree struct {
+	src      Source
+	text     string // the tree's index, with a newline before the first line
+	fallback string // data/icufallback.bin, read when first needed
+}
+
+// line finds the rest of the line of text that begins with prefix.
+func line(text, prefix string) (string, bool) {
+	at := strings.Index(text, "\n"+prefix)
+	if at < 0 {
+		return "", false
+	}
+	rest := text[at+1+len(prefix):]
+	if end := strings.IndexByte(rest, '\n'); end >= 0 {
+		rest = rest[:end]
+	}
+	return rest, true
+}
+
+func (x *icuTree) has(name string) bool {
+	list, ok := line(x.text, "bundles ")
+	return ok && strings.Contains(" "+list+" ", " "+name+" ")
+}
+
+func (x *icuTree) value(prefix string) (string, bool) {
+	return line(x.text, prefix+" ")
+}
+
+func (x *icuTree) fallbackValue(prefix string) (string, bool) {
+	if x.fallback == "" {
+		b, err := x.src.Open(MarkerICUFallback, DataLocale{})
+		if err != nil {
+			return "", false
+		}
+		x.fallback = "\n" + string(b)
+	}
+	return line(x.fallback, prefix+" ")
 }
 
 // The trees of ICU's data a service's data comes from, for ChainIn.
@@ -46,6 +91,7 @@ const (
 	treeLang    = "lang"
 	treeRegion  = "region"
 	treeZone    = "zone"
+	treeColl    = "coll"
 )
 
 // NewFallbacker reads the tables it needs from a source.
@@ -58,36 +104,154 @@ func NewFallbacker(src Source) (*Fallbacker, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &Fallbacker{parents: parents, likely: likely, redirects: map[string]map[DataLocale]DataLocale{}}
-	// The redirects are optional, so that a source carrying only the two
-	// tables above still works.
-	if b, err := src.Open(MarkerAvailable, DataLocale{}); err == nil {
-		for _, line := range strings.Split(string(b), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) != 4 || fields[0] != "redirect" {
-				continue
-			}
-			from, err1 := ParseLocale(fields[2])
-			to, err2 := ParseLocale(fields[3])
-			if err1 != nil || err2 != nil {
-				return nil, fmt.Errorf("loading %s: %q", MarkerAvailable, line)
-			}
-			if f.redirects[fields[1]] == nil {
-				f.redirects[fields[1]] = map[DataLocale]DataLocale{}
-			}
-			f.redirects[fields[1]][from.Data()] = to.Data()
-		}
-	}
-	return f, nil
+	return &Fallbacker{parents: parents, likely: likely, src: src}, nil
 }
 
-// ChainIn is Chain for data read from one of ICU's trees: from the bundle
-// ICU opens instead, where it opens another.
-func (f *Fallbacker) ChainIn(tree string, d DataLocale) []DataLocale {
-	if to, ok := f.redirects[tree][d]; ok {
-		d = to
+// icuTree reads ICU's index of a tree, or reports that the source has none.
+func (f *Fallbacker) icuTree(tree string) (*icuTree, bool) {
+	b, err := f.src.Open(Marker("icutree-"+tree), DataLocale{})
+	if err != nil {
+		return nil, false
 	}
-	return f.Chain(d)
+	return &icuTree{src: f.src, text: "\n" + string(b)}, true
+}
+
+// ChainIn is Chain for data read from one of ICU's trees: the bundles ICU
+// reads for the locale in that tree, most specific first, as data locales,
+// the root last. The index is optional, so that a source carrying only the
+// likely subtags and parent locales still works, by CLDR's chain.
+func (f *Fallbacker) ChainIn(tree string, d DataLocale) []DataLocale {
+	x, ok := f.icuTree(tree)
+	if !ok {
+		return f.Chain(d)
+	}
+	var chain []DataLocale
+	for _, name := range x.resolve(icuName(d)) {
+		if name == "root" {
+			break
+		}
+		l, err := ParseLocale(strings.ReplaceAll(name, "_", "-"))
+		if err != nil || len(l.Variants) > 0 {
+			// A bundle with a variant, which a data locale cannot hold.
+			continue
+		}
+		chain = append(chain, l.Data())
+	}
+	return append(chain, DataLocale{})
+}
+
+// icuName is a data locale as ICU names it: "sr_Latn_ME", "root" for the
+// root.
+func icuName(d DataLocale) string {
+	if d.IsRoot() {
+		return "root"
+	}
+	name := d.Language.String()
+	if !d.Script.IsZero() {
+		name += "_" + d.Script.String()
+	}
+	if !d.Region.IsZero() {
+		name += "_" + d.Region.String()
+	}
+	return name
+}
+
+// resolve is what ures_open reads for a locale in a tree, as
+// icusrc.Locales.Resolve reads it at generation: the first bundle that
+// exists, found by ICU's fallback, then along its aliases and its parents or
+// its truncations to the root.
+func (x *icuTree) resolve(name string) []string {
+	orig := name
+	for i := 0; !x.has(name) && i < maxChain; i++ {
+		next, ok := x.missingParent(name, orig)
+		if !ok {
+			name = "root"
+			break
+		}
+		name = next
+	}
+	var out []string
+	for i := 0; name != "" && i < maxChain; i++ {
+		if to, ok := x.value("alias " + name); ok {
+			name = to
+			continue
+		}
+		out = append(out, name)
+		if name == "root" {
+			break
+		}
+		next, ok := x.value("parent " + name)
+		if !ok {
+			if cut := strings.LastIndexByte(name, '_'); cut > 0 {
+				next = name[:cut]
+			} else {
+				next = "root"
+			}
+		}
+		name = next
+	}
+	return out
+}
+
+// missingParent is ICU's getParentLocaleID for a bundle that does not exist:
+// the parent locale if CLDR names one, else the name without a region or
+// script, where the script is the default ICU would assume.
+func (x *icuTree) missingParent(name, orig string) (string, bool) {
+	language, script, region, variant := splitICUName(name)
+	if variant {
+		if cut := strings.LastIndexByte(name, '_'); cut > 0 {
+			return name[:cut], true
+		}
+		return "", false
+	}
+	if p, ok := x.fallbackValue("icuparent " + name); ok {
+		return p, true
+	}
+	defaultScript := func(region string) string {
+		if region != "" {
+			if s, ok := x.fallbackValue("defaultscript " + language + "_" + region); ok {
+				return s
+			}
+		}
+		if s, ok := x.fallbackValue("defaultscript " + language); ok {
+			return s
+		}
+		return "Latn"
+	}
+	switch {
+	case script != "" && region != "":
+		if defaultScript(region) == script {
+			return language + "_" + region, true
+		}
+		return language + "_" + script, true
+	case region != "":
+		if _, origScript, _, _ := splitICUName(orig); origScript != "" {
+			return language + "_" + origScript, true
+		}
+		return language + "_" + defaultScript(region), true
+	case script != "":
+		if defaultScript("") == script {
+			return language, true
+		}
+	}
+	return "", false
+}
+
+// splitICUName takes an ICU locale name apart.
+func splitICUName(name string) (language, script, region string, variant bool) {
+	parts := strings.Split(name, "_")
+	language = parts[0]
+	for _, p := range parts[1:] {
+		switch {
+		case script == "" && region == "" && len(p) == 4:
+			script = p
+		case region == "" && (len(p) == 2 || len(p) == 3 && p[0] >= '0' && p[0] <= '9'):
+			region = p
+		default:
+			variant = true
+		}
+	}
+	return language, script, region, variant
 }
 
 func loadPairs(src Source, m Marker) (pairTable, error) {
@@ -183,15 +347,17 @@ func (f *Fallbacker) Minimize(d DataLocale) (DataLocale, bool) {
 	if !ok {
 		return d, false
 	}
-	// The shortest form whose maximization is the same locale wins.
+	// The shortest form whose maximization is the same locale wins, the
+	// region before the script, as ICU's minimizeSubtags tries them. The
+	// forms are the maximized locale's: "zh-Hant" is "zh-TW".
 	for _, try := range [...]DataLocale{
-		{Language: d.Language},
-		{Language: d.Language, Region: d.Region},
-		{Language: d.Language, Script: d.Script},
+		{Language: full.Language},
+		{Language: full.Language, Region: full.Region},
+		{Language: full.Language, Script: full.Script},
 	} {
 		if got, ok := f.Maximize(try); ok && got == full {
 			return try, true
 		}
 	}
-	return d, true
+	return full, true
 }

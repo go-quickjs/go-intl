@@ -320,8 +320,17 @@ func collationChain(src Source, d DataLocale) (collationSearch, error) {
 	if err != nil {
 		return nil, err
 	}
+	steps := tree.chain(d)
+	// ICU's index of the collation tree, where there is one, also knows
+	// where ICU goes for a locale it has no bundle for: "ar-Latn" is the
+	// root's, not Arabic's.
+	if fb, err := NewFallbacker(src); err == nil {
+		if _, ok := fb.icuTree(treeColl); ok {
+			steps = fb.ChainIn(treeColl, d)
+		}
+	}
 	var chain collationSearch
-	for _, step := range tree.chain(d) {
+	for _, step := range steps {
 		b, err := src.Open(MarkerCollation, step)
 		if errors.Is(err, ErrNotFound) {
 			continue
