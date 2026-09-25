@@ -3,6 +3,8 @@ package intl
 import (
 	"fmt"
 	"strings"
+
+	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Choosing a pattern, as V8 asks ICU for one.
@@ -327,9 +329,9 @@ func allowedHourFormats(src Source, loc Locale) (byte, []string, error) {
 	if region == "" {
 		region = "001"
 	}
-	entry, ok := table[language+"_"+region]
+	entry, ok := table.entry(language + "_" + region)
 	if !ok {
-		entry, ok = table[region]
+		entry, ok = table.entry(region)
 	}
 
 	var hourChar byte
@@ -380,20 +382,28 @@ type timeDataEntry struct {
 	allowed   []string
 }
 
-// loadTimeData reads CLDR's hour-cycle preferences: a line per key, the
-// preferred cycle, and the allowed ones separated by commas.
-func loadTimeData(src Source) (map[string]timeDataEntry, error) {
+// timeData is CLDR's hour-cycle preferences, an index read where it lies:
+// by "de_AT" or "AT", the preferred cycle and the allowed ones separated by
+// commas.
+type timeData struct{ index blob.Index }
+
+func loadTimeData(src Source) (timeData, error) {
 	b, err := src.Open(MarkerTimeData, DataLocale{})
 	if err != nil {
-		return nil, fmt.Errorf("intl: the hour-cycle preferences: %w", err)
+		return timeData{}, fmt.Errorf("intl: the hour-cycle preferences: %w", err)
 	}
-	out := map[string]timeDataEntry{}
-	for _, line := range strings.Split(string(b), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 3 {
-			continue
-		}
-		out[fields[0]] = timeDataEntry{preferred: fields[1], allowed: strings.Split(fields[2], ",")}
+	index, err := blob.ReadIndex(b)
+	if err != nil {
+		return timeData{}, fmt.Errorf("intl: the hour-cycle preferences: %w", err)
 	}
-	return out, nil
+	return timeData{index}, nil
+}
+
+func (t timeData) entry(key string) (timeDataEntry, bool) {
+	v, ok := t.index.Find(key)
+	if !ok {
+		return timeDataEntry{}, false
+	}
+	preferred, allowed, _ := strings.Cut(string(v), " ")
+	return timeDataEntry{preferred: preferred, allowed: strings.Split(allowed, ",")}, true
 }

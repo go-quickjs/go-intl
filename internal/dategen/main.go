@@ -374,8 +374,9 @@ func readFieldNames(main, name string) ([datedata.Fields]string, error) {
 }
 
 // timeData writes CLDR's hour-cycle preferences, which are a property of a
-// region, or of a language in a region: one line each, the key, the preferred
-// cycle and the allowed ones, as CLDR spells them ("h", "H", "hB").
+// region, or of a language in a region, as an index (blob.Index) read where
+// it lies: by "de_AT" or "AT", the preferred cycle, a space and the allowed
+// ones separated by commas, as CLDR spells them ("H H,hB").
 func timeData() ([]byte, error) {
 	var res struct {
 		Supplemental struct {
@@ -392,14 +393,15 @@ func timeData() ([]byte, error) {
 	for key := range res.Supplemental.TimeData {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
-	var b strings.Builder
+	// An index (blob.Index), looked up where it lies: the key, "de_AT" or
+	// "AT", then the preferred hour format and the allowed ones, "H H,hB".
+	records := map[string][]byte{}
 	for _, key := range keys {
 		d := res.Supplemental.TimeData[key]
-		fmt.Fprintf(&b, "%s %s %s\n", strings.ReplaceAll(key, "-", "_"), d.Preferred,
+		records[strings.ReplaceAll(key, "-", "_")] = []byte(d.Preferred + " " +
 			strings.Join(strings.Fields(d.Allowed), ","))
 	}
-	return []byte(b.String()), nil
+	return blob.BuildIndex(records)
 }
 
 // japaneseEras writes the start dates of the Japanese calendar's eras, from

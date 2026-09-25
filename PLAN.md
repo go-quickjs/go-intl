@@ -1234,6 +1234,17 @@ English, a Collator went from 344 to 33 µs, a ListFormat from 151 to 16 µs,
 a NumberFormat from 148 to 73 µs, a DateTimeFormat from 1.07 to 0.32 ms and
 a Segmenter from 1.82 to 0.57 ms, each allocating a fraction of what it did.
 
+Then the tables every build read in full became indexes (`blob.Index`:
+sorted keys and values, found by binary search where they lie): ICU's tree
+indexes and the tables its fallback reads, the normalization tables, the
+break engines' Unicode sets and scripts, and the hour-cycle preferences.
+Building no longer decodes them into maps; it looks up what it needs. In
+English now: a Collator 32 µs, a ListFormat or PluralRules 3.3 µs, a
+NumberFormat 22 µs, a Segmenter 21 µs, a RelativeTimeFormat 40 µs, a
+DurationFormat 75 µs, DisplayNames 92 µs, a DateTimeFormat of fields 0.13 ms
+and one of both full styles 0.47 ms, where the zones' metadata and names,
+still decoded whole, are most of what is left.
+
 What is left is mostly text no two locales share -- translated names of
 languages, regions, zones, cities and currencies, about 9 MB -- and ICU's
 segmentation dictionaries, 3.1 MB, which no sharing reduces. Inlining the
