@@ -953,7 +953,8 @@ README's Intl section.
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
-| **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB |
+| **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB; packed into one embedded file read in place, 18.7 MB with the tables that are looked up |
+| **Load time** | data read in place from one embedded pack; tables looked up by binary search rather than decoded, strings not copied; every constructor in English under 0.11 ms, most under 25 µs (see Loading time) |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
@@ -1300,7 +1301,8 @@ would save an estimated 1.5 to 2 MB more.
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
-| **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB |
+| **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB; packed into one embedded file read in place, 18.7 MB with the tables that are looked up |
+| **Load time** | data read in place from one embedded pack; tables looked up by binary search rather than decoded, strings not copied; every constructor in English under 0.11 ms, most under 25 µs (see Loading time) |
 | 9. Retire internal/icu | not started |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
