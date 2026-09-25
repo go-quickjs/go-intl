@@ -1,19 +1,1 @@
-lâ€™annÃ©e derniÃ¨recette annÃ©e	lâ€™annÃ©e prochaineonedans {0} anotherdans {0} ansoneil y a {0} anotheril y a {0} anslâ€™an derniercette annÃ©e	lâ€™an prochainone
-dans {0} aother
-dans {0} aoneil y a {0} aotheril y a {0} alâ€™an derniercette annÃ©e	lâ€™an prochainone+{0} aother+{0} aone-{0} aother-{0} ale trimestre dernierce trimestre-ci	le trimestre prochainonedans {0} trimestreotherdans {0} trimestresoneil y a {0} trimestreotheril y a {0} trimestrestrim. dernierce trim.	trim. prochainonedans {0} trim.otherdans {0} trim.oneil y a {0} trim.otheril y a {0} trim.trim. dernierce trim.	trim.prochainone
-+{0} trim.other
-+{0} trim.one
--{0} trim.other
--{0} trim.le mois dernier
-ce mois-ci	le mois prochainonedans {0} moisotherdans {0} moisoneil y a {0} moisotheril y a {0} moisle mois dernier
-ce mois-ci	le mois prochainonedans {0} m.otherdans {0} m.oneil y a {0} m.otheril y a {0} m.le mois dernier
-ce mois-ci	le mois prochainone+{0} m.other+{0} m.one-{0} m.other-{0} m.la semaine derniÃ¨recette semaine	la semaine prochaineonedans {0} semaineotherdans {0} semainesoneil y a {0} semaineotheril y a {0} semainesla semaine derniÃ¨recette semaine	la semaine prochaineonedans {0} sem.otherdans {0} sem.oneil y a {0} sem.otheril y a {0} sem.la semaine derniÃ¨recette semaine	la semaine prochaineone	+{0} sem.other	+{0} sem.one	-{0} sem.other	-{0} sem.
-avant-hierhieraujourdâ€™hui	demain
-aprÃ¨s-demainonedans {0} jourotherdans {0} joursoneil y a {0} jourotheril y a {0} jours
-avant-hierhieraujourdâ€™hui	demain
-aprÃ¨s-demainonedans {0}Â jotherdans {0}Â joneil y a {0}Â jotheril y a {0}Â j
-avant-hierhieraujourdâ€™hui	demain
-aprÃ¨s-demainone+{0} jother+{0} jone-{0} jother-{0} jcette heure-cionedans {0} heureotherdans {0} heuresoneil y a {0} heureotheril y a {0} heurescette heure-cionedans {0}Â hotherdans {0}Â honeil y a {0}Â hotheril y a {0}Â hcette heure-cione+{0} hother+{0} hone-{0} hother-{0} hcette minute-cionedans {0} minuteotherdans {0} minutesoneil y a {0} minuteotheril y a {0} minutescette minute-cionedans {0}Â minotherdans {0}Â minoneil y a {0}Â minotheril y a {0}Â mincette minute-cione+{0} minother+{0} minone-{0} minother-{0} min
-maintenantonedans {0} secondeotherdans {0} secondesoneil y a {0} secondeotheril y a {0} secondes
-maintenantonedans {0}Â sotherdans {0}Â soneil y a {0}Â sotheril y a {0}Â s
-maintenantone+ {0} sother+{0} sone-{0} sother-{0} s
+ü„ÚŞà–™œ¤§ª´·ºÀÃÄÊÍÎÔ×â

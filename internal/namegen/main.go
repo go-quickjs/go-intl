@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/namedata"
 )
@@ -68,6 +69,9 @@ func run(namesRoot, datesRoot string) error {
 	}
 
 	built := map[string][]byte{}
+	// The locales share one pool, written beside them. ReadDir's order is
+	// sorted, so the pool is the same every run.
+	pool := blob.NewPool(namedata.Version)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -79,7 +83,7 @@ func run(namesRoot, datesRoot string) error {
 		if l == nil {
 			continue
 		}
-		built[e.Name()] = namedata.Encode(l)
+		built[e.Name()] = namedata.Encode(l, pool)
 	}
 	if len(built) == 0 {
 		return fmt.Errorf("no locales found under %s", main)
@@ -90,6 +94,9 @@ func run(namesRoot, datesRoot string) error {
 		return err
 	}
 	if err := datawrite.Locales(out, built); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "namesshared.bin"), pool.Bytes(), 0o644); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "namegen: %d locales\n", len(built))

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"io/fs"
 	"path"
 	"unsafe"
@@ -58,6 +59,13 @@ const (
 	MarkerNumbersShared Marker = "numbersshared"
 	// MarkerZoneNamesShared is what the locales' zone names share.
 	MarkerZoneNamesShared Marker = "zonenamesshared"
+	// MarkerNamesShared is what the locales' display names share.
+	MarkerNamesShared Marker = "namesshared"
+	// MarkerUnitsShared is what the locales' measurement patterns share.
+	MarkerUnitsShared Marker = "unitsshared"
+	// MarkerRelativeTimeShared is what the locales' relative-time wordings
+	// share.
+	MarkerRelativeTimeShared Marker = "reltimeshared"
 	// MarkerZoneNames is what one locale calls the time zones.
 	MarkerZoneNames Marker = "zonenames"
 	// MarkerMetazones maps a zone to the metazone it belongs to, which is not
@@ -155,15 +163,27 @@ var embeddedNumbersShared string
 //go:embed data/zonenamesshared.bin
 var embeddedZoneNamesShared string
 
+//go:embed data/namesshared.bin
+var embeddedNamesShared string
+
+//go:embed data/unitsshared.bin
+var embeddedUnitsShared string
+
+//go:embed data/reltimeshared.bin
+var embeddedRelativeTimeShared string
+
 // Embedded is the data built into this package. It is the default, so that the
 // simple path needs no setting up, and it is only a default: anything taking a
 // Source can be given another.
 var Embedded Source = &embeddedSource{
 	fsSource: mustSub(embeddedData, "data").(fsSource),
 	shared: map[Marker]string{
-		MarkerDatesShared:     embeddedDatesShared,
-		MarkerNumbersShared:   embeddedNumbersShared,
-		MarkerZoneNamesShared: embeddedZoneNamesShared,
+		MarkerDatesShared:        embeddedDatesShared,
+		MarkerNumbersShared:      embeddedNumbersShared,
+		MarkerZoneNamesShared:    embeddedZoneNamesShared,
+		MarkerNamesShared:        embeddedNamesShared,
+		MarkerUnitsShared:        embeddedUnitsShared,
+		MarkerRelativeTimeShared: embeddedRelativeTimeShared,
 	},
 }
 
@@ -298,4 +318,18 @@ func compareBytes(a, b []byte) int {
 		}
 	}
 	return 0
+}
+
+// openShared opens the pool a data set kept per locale shares, which its
+// tables are read with.
+func openShared(src Source, m Marker, version byte) (blob.Shared, error) {
+	b, err := src.Open(m, DataLocale{})
+	if err != nil {
+		return blob.Shared{}, fmt.Errorf("intl: %s: %w", m, err)
+	}
+	pool, err := blob.ReadShared(b, version)
+	if err != nil {
+		return blob.Shared{}, fmt.Errorf("intl: %s: %w", m, err)
+	}
+	return pool, nil
 }

@@ -130,12 +130,16 @@ func loadRelativeTime(src Source, loc Locale) (*reltimedata.Locale, error) {
 	if fb, err := NewFallbacker(src); err == nil {
 		chain = fb.ChainIn(treeLocales, loc.Data())
 	}
+	pool, err := openShared(src, MarkerRelativeTimeShared, reltimedata.Version)
+	if err != nil {
+		return nil, err
+	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerRelativeTime, d)
 		if err != nil {
 			continue
 		}
-		l, err := reltimedata.Decode(b)
+		l, err := reltimedata.Decode(b, pool)
 		if err != nil {
 			return nil, fmt.Errorf("intl: the relative times for %s: %w", d, err)
 		}

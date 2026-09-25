@@ -14,7 +14,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // The widths, in the order they are stored.
 const (
@@ -89,56 +89,63 @@ func (l *Locale) Width(w int) *Width {
 	return &l.Widths[Long]
 }
 
-// Encode writes a locale's units.
-func Encode(l *Locale) []byte {
-	b := blob.NewWriter(Version)
+// Encode writes a locale's units, with what it shares with other locales --
+// every string, each unit and each list -- in pool, which the generator
+// writes beside the locales and Decode is given.
+func Encode(l *Locale, pool *blob.Pool) []byte {
+	b := blob.NewPooledWriter(Version, pool)
 	for _, w := range l.Widths {
-		b.String(w.Compound)
-		b.Uint(len(w.Units))
-		for _, u := range w.Units {
-			b.String(u.Name)
-			b.String(u.PerUnit)
-			b.Uint(len(u.Patterns))
-			for _, p := range u.Patterns {
-				b.String(p.Count)
-				b.String(p.Text)
+		b.SharedString(w.Compound)
+		b.Shared(func(b *blob.Writer) {
+			b.Uint(len(w.Units))
+			for _, u := range w.Units {
+				b.Shared(func(b *blob.Writer) {
+					b.SharedString(u.Name)
+					b.SharedString(u.PerUnit)
+					b.Uint(len(u.Patterns))
+					for _, p := range u.Patterns {
+						b.SharedString(p.Count)
+						b.SharedString(p.Text)
+					}
+				})
 			}
-		}
+		})
 	}
 	return b.Bytes()
 }
 
-// Decode reads what Encode wrote.
-func Decode(data []byte) (*Locale, error) {
-	r, err := blob.NewReader(data, Version)
+// Decode reads what Encode wrote, with the pool it wrote into.
+func Decode(data []byte, pool blob.Shared) (*Locale, error) {
+	r, err := blob.NewPooledReader(data, Version, pool)
 	if err != nil {
 		return nil, err
 	}
 	var l Locale
 	for i := range l.Widths {
 		w := &l.Widths[i]
-		w.Compound = r.String()
-		n := r.Uint()
-		if n < 0 || n > r.Left() {
-			break
-		}
-		w.Units = make([]Unit, 0, n)
-		for j := 0; j < n; j++ {
-			var u Unit
-			u.Name = r.String()
-			u.PerUnit = r.String()
-			patterns := r.Uint()
-			if patterns < 0 || patterns > r.Left() {
-				break
+		w.Compound = r.SharedString()
+		r.Shared(func(r *blob.Reader) {
+			n := r.Uint()
+			if n < 0 || n > r.Left() {
+				return
 			}
-			u.Patterns = make([]CountedText, 0, patterns)
-			for k := 0; k < patterns; k++ {
-				count := r.String()
-				text := r.String()
-				u.Patterns = append(u.Patterns, CountedText{count, text})
+			w.Units = make([]Unit, n)
+			for j := range w.Units {
+				u := &w.Units[j]
+				r.Shared(func(r *blob.Reader) {
+					u.Name = r.SharedString()
+					u.PerUnit = r.SharedString()
+					k := r.Uint()
+					if k < 0 || k > r.Left() {
+						return
+					}
+					u.Patterns = make([]CountedText, k)
+					for m := range u.Patterns {
+						u.Patterns[m] = CountedText{Count: r.SharedString(), Text: r.SharedString()}
+					}
+				})
 			}
-			w.Units = append(w.Units, u)
-		}
+		})
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

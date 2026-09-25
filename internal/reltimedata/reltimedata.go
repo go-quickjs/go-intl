@@ -12,7 +12,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // The units, in the order they are stored. These are the ones ECMA-402 allows.
 const (
@@ -113,60 +113,63 @@ func (l *Locale) Field(unit, width int) *Field {
 	return &l.Fields[unit*Widths+Long]
 }
 
-// Encode writes a locale's fields.
-func Encode(l *Locale) []byte {
-	b := blob.NewWriter(Version)
+// Encode writes a locale's relative-time data, with what it shares with
+// other locales -- every string and each field -- in pool, which the
+// generator writes beside the locales and Decode is given.
+func Encode(l *Locale, pool *blob.Pool) []byte {
+	b := blob.NewPooledWriter(Version, pool)
 	for _, f := range l.Fields {
-		b.Uint(len(f.Named))
-		for _, n := range f.Named {
-			// The offsets run from -1 upwards in practice, and the writer
-			// takes no negative numbers, so they are shifted.
-			b.Uint(n.Offset + 8)
-			b.String(n.Text)
-		}
-		for _, set := range [][]CountedText{f.Future, f.Past} {
-			b.Uint(len(set))
-			for _, p := range set {
-				b.String(p.Count)
-				b.String(p.Text)
+		b.Shared(func(b *blob.Writer) {
+			b.Uint(len(f.Named))
+			for _, n := range f.Named {
+				// The offsets run from -1 upwards in practice, and the
+				// writer takes no negative numbers, so they are shifted.
+				b.Uint(n.Offset + 8)
+				b.SharedString(n.Text)
 			}
-		}
+			for _, set := range [][]CountedText{f.Future, f.Past} {
+				b.Uint(len(set))
+				for _, p := range set {
+					b.SharedString(p.Count)
+					b.SharedString(p.Text)
+				}
+			}
+		})
 	}
 	return b.Bytes()
 }
 
-// Decode reads what Encode wrote.
-func Decode(data []byte) (*Locale, error) {
-	r, err := blob.NewReader(data, Version)
+// Decode reads what Encode wrote, with the pool it wrote into.
+func Decode(data []byte, pool blob.Shared) (*Locale, error) {
+	r, err := blob.NewPooledReader(data, Version, pool)
 	if err != nil {
 		return nil, err
 	}
 	var l Locale
 	for i := range l.Fields {
 		f := &l.Fields[i]
-		n := r.Uint()
-		if n < 0 || n > r.Left() {
-			break
-		}
-		f.Named = make([]Named, 0, n)
-		for j := 0; j < n; j++ {
-			offset := r.Uint() - 8
-			text := r.String()
-			f.Named = append(f.Named, Named{offset, text})
-		}
-		for _, set := range []*[]CountedText{&f.Future, &f.Past} {
-			m := r.Uint()
-			if m < 0 || m > r.Left() {
-				break
+		r.Shared(func(r *blob.Reader) {
+			n := r.Uint()
+			if n < 0 || n > r.Left() {
+				return
 			}
-			out := make([]CountedText, 0, m)
-			for j := 0; j < m; j++ {
-				count := r.String()
-				text := r.String()
-				out = append(out, CountedText{count, text})
+			f.Named = make([]Named, n)
+			for j := range f.Named {
+				offset := r.Uint() - 8
+				f.Named[j] = Named{offset, r.SharedString()}
 			}
-			*set = out
-		}
+			for _, set := range []*[]CountedText{&f.Future, &f.Past} {
+				m := r.Uint()
+				if m < 0 || m > r.Left() {
+					return
+				}
+				out := make([]CountedText, m)
+				for k := range out {
+					out[k] = CountedText{Count: r.SharedString(), Text: r.SharedString()}
+				}
+				*set = out
+			}
+		})
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/numdata"
 )
@@ -363,13 +362,9 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 	if f, err := NewFallbacker(src); err == nil {
 		chain = f.ChainIn(treeLocales, loc.Data())
 	}
-	shared, err := src.Open(MarkerDatesShared, DataLocale{})
+	pool, err := openShared(src, MarkerDatesShared, datedata.Version)
 	if err != nil {
-		return nil, fmt.Errorf("intl: the shared date data: %w", err)
-	}
-	pool, err := blob.ReadShared(shared, datedata.Version)
-	if err != nil {
-		return nil, fmt.Errorf("intl: the shared date data: %w", err)
+		return nil, err
 	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerDates, d)

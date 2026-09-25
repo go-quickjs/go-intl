@@ -139,12 +139,16 @@ func loadNames(src Source, loc Locale, tree string) (*namedata.Locale, error) {
 	if f, err := NewFallbacker(src); err == nil {
 		chain = f.ChainIn(tree, loc.Data())
 	}
+	pool, err := openShared(src, MarkerNamesShared, namedata.Version)
+	if err != nil {
+		return nil, err
+	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerNames, d)
 		if err != nil {
 			continue
 		}
-		l, err := namedata.Decode(b)
+		l, err := namedata.Decode(b, pool)
 		if err != nil {
 			return nil, fmt.Errorf("intl: the display names for %s: %w", d, err)
 		}

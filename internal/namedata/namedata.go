@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 1
+const Version = 2
 
 // The kinds of name, in the order they are stored.
 const (
@@ -92,42 +92,46 @@ func (l *Locale) Lookup(kind, width int, code string) (string, bool) {
 	return "", false
 }
 
-// Encode writes a locale's names.
-func Encode(l *Locale) []byte {
-	b := blob.NewWriter(Version)
-	b.String(l.Pattern)
-	b.String(l.Separator)
+// Encode writes a locale's names, with what it shares with other locales --
+// every string and each set -- in pool, which the generator writes beside
+// the locales and Decode is given.
+func Encode(l *Locale, pool *blob.Pool) []byte {
+	b := blob.NewPooledWriter(Version, pool)
+	b.SharedString(l.Pattern)
+	b.SharedString(l.Separator)
 	for _, s := range l.Sets {
-		b.Uint(len(s.Entries))
-		for _, e := range s.Entries {
-			b.String(e.Code)
-			b.String(e.Name)
-		}
+		b.Shared(func(b *blob.Writer) {
+			b.Uint(len(s.Entries))
+			for _, e := range s.Entries {
+				b.SharedString(e.Code)
+				b.SharedString(e.Name)
+			}
+		})
 	}
 	return b.Bytes()
 }
 
-// Decode reads what Encode wrote.
-func Decode(data []byte) (*Locale, error) {
-	r, err := blob.NewReader(data, Version)
+// Decode reads what Encode wrote, with the pool it wrote into.
+func Decode(data []byte, pool blob.Shared) (*Locale, error) {
+	r, err := blob.NewPooledReader(data, Version, pool)
 	if err != nil {
 		return nil, err
 	}
 	var l Locale
-	l.Pattern = r.String()
-	l.Separator = r.String()
+	l.Pattern = r.SharedString()
+	l.Separator = r.SharedString()
 	for i := range l.Sets {
-		n := r.Uint()
-		if n < 0 || n > r.Left() {
-			break
-		}
-		entries := make([]Entry, 0, n)
-		for j := 0; j < n; j++ {
-			code := r.String()
-			name := r.String()
-			entries = append(entries, Entry{code, name})
-		}
-		l.Sets[i].Entries = entries
+		r.Shared(func(r *blob.Reader) {
+			n := r.Uint()
+			if n < 0 || n > r.Left() {
+				return
+			}
+			entries := make([]Entry, n)
+			for j := range entries {
+				entries[j] = Entry{Code: r.SharedString(), Name: r.SharedString()}
+			}
+			l.Sets[i].Entries = entries
+		})
 	}
 	if err := r.Err(); err != nil {
 		return nil, err

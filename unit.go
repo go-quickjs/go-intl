@@ -79,12 +79,16 @@ func loadUnits(src Source, loc Locale) (*unitdata.Locale, error) {
 	if f, err := NewFallbacker(src); err == nil {
 		chain = f.ChainIn(treeUnit, loc.Data())
 	}
+	pool, err := openShared(src, MarkerUnitsShared, unitdata.Version)
+	if err != nil {
+		return nil, err
+	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerUnits, d)
 		if err != nil {
 			continue
 		}
-		l, err := unitdata.Decode(b)
+		l, err := unitdata.Decode(b, pool)
 		if err != nil {
 			return nil, fmt.Errorf("intl: the units for %s: %w", d, err)
 		}

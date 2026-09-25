@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/reltimedata"
 )
@@ -49,6 +50,9 @@ func run(root string) error {
 	}
 
 	built := map[string][]byte{}
+	// The locales share one pool, written beside them. ReadDir's order is
+	// sorted, so the pool is the same every run.
+	pool := blob.NewPool(reltimedata.Version)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -60,7 +64,7 @@ func run(root string) error {
 		if l == nil {
 			continue
 		}
-		built[e.Name()] = reltimedata.Encode(l)
+		built[e.Name()] = reltimedata.Encode(l, pool)
 	}
 	if len(built) == 0 {
 		return fmt.Errorf("no locales found under %s", main)
@@ -71,6 +75,9 @@ func run(root string) error {
 		return err
 	}
 	if err := datawrite.Locales(out, built); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "reltimeshared.bin"), pool.Bytes(), 0o644); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "reltimegen: %d locales\n", len(built))
