@@ -78,6 +78,9 @@ var extras = []struct{ cldr, bcp47, pkg string }{
 	{"indian", "indian", "indian"},
 	{"islamic-civil", "islamic-civil", "islamic"},
 	{"islamic-tbla", "islamic-tbla", "islamic"},
+	{"islamic", "islamic", "islamic"},
+	{"islamic-umalqura", "islamic-umalqura", "islamic"},
+	{"islamic-rgsa", "islamic-rgsa", "islamic"},
 	{"roc", "roc", "roc"},
 	{"hebrew", "hebrew", "hebrew"},
 	{"japanese", "japanese", "japanese"},
@@ -263,6 +266,13 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	if err := os.WriteFile(filepath.Join("data", "japaneseeras.bin"), eras, 0o644); err != nil {
 		return err
 	}
+	umm, err := ummAlQura()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "ummalqura.bin"), umm, 0o644); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join("data", "weekdata.bin"), week, 0o644); err != nil {
 		return err
 	}
@@ -271,7 +281,7 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "dategen: %d locales, %d calendars, %.1f MB\n",
-		len(names), 1+len(others), float64(total)/(1<<20))
+		len(names), len(extras)+2, float64(total)/(1<<20))
 	return nil
 }
 
@@ -428,6 +438,21 @@ func japaneseEras(icu *icusrc.Locales) ([]byte, error) {
 	var out strings.Builder
 	for _, e := range list {
 		fmt.Fprintf(&out, "%d %d %d %d\n", e.n, e.y, e.m, e.d)
+	}
+	return []byte(out.String()), nil
+}
+
+// ummAlQura writes the Umm al-Qura calendar's tables from ICU's source, one
+// line a year: the year, the mask of its thirty-day months, and the
+// correction to its estimated first day, "1300 2730 0".
+func ummAlQura() ([]byte, error) {
+	u, err := icusrc.ReadUmmAlQura()
+	if err != nil {
+		return nil, err
+	}
+	var out strings.Builder
+	for i := range u.Months {
+		fmt.Fprintf(&out, "%d %d %d\n", u.First+i, u.Months[i], u.Fixes[i])
 	}
 	return []byte(out.String()), nil
 }

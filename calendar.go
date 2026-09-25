@@ -39,6 +39,12 @@ const (
 	// counted from one day apart.
 	IslamicCivil   CalendarSystem = "islamic-civil"
 	IslamicTabular CalendarSystem = "islamic-tbla"
+	// Islamic and IslamicRGSA are the astronomical Islamic calendar, whose
+	// months start when the moon is past new at midnight, reckoned alike;
+	// IslamicUmmAlQura is Saudi Arabia's, from its published table.
+	Islamic          CalendarSystem = "islamic"
+	IslamicRGSA      CalendarSystem = "islamic-rgsa"
+	IslamicUmmAlQura CalendarSystem = "islamic-umalqura"
 	// ROC counts the Gregorian years from 1912, the Republic of China.
 	ROC CalendarSystem = "roc"
 	// Hebrew is the lunisolar Hebrew calendar.
@@ -62,6 +68,9 @@ var implemented = map[CalendarSystem]bool{
 	Indian:            true,
 	IslamicCivil:      true,
 	IslamicTabular:    true,
+	Islamic:           true,
+	IslamicRGSA:       true,
+	IslamicUmmAlQura:  true,
 	ROC:               true,
 	Hebrew:            true,
 	Japanese:          true,
@@ -143,7 +152,7 @@ func (e *unimplementedCalendarError) Error() string {
 // Only the year and the era differ between the two implemented calendars: the
 // Buddhist one keeps the Gregorian months and days and counts the years from
 // 543 years earlier, so 2024 is 2567 and every date is in its single era.
-func reckon(t time.Time, system CalendarSystem, eras []eraStart) dateParts {
+func reckon(t time.Time, system CalendarSystem, rules calendarRules) dateParts {
 	p := partsOf(t)
 	// The Gregorian calendar's own fields, which the Buddhist one keeps:
 	// its extended year is the Gregorian one, counting on through 0 for
@@ -205,6 +214,21 @@ func reckon(t time.Time, system CalendarSystem, eras []eraStart) dateParts {
 		p.relatedYear = islamicRelatedYear(p.year)
 		p.yearLength = islamicTabularYearLength
 		return p
+	case Islamic, IslamicRGSA:
+		p.year, p.month, p.day, p.dayOfYear = islamicAstroDate(julianDay(t), float64(t.UnixMilli()))
+		p.era, p.extYear = 0, p.year
+		p.relatedYear = islamicRelatedYear(p.year)
+		p.yearLength = islamicAstroYearLength
+		return p
+	case IslamicUmmAlQura:
+		if rules.ummAlQura == nil {
+			break
+		}
+		p.year, p.month, p.day, p.dayOfYear = rules.ummAlQura.date(julianDay(t))
+		p.era, p.extYear = 0, p.year
+		p.relatedYear = islamicRelatedYear(p.year)
+		p.yearLength = rules.ummAlQura.yearLength
+		return p
 	case Hebrew:
 		p.year, p.month, p.day, p.dayOfYear = hebrewDate(julianDay(t))
 		p.era, p.extYear = 0, p.year
@@ -232,6 +256,7 @@ func reckon(t time.Time, system CalendarSystem, eras []eraStart) dateParts {
 		// start on or before the date, the first era counting back before
 		// its own start, and the year counts from the era's first.
 		p.era = 0
+		eras := rules.eras
 		for i := len(eras) - 1; i >= 0; i-- {
 			e := eras[i]
 			if e.year < p.extYear || e.year == p.extYear &&
@@ -252,6 +277,15 @@ func reckon(t time.Time, system CalendarSystem, eras []eraStart) dateParts {
 		p.era = 0
 	}
 	return p
+}
+
+// calendarRules are the tables a calendar reckons with beyond its arithmetic,
+// read when a formatter is built for it.
+type calendarRules struct {
+	// eras are the Japanese calendar's.
+	eras []eraStart
+	// ummAlQura is the Umm al-Qura calendar's month lengths.
+	ummAlQura *ummAlQura
 }
 
 // eraStart is the first day of one of the Japanese calendar's eras.

@@ -84,10 +84,12 @@ Other URLs:
   `collgen` checks both checksums before reading either archive.
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz`
   — sha256 `3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0`, 28 MB.
-  Only `source/common/localefallback_data.h` is read, and it is vendored in
-  `internal/icusrc`: ICU's tables of parent locales and default scripts,
-  which ICU's resource fallback consults and which are not in the data
-  archive.
+  Two files are read, and both are vendored in `internal/icusrc`:
+  `source/common/localefallback_data.h`, ICU's tables of parent locales and
+  default scripts, which ICU's resource fallback consults; and
+  `source/i18n/islamcal.cpp`, as `islamcal.cpp.txt` since Go refuses C++
+  files in a package without cgo, for the Umm al-Qura calendar's tables of
+  month lengths and year-start corrections. Neither is in the data archive.
 - `https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt` - sha256
   `2e1efc1dcb59c575...`, vendored in `internal/normgen`
 - `https://www.unicode.org/Public/17.0.0/ucd/CompositionExclusions.txt` -

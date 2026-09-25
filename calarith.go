@@ -69,10 +69,7 @@ func islamicTabularDate(jd, epoch int) (year, month, day, dayOfYear int) {
 
 // islamicTabularYearLength is 355 in a leap year of the 30-year cycle.
 func islamicTabularYearLength(year int) int {
-	if mod(14+11*year, 30) < 11 {
-		return 355
-	}
-	return 354
+	return 354 + b2i(civilLeapYear(year))
 }
 
 // islamicRelatedYear is gregoYearFromIslamicStart, ICU's rough Gregorian

@@ -8,13 +8,14 @@
 package datedata
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 3
+const Version = 4
 
 // The widths a name may be written at, in the order they are stored.
 const (
@@ -310,10 +311,29 @@ func Encode(l *Locale) []byte {
 		b.String(name)
 	}
 	b.String(l.DateTimeGlue)
+	// A calendar a locale says exactly the same of as an earlier one -- the
+	// five Islamic calendars share their names and patterns -- is written as
+	// the number of that one, counting from one; zero is followed by the
+	// calendar itself.
 	b.Uint(len(l.Calendars))
+	var written []string
 	for i := range l.Calendars {
 		b.String(l.Calendars[i].Name)
-		encodeCalendar(b, &l.Calendars[i].Calendar)
+		one := blob.NewWriter(0)
+		encodeCalendar(one, &l.Calendars[i].Calendar)
+		body := string(one.Bytes()[1:])
+		same := 0
+		for j, earlier := range written {
+			if earlier == body {
+				same = j + 1
+				break
+			}
+		}
+		written = append(written, body)
+		b.Uint(same)
+		if same == 0 {
+			encodeCalendar(b, &l.Calendars[i].Calendar)
+		}
 	}
 	return b.Bytes()
 }
@@ -401,7 +421,14 @@ func Decode(data []byte) (*Locale, error) {
 	for i := 0; i < n; i++ {
 		name := r.String()
 		var c Calendar
-		decodeCalendar(r, &c)
+		switch same := r.Uint(); {
+		case same == 0:
+			decodeCalendar(r, &c)
+		case same <= len(l.Calendars):
+			c = l.Calendars[same-1].Calendar
+		default:
+			return nil, fmt.Errorf("datedata: calendar %s is the same as calendar %d of %d", name, same, len(l.Calendars))
+		}
 		l.Calendars = append(l.Calendars, NamedCalendar{Name: name, Calendar: c})
 	}
 	if err := r.Err(); err != nil {

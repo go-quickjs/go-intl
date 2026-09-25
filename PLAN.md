@@ -555,14 +555,17 @@ ICU uses").
 
 ### Calendars
 
-Thirteen of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
-Coptic, Ethiopic, Ethiopic Amete Alem, Indian, civil and tabular Islamic,
-ROC, Hebrew, Japanese and ISO 8601. Each is ICU 78's arithmetic, from the ICU source named in its
+Fifteen of CLDR's seventeen are implemented: Gregorian, Buddhist, Persian,
+Coptic, Ethiopic, Ethiopic Amete Alem, Indian, the five Islamic ones
+(civil, tabular, astronomical, Saudi, Umm al-Qura), ROC, Hebrew, Japanese
+and ISO 8601. Each is ICU 78's arithmetic, from the ICU source named in its
 comments, and matches go-quickjs's arithmetic wherever both were compared.
 `testdata/datetime_calendars_node.js` records every calendar Node supports
 in forty locales, dates from 1900 to 2077; the implemented ones all match,
 and each calendar still to come is a named gap there that reports itself
-when it starts to pass.
+when it starts to pass. `testdata/calendar_days_node.js` checks every day
+from 1600 to 2400 in each calendar whose months are not the Gregorian
+ones, 4.4 million days, and all of them match, on amd64 and on 386.
 
 Persian is ICU 78's arithmetic (persncal.cpp): the 33-year rule with ICU's
 list of corrected years. It is not astronomical, whatever go-quickjs's
@@ -578,8 +581,7 @@ related Gregorian year) are written as ICU writes them too.
 
 Two more are ICU's rather than any calendar's. V8 makes ICU's Gregorian
 calendar proleptic, but only a calendar that is exactly ICU's
-GregorianCalendar: the Buddhist and ROC calendars (and the Japanese, to
-come) are subclasses and keep Julian dates before October 1582. And a
+GregorianCalendar: the Buddhist, ROC and Japanese calendars are subclasses and keep Julian dates before October 1582. And a
 calendar with one era counts its years back through zero before it, so the
 Islamic year of AD 200 is -435.
 
@@ -591,6 +593,20 @@ rules for it, and DateFormatSymbols is left with no wide or abbreviated
 names and only the first narrow one, so Node writes " 2024" for an era and
 a year, and "B 6" before the common era in English.
 
+The astronomical Islamic calendar, which ICU calls both "islamic" and
+"islamic-rgsa", starts a month on the first day whose midnight, in UTC,
+finds the moon past new by ICU's CalendarAstronomer (astro.cpp), which is
+ported: Duffett-Smith's sun and moon, with each constant rounded as ICU's
+macros round it and each product converted before it is added, so that no
+platform fuses the two. ICU guesses the month from the moon's age at the
+moment formatted rather than at midnight, and a guess a month short
+stands; go-intl keeps that. Umm al-Qura is ICU's table of which months of
+1300 to 1600 AH have thirty days and the corrections to its fit of each
+year's start, read from islamcal.cpp (vendored in `internal/icusrc`) into
+`data/ummalqura.bin`; outside the table it is the civil calendar. ICU's C
+remainder makes every civil year before 0 a leap year, and go-intl's
+tabular calendar now agrees.
+
 The algorithmic numbering systems date patterns name -- Roman numerals for
 Hawaiian months, Hebrew numerals, the Japanese era year that calls its first
 year 元, the Chinese calendar's days -- are ICU's rule-based number formats.
@@ -598,10 +614,12 @@ go-intl carries ICU's rules (`data/rbnf.bin`, 23 KB) and interprets them, as
 nfrule.cpp and nfrs.cpp do, for whole numbers. The hand-written Roman
 numerals it replaced agreed with it.
 
-The date data is 53 MB with thirteen calendars, up from 9 MB with three: each
+The date data is 50 MB with sixteen calendars, up from 9 MB with three: each
 calendar keeps its own copy of names and patterns that often repeat the
 Gregorian ones, and every locale repeats the Japanese calendar's 237 era
-names in three widths. That is for the data-size decision below: storing
+names in three widths. A calendar identical to an earlier one in the same
+locale is stored as a reference to it, which the five Islamic calendars
+are. That is for the data-size decision below: storing
 only what a locale's parent does not say, or compressing across locales,
 would take most of it back.
 
@@ -611,8 +629,6 @@ answers are not:
 
 | Calendar | Source |
 |---|---|
-| Umm al-Qura | ICU's table of month lengths, from its source, as input data |
-| Islamic, Islamic (Saudi) | ICU's CalendarAstronomer, ported |
 | Chinese, Dangi | ICU's ChineseCalendar and CalendarAstronomer, ported; leap-month patterns and cyclic year names from CLDR |
 
 ### 8. Segmenter
@@ -636,7 +652,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 13 of 17 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 15 of 17 calendars |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | not started - not in the corpus |
@@ -684,7 +700,7 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| DateTimeFormat | done | 5 calendars: Islamic, Islamic (Saudi), Umm al-Qura, Chinese, Dangi; see "Calendars" |
+| DateTimeFormat | done | 2 calendars: Chinese, Dangi; see "Calendars" |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |
 
@@ -743,6 +759,8 @@ files, and it was wrong.
 
 **The binary is the problem.** `go:embed` puts all 37.1 MB into any program that
 imports the package, so one formatting numbers in English builds to 21.4 MB.
+That was measured before the calendars: the data is now 94 MB, 50 MB of it
+dates, and the table below has not been measured again.
 
 | Approach | Size | Ratio | Cost |
 |---|---|---|---|
