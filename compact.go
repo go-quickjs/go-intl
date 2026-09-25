@@ -35,6 +35,10 @@ type compactForm struct {
 	// noBody is a pattern with no digits, French "mille" for exactly a
 	// thousand: ICU writes its text in place of the number.
 	noBody bool
+	// negPrefix and negSuffix are the pattern's negative form, where it has
+	// one, which places the sign: Swahili's "elfu 0;elfu -0".
+	negPrefix, negSuffix string
+	hasNeg               bool
 }
 
 // chooseCompact picks the pattern for a magnitude. It returns false when the
@@ -74,6 +78,11 @@ func compactFor(patterns []numdata.CompactPattern, exponent int, count string) (
 		return compactForm{}, false
 	}
 
+	negative := ""
+	if cut := strings.IndexByte(chosen, ';'); cut >= 0 {
+		chosen, negative = chosen[:cut], chosen[cut+1:]
+	}
+
 	// The zeros in the pattern say how many digits of the magnitude stay: "0K"
 	// at a thousand divides by a thousand, "00K" at ten thousand also divides
 	// by a thousand and writes two digits.
@@ -99,6 +108,14 @@ func compactFor(patterns []numdata.CompactPattern, exponent int, count string) (
 		prefix:   unquote(chosen[:start]),
 		suffix:   unquote(chosen[end:]),
 		zeros:    zeros,
+	}
+	if first := strings.IndexByte(negative, '0'); first >= 0 {
+		last := first
+		for last < len(negative) && negative[last] == '0' {
+			last++
+		}
+		form.negPrefix, form.negSuffix = unquote(negative[:first]), unquote(negative[last:])
+		form.hasNeg = true
 	}
 	return form, true
 }
@@ -143,11 +160,14 @@ func isIgnorable(r rune) bool {
 	return false
 }
 
-// compactParts writes a number in compact notation.
-func (f *NumberFormat) compactParts(magnitude mag, negative bool) []Part {
-	form := f.compactForm(magnitude, negative)
+// compactPieces writes a number in compact notation: the pattern's text
+// before the digits, the digits, and its text after them. With useNegative
+// the pattern's negative form is written, its minus replaced by the sign
+// symbols.
+func (f *NumberFormat) compactPieces(form compactForm, magnitude mag, negative bool,
+	useNegative bool, symbols []Part) (pre, body, post []Part) {
 	if form.noBody {
-		return compactAffix(nil, form.prefix)
+		return compactAffix(nil, form.prefix), nil, nil
 	}
 
 	// The digit counts are settled once, when the formatter is built, so a
@@ -158,13 +178,26 @@ func (f *NumberFormat) compactParts(magnitude mag, negative bool) []Part {
 	integer, fraction := f.round(value, negative)
 	integer = padInteger(integer, max(f.minInt, 1))
 
-	parts := compactAffix(nil, form.prefix)
-	parts = append(parts, f.groupedInteger(integer)...)
+	body = f.groupedInteger(integer)
 	if fraction != "" {
-		parts = append(parts, Part{PartDecimal, f.decimalSep})
-		parts = append(parts, Part{PartFraction, f.digits(fraction)})
+		body = append(body, Part{PartDecimal, f.decimalSep}, Part{PartFraction, f.digits(fraction)})
 	}
-	return compactAffix(parts, form.suffix)
+	if useNegative {
+		return compactSigned(form.negPrefix, symbols), body, compactSigned(form.negSuffix, symbols)
+	}
+	return compactAffix(nil, form.prefix), body, compactAffix(nil, form.suffix)
+}
+
+// compactSigned writes a compact affix whose minus is a sign placeholder.
+func compactSigned(affix string, symbols []Part) []Part {
+	var parts []Part
+	for i, piece := range strings.Split(affix, "-") {
+		if i > 0 {
+			parts = append(parts, symbols...)
+		}
+		parts = compactAffix(parts, piece)
+	}
+	return parts
 }
 
 // compactForm chooses the compact pattern a magnitude is written with.

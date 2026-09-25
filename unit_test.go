@@ -66,7 +66,10 @@ func TestUnsanctionedUnitIsRefused(t *testing.T) {
 	}
 }
 
-// The pieces of a measurement keep the number apart from its unit.
+// The pieces of a measurement keep the number apart from its unit, and the
+// unit's name is a part of its own with the space before it a literal, as
+// ICU marks it and Node reports it. This once expected " meters" as one
+// literal, which was go-intl's output rather than Node's.
 func TestUnitParts(t *testing.T) {
 	f := newFormat(t, "en", intl.NumberFormatOptions{
 		Style: intl.StyleUnit, Unit: "meter", UnitDisplay: intl.UnitLong,
@@ -74,7 +77,8 @@ func TestUnitParts(t *testing.T) {
 	got := f.FormatToParts(16)
 	want := []intl.Part{
 		{Kind: intl.PartInteger, Value: "16"},
-		{Kind: intl.PartLiteral, Value: " meters"},
+		{Kind: intl.PartLiteral, Value: " "},
+		{Kind: intl.PartUnit, Value: "meters"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d parts, want %d: %v", len(got), len(want), got)
@@ -83,5 +87,22 @@ func TestUnitParts(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("part %d is %v, want %v", i, got[i], want[i])
 		}
+	}
+}
+
+// An unset unit display is ECMA-402's default, short: the zero value of every
+// option is the ECMA-402 default. It was long until a range sweep against
+// Node caught Arabic kilometres written out in full.
+func TestUnitDisplayDefaultsToShort(t *testing.T) {
+	loc, err := intl.ParseLocale("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := intl.NewNumberFormat(loc, intl.NumberFormatOptions{Style: intl.StyleUnit, Unit: "kilometer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := f.Format(16), "16 km"; got != want {
+		t.Errorf("an unset unit display writes %q, want %q", got, want)
 	}
 }

@@ -22,9 +22,11 @@ import (
 type UnitDisplay int
 
 const (
-	// UnitLong writes "16 litres", and is the default.
-	UnitLong UnitDisplay = iota
-	UnitShort
+	// UnitShort writes "16 L", and is the default, as in ECMA-402.
+	UnitShort UnitDisplay = iota
+	// UnitLong writes "16 litres".
+	UnitLong
+	// UnitNarrow writes "16L".
 	UnitNarrow
 )
 
@@ -92,20 +94,14 @@ func loadUnits(src Source, loc Locale) (*unitdata.Locale, error) {
 }
 
 // applyUnit puts the amount into the unit's pattern.
-func (f *NumberFormat) applyUnit(parts []Part, magnitude mag, finite bool) []Part {
-	count := string(PluralOther)
-	if f.plurals != nil && finite {
-		// The wording follows the digits that were written, not the value.
-		integer, fraction := f.round(magnitude, false)
-		o := operandsFor(padInteger(integer, f.minInt), fraction, 0)
-		count = string(f.plurals.selectOperands(&o))
-	}
-
+func (f *NumberFormat) applyUnit(parts []Part, count string) []Part {
 	pattern, ok := f.unitPattern(count)
 	if !ok {
 		return parts
 	}
-	return fillPattern(pattern, parts, nil)
+	// The pattern's text is the unit, as ICU marks it; the spaces round it
+	// are trimmed off into literals when the parts are finished.
+	return fillPatternAs(pattern, PartUnit, parts, nil)
 }
 
 // unitPattern builds the pattern for the formatter's unit, joining a divisor
@@ -158,10 +154,16 @@ func (f *NumberFormat) unitPattern(count string) (string, bool) {
 // fillPattern substitutes a pattern's placeholders with pieces, keeping what
 // came from the number apart from what came from the pattern.
 func fillPattern(pattern string, first, second []Part) []Part {
+	return fillPatternAs(pattern, PartLiteral, first, second)
+}
+
+// fillPatternAs is fillPattern with the pattern's own text marked as a kind
+// of part.
+func fillPatternAs(pattern string, kind PartKind, first, second []Part) []Part {
 	var out []Part
 	literal := func(s string) {
 		if s != "" {
-			out = append(out, Part{PartLiteral, s})
+			out = append(out, Part{kind, s})
 		}
 	}
 	rest := pattern

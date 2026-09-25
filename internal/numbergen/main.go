@@ -218,6 +218,23 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 		}
 		out.Others = append(out.Others, *s)
 	}
+	// The root aliases every system's range pattern to the Latin one.
+	latin := out.RangePattern
+	if system != "latn" {
+		for _, s := range out.Others {
+			if s.NumberingSystem == "latn" {
+				latin = s.RangePattern
+			}
+		}
+	}
+	if out.RangePattern == "" {
+		out.RangePattern = latin
+	}
+	for i := range out.Others {
+		if out.Others[i].RangePattern == "" {
+			out.Others[i].RangePattern = latin
+		}
+	}
 
 	if raw, ok := entry.Numbers["minimumGroupingDigits"]; ok {
 		var s string
@@ -273,6 +290,7 @@ type cldrSymbols struct {
 	Infinity        string `json:"infinity"`
 	CurrencyDecimal string `json:"currencyDecimal"`
 	CurrencyGroup   string `json:"currencyGroup"`
+	Approximately   string `json:"approximatelySign"`
 }
 
 func (c cldrSymbols) symbols() numdata.Symbols {
@@ -282,6 +300,7 @@ func (c cldrSymbols) symbols() numdata.Symbols {
 		MinusSign: c.MinusSign, Exponential: c.Exponential,
 		NaN: c.NaN, Infinity: c.Infinity,
 		CurrencyDecimal: c.CurrencyDecimal, CurrencyGroup: c.CurrencyGroup,
+		ApproximatelySign: c.Approximately,
 	}
 }
 
@@ -342,6 +361,17 @@ func readSystem(numbers map[string]json.RawMessage, system string, digits map[st
 	}
 	out.CompactShort = compactPatterns(decimal.Short["decimalFormat"])
 	out.CompactLong = compactPatterns(decimal.Long["decimalFormat"])
+	// A system with no range pattern of its own takes the Latin one; the
+	// caller fills that in.
+	if raw, ok := numbers["miscPatterns-numberSystem-"+system]; ok {
+		var misc struct {
+			Range string `json:"range"`
+		}
+		if err := json.Unmarshal(raw, &misc); err != nil {
+			return nil, fmt.Errorf("miscPatterns: %w", err)
+		}
+		out.RangePattern = misc.Range
+	}
 	return out, nil
 }
 
@@ -393,6 +423,7 @@ func readRootSystems(icu *icusrc.Locales, digits map[string]string) ([]numdata.N
 				PercentSign: get("percentSign"), PlusSign: get("plusSign"),
 				MinusSign: get("minusSign"), Exponential: get("exponential"),
 				NaN: get("nan"), Infinity: get("infinity"),
+				ApproximatelySign: get("approximatelySign"),
 			}
 			if s.Symbols.Decimal == "" || s.Symbols.Group == "" {
 				return nil, fmt.Errorf("root.txt: %s has symbols without separators", name)
@@ -588,7 +619,7 @@ func partials(c *icusrc.Locales, name string, l *numdata.Locale, digits map[stri
 	sort.Strings(names)
 
 	symbolKeys := []string{"decimal", "group", "percentSign", "plusSign", "minusSign",
-		"exponential", "nan", "infinity", "currencyDecimal", "currencyGroup"}
+		"exponential", "nan", "infinity", "currencyDecimal", "currencyGroup", "approximatelySign"}
 	patternKeys := []string{"decimalFormat", "percentFormat", "currencyFormat", "accountingFormat"}
 	var out []numdata.System
 	for _, system := range names {
@@ -610,7 +641,8 @@ func partials(c *icusrc.Locales, name string, l *numdata.Locale, digits map[stri
 		}
 		symbols := []*string{&p.Symbols.Decimal, &p.Symbols.Group, &p.Symbols.PercentSign,
 			&p.Symbols.PlusSign, &p.Symbols.MinusSign, &p.Symbols.Exponential,
-			&p.Symbols.NaN, &p.Symbols.Infinity, &p.Symbols.CurrencyDecimal, &p.Symbols.CurrencyGroup}
+			&p.Symbols.NaN, &p.Symbols.Infinity, &p.Symbols.CurrencyDecimal, &p.Symbols.CurrencyGroup,
+			&p.Symbols.ApproximatelySign}
 		for i, key := range symbolKeys {
 			if *symbols[i], err = lookup("symbols", key); err != nil {
 				return nil, err
@@ -621,6 +653,9 @@ func partials(c *icusrc.Locales, name string, l *numdata.Locale, digits map[stri
 			if *patterns[i], err = lookup("patterns", key); err != nil {
 				return nil, err
 			}
+		}
+		if p.RangePattern, err = lookup("miscPatterns", "range"); err != nil {
+			return nil, err
 		}
 		if found {
 			out = append(out, p)

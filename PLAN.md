@@ -291,6 +291,24 @@ rather than the corpus gate:
   currency names. Compact notation's word is now a `compact` part, with the
   spaces around it literals, as ICU trims them. 6,970 strings in ten
   locales, as strings and parts, all match.
+- ~~`formatRange`, `formatRangeToParts`~~ **done**: ICU's NumberRangeFormatter
+  at V8's defaults. The formatter now builds a number in ICU's layers -- the
+  digits, the scientific exponent, the pattern's affixes, the unit or
+  currency name -- and a range writes once the layers its ends share: a unit
+  always, in the plural the range takes ("1–2 kilometers"), and the affixes
+  when they match and run to two characters or more (German "5,00–10,00 €",
+  English "$5.00 – $10.00"). Ends written alike are one number with the
+  approximately sign where the sign goes. Sources come from ICU's spans,
+  which count a shared prefix without the currency spacing applied with it
+  and so sit a character off with a currency code; V8 reports them as they
+  are. Comparing with node fixed three things for single numbers too: a
+  sign shown in a pattern's negative form goes where its minus is (and a
+  number shown unsigned uses the positive form), fields are trimmed of
+  spaces and bidirectional marks as ICU trims them (Arabic's minus is a
+  hyphen after a literal left-to-right mark), and a unit's name is a `unit`
+  part. `UnitDisplay`'s zero value was long; it is now short, ECMA-402's
+  default, as DESIGN.md requires of every option. 4,320 ranges in sixteen
+  locales, strings and parts, all match.
 - ~~`PluralRules` in compact and scientific notation~~ **done**: a number is
   selected as ICU's number formatter writes it, with the power of ten apart
   (`c`) and the digits of the whole value, so "1.5M" is French "many".
@@ -555,7 +573,7 @@ README's Intl section.
 | 2. Provider and datagen | **done** - Source, embedded FS, localegen, CLDR fallback |
 | 3. NumberFormat | **done** - 2,640/2,640 corpus cases, 766 locales |
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
-| 3c. Rest of the surface | corpus done; exact decimal input done, 6,970 cases against node; `formatRange` missing |
+| 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
 | 5. DateTimeFormat | 1,230/1,230, and 237,557 cases against node, all but a named 36; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; 14 calendars left |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
@@ -586,9 +604,9 @@ Switched over in go-quickjs: *none yet, and none until rule 5 is satisfied.*
 **Corpus parity is not eligibility.** An audit of go-quickjs's option reads
 (2026-09-24) found that an earlier version of this line, "all six finished
 services meet both gate conditions", was wrong. Now **Collator, ListFormat,
-DisplayNames, RelativeTimeFormat and PluralRules** implement every option
-go-quickjs does. NumberFormat and DateTimeFormat match the corpus exactly and
-still lack options go-quickjs accepts; the next section lists them.
+DisplayNames, RelativeTimeFormat, PluralRules and NumberFormat** implement
+every option go-quickjs does. DateTimeFormat matches the corpus exactly and
+still lacks the non-Gregorian calendars; the next section lists them.
 
 ## What is left
 
@@ -605,7 +623,6 @@ What go-quickjs's VM accepts and go-intl does not yet:
 
 | Service | Corpus | Missing |
 |---|---|---|
-| NumberFormat | done | `formatRange`, `formatRangeToParts` |
 | DateTimeFormat | done | 14 calendars |
 | Segmenter | 140 cases | the service: grapheme, word and sentence breaks, and the dictionaries and LSTM models for scripts without spaces |
 | DurationFormat | none | the service |

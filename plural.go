@@ -228,13 +228,7 @@ func (p *PluralRules) SelectRange(start, end float64) (PluralCategory, error) {
 	if math.IsNaN(start) || math.IsNaN(end) {
 		return "", fmt.Errorf("intl: a plural range with an end that is not a number")
 	}
-	first, second := string(p.Select(start)), string(p.Select(end))
-	for _, r := range p.ranges {
-		if r.Start == first && r.End == second {
-			return PluralCategory(r.Result), nil
-		}
-	}
-	return PluralOther, nil
+	return PluralCategory(p.resolveRange(string(p.Select(start)), string(p.Select(end)))), nil
 }
 
 // Categories returns the forms this locale distinguishes, in CLDR's order.

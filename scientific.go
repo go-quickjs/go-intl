@@ -29,23 +29,23 @@ func (f *NumberFormat) exponentFor(magnitude mag) int {
 	return e
 }
 
-// scientificParts writes a number against a power of ten.
-func (f *NumberFormat) scientificParts(magnitude mag, negative bool) []Part {
+// scientificPieces writes a number against a power of ten: the mantissa,
+// and the exponent after it.
+func (f *NumberFormat) scientificPieces(magnitude mag, negative bool) (body, inner []Part) {
 	exponent, integer, fraction := f.scientificDigits(magnitude, negative)
 
-	parts := f.groupedInteger(integer)
+	body = f.groupedInteger(integer)
 	if fraction != "" {
-		parts = append(parts, Part{PartDecimal, f.decimalSep})
-		parts = append(parts, Part{PartFraction, f.digits(fraction)})
+		body = append(body, Part{PartDecimal, f.decimalSep}, Part{PartFraction, f.digits(fraction)})
 	}
 
-	parts = append(parts, Part{PartExponentSeparator, f.data.Symbols.Exponential})
+	inner = []Part{{PartExponentSeparator, f.data.Symbols.Exponential}}
 	if exponent < 0 {
-		parts = append(parts, Part{PartExponentMinusSign, f.data.Symbols.MinusSign})
+		inner = append(inner, Part{PartExponentMinusSign, f.data.Symbols.MinusSign})
 		exponent = -exponent
 	}
-	parts = append(parts, Part{PartExponentInteger, f.digits(itoa(exponent))})
-	return parts
+	inner = append(inner, Part{PartExponentInteger, f.digits(itoa(exponent))})
+	return body, inner
 }
 
 // scientificDigits is the exponent a number is written against and the

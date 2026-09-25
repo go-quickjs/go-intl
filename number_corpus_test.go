@@ -185,6 +185,14 @@ func numberOptions(in map[string]any) (intl.NumberFormatOptions, error) {
 			}
 		case "unit":
 			out.Unit, _ = value.(string)
+		case "currencySign":
+			switch value {
+			case "standard":
+			case "accounting":
+				out.CurrencySign = intl.CurrencySignAccounting
+			default:
+				return out, fmt.Errorf("currencySign %v", value)
+			}
 		case "unitDisplay":
 			switch value {
 			case "short":

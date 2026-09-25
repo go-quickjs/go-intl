@@ -241,12 +241,12 @@ func NewNumberFormatFrom(src Source, loc Locale, opts NumberFormatOptions) (*Num
 			return nil, err
 		}
 		switch opts.UnitDisplay {
-		case UnitShort:
-			f.unitWidth = unitdata.Short
+		case UnitLong:
+			f.unitWidth = unitdata.Long
 		case UnitNarrow:
 			f.unitWidth = unitdata.Narrow
 		default:
-			f.unitWidth = unitdata.Long
+			f.unitWidth = unitdata.Short
 		}
 	}
 
@@ -388,6 +388,10 @@ const (
 	// PartCompact is the word or letter compact notation writes for a
 	// magnitude: "K", "million".
 	PartCompact PartKind = "compact"
+	// PartUnit is a measurement's name or symbol: "km", "kilometers".
+	PartUnit PartKind = "unit"
+	// PartApproximatelySign marks a range whose ends are written alike.
+	PartApproximatelySign PartKind = "approximatelySign"
 
 	// The pieces of a date or a time, named as ECMA-402 names them.
 	PartEra              PartKind = "era"
@@ -449,6 +453,30 @@ func (f *NumberFormat) FormatDecimal(d Decimal) string {
 // FormatDecimalToParts writes a number given exactly as the pieces it is
 // made of.
 func (f *NumberFormat) FormatDecimalToParts(d Decimal) []Part {
+	return mergeParts(trimParts(f.assemble(f.layers(d, false))))
+}
+
+// numberLayers is a number written, in the layers ICU's number formatter
+// builds it from: the digits (body); the exponent of scientific notation
+// (inner); the pattern's affixes with the sign, the currency, the percent
+// sign and compact notation's word (middle, pre and post); and the unit or
+// currency name wrapped round the lot (outer). A range compares its two ends
+// layer by layer and writes a layer both share once.
+type numberLayers struct {
+	pre, body, inner, post []Part
+	// outer says whether a unit or currency name is wrapped round the
+	// number, and count is the plural category it is chosen by.
+	outer bool
+	count string
+	// rounded is the number as written, sign and digits, which decides
+	// whether a range's two ends are the same.
+	rounded string
+}
+
+// layers writes a number in its layers. Approximately puts the approximately
+// sign where the sign goes, as ICU does for a range whose ends are written
+// alike.
+func (f *NumberFormat) layers(d Decimal, approximately bool) numberLayers {
 	negative := d.neg
 	magnitude := d.m
 	if magnitude.integer == "" {
@@ -458,65 +486,134 @@ func (f *NumberFormat) FormatDecimalToParts(d Decimal) []Part {
 		magnitude = magnitude.shift(2)
 	}
 
-	var parts []Part
-	add := func(kind PartKind, value string) {
-		if value != "" {
-			parts = append(parts, Part{kind, value})
-		}
-	}
-
+	var l numberLayers
 	// Whether the number is zero is asked of it as written: 0.0001 at two
 	// decimals is "0", which signDisplay "exceptZero" writes without a sign.
 	zero := d.kind == decimalNaN || d.kind == decimalFinite && f.roundsToZero(magnitude, negative)
 	sign, showSign := f.signFor(zero, negative)
-	prefix := f.pattern.prefixFor(negative)
-	suffix := f.pattern.suffixFor(negative)
 
-	// A pattern with a negative form of its own already carries the sign in
-	// its affixes, so one is not written twice.
-	if showSign && !(negative && f.pattern.explicitNeg) {
-		add(sign.kind, sign.text)
+	// PatternStringUtils::patternInfoToStringBuilder: the sign goes where
+	// the pattern's negative form puts its minus -- the plus and the
+	// approximately sign too, when there is such a form -- and otherwise
+	// before everything. A number shown without a sign is written with the
+	// positive form, whatever its sign.
+	minusShown := showSign && sign.kind == PartMinusSign
+	plusShown := showSign && sign.kind == PartPlusSign
+	var symbols []Part
+	if approximately {
+		symbols = append(symbols, Part{PartApproximatelySign, f.approximatelySign()})
 	}
-	parts = append(parts, f.affixParts(prefix)...)
+	switch {
+	case plusShown:
+		symbols = append(symbols, Part{PartPlusSign, f.data.Symbols.PlusSign})
+	case minusShown || !approximately:
+		symbols = append(symbols, Part{PartMinusSign, f.data.Symbols.MinusSign})
+	}
+	negativeHasMinus := f.pattern.explicitNeg &&
+		strings.ContainsRune(f.pattern.negPrefix+f.pattern.negSuffix, '-')
+	useNegative := f.pattern.explicitNeg &&
+		(minusShown || negativeHasMinus && (plusShown || approximately))
+	prefix, suffix := f.pattern.posPrefix, f.pattern.posSuffix
+	if useNegative {
+		prefix, suffix = f.pattern.negPrefix, f.pattern.negSuffix
+	}
+	// A compact pattern with a negative form of its own places the sign
+	// likewise, in place of the pattern's.
+	var form compactForm
+	compactNegative := false
+	if d.kind == decimalFinite && f.opts.Notation == NotationCompact {
+		form = f.compactForm(magnitude, negative)
+		compactNegative = form.hasNeg && (minusShown ||
+			strings.ContainsRune(form.negPrefix+form.negSuffix, '-') && (plusShown || approximately))
+	}
+	if !useNegative && !compactNegative && (minusShown || plusShown || approximately) {
+		l.pre = append(l.pre, symbols...)
+	}
+	l.pre = append(l.pre, f.affixParts(prefix, symbols)...)
 
 	switch {
 	case d.kind == decimalNaN:
-		add(PartNaN, f.data.Symbols.NaN)
+		l.body = []Part{{PartNaN, f.data.Symbols.NaN}}
 	case d.kind == decimalInfinite:
-		add(PartInfinity, f.data.Symbols.Infinity)
+		l.body = []Part{{PartInfinity, f.data.Symbols.Infinity}}
 	case f.opts.Notation == NotationCompact:
-		parts = append(parts, f.compactParts(magnitude, negative)...)
+		pre, body, post := f.compactPieces(form, magnitude, negative, compactNegative, symbols)
+		l.pre = append(l.pre, pre...)
+		l.body = body
+		l.post = post
 	case f.opts.Notation == NotationScientific, f.opts.Notation == NotationEngineering:
-		parts = append(parts, f.scientificParts(magnitude, negative)...)
+		l.body, l.inner = f.scientificPieces(magnitude, negative)
 	default:
-		parts = append(parts, f.numberParts(magnitude, negative)...)
+		l.body = f.numberParts(magnitude, negative)
 	}
+	l.post = append(l.post, f.affixParts(suffix, symbols)...)
 
-	parts = append(parts, f.affixParts(suffix)...)
 	// NaN and the infinities are "other" in every language, as ICU's plural
 	// rules answer for them.
 	finite := d.kind == decimalFinite
-	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName {
-		return f.joinCurrencyName(parts, magnitude, finite)
+	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName || f.opts.Style == StyleUnit {
+		l.outer = true
+		l.count = f.outerCount(magnitude, finite)
 	}
-	if f.opts.Style == StyleUnit {
-		return f.applyUnit(parts, magnitude, finite)
+	var b strings.Builder
+	if negative {
+		b.WriteByte('-')
+	}
+	for _, p := range l.body {
+		b.WriteString(p.Value)
+	}
+	for _, p := range l.inner {
+		b.WriteString(p.Value)
+	}
+	l.rounded = b.String()
+	return l
+}
+
+// approximatelySign is the locale's, or ICU's default.
+func (f *NumberFormat) approximatelySign() string {
+	if s := f.data.Symbols.ApproximatelySign; s != "" {
+		return s
+	}
+	return "~"
+}
+
+// assemble puts a number's layers together.
+func (f *NumberFormat) assemble(l numberLayers) []Part {
+	parts := make([]Part, 0, len(l.pre)+len(l.body)+len(l.inner)+len(l.post))
+	parts = append(parts, l.pre...)
+	parts = append(parts, l.body...)
+	parts = append(parts, l.inner...)
+	parts = append(parts, l.post...)
+	if l.outer {
+		return f.wrapOuter(parts, l.count)
 	}
 	return f.spaceCurrency(parts)
 }
 
+// outerCount is the plural category a unit or currency name is chosen by.
+// It comes from the digits the formatter writes, not from the value: money
+// is written with two decimals, so one dollar is "1.00", which English calls
+// "dollars" rather than "dollar".
+func (f *NumberFormat) outerCount(magnitude mag, finite bool) string {
+	if f.plurals == nil || !finite {
+		return string(PluralOther)
+	}
+	integer, fraction := f.round(magnitude, false)
+	o := operandsFor(padInteger(integer, f.minInt), fraction, 0)
+	return string(f.plurals.selectOperands(&o))
+}
+
+// wrapOuter wraps a number in its unit or currency name.
+func (f *NumberFormat) wrapOuter(parts []Part, count string) []Part {
+	if f.opts.Style == StyleUnit {
+		return f.applyUnit(parts, count)
+	}
+	return f.joinCurrencyName(parts, count)
+}
+
 // joinCurrencyName puts the amount and the spelled-out name together, by the
 // locale's unit pattern and the plural category of the amount.
-func (f *NumberFormat) joinCurrencyName(parts []Part, magnitude mag, finite bool) []Part {
-	count := string(PluralOther)
-	if f.plurals != nil && finite {
-		// The category comes from the digits this formatter writes, not from
-		// the value: money is written with two decimals, so one dollar is
-		// "1.00" and English calls that "dollars" rather than "dollar".
-		integer, fraction := f.round(magnitude, false)
-		o := operandsFor(padInteger(integer, f.minInt), fraction, 0)
-		count = string(f.plurals.selectOperands(&o))
-	}
+func (f *NumberFormat) joinCurrencyName(parts []Part, count string) []Part {
 
 	name := strings.ToUpper(f.opts.Currency)
 	if c, ok := f.data.Currency(name); ok {
@@ -574,33 +671,42 @@ func (f *NumberFormat) spaceCurrency(parts []Part) []Part {
 		return parts
 	}
 	for i := 0; i < len(parts)-1; i++ {
-		left, right := parts[i], parts[i+1]
-		var rule *spacingRule
-		var currencyFacing, numberFacing rune
-		var ok bool
-		switch {
-		case left.Kind == PartCurrency && isNumberPart(right.Kind):
-			rule = f.afterCurrency
-			if currencyFacing, ok = lastRune(left.Value); ok {
-				numberFacing, ok = firstRune(right.Value)
-			}
-		case isNumberPart(left.Kind) && right.Kind == PartCurrency:
-			rule = f.beforeCurrency
-			if currencyFacing, ok = firstRune(right.Value); ok {
-				numberFacing, ok = lastRune(left.Value)
-			}
-		default:
-			continue
-		}
-		if !ok || !rule.applies(currencyFacing, numberFacing) {
+		insert, ok := f.currencySpace(parts[i], parts[i+1])
+		if !ok {
 			continue
 		}
 		parts = append(parts, Part{})
 		copy(parts[i+2:], parts[i+1:])
-		parts[i+1] = Part{PartLiteral, rule.insert}
+		parts[i+1] = Part{PartLiteral, insert}
 		i++
 	}
 	return parts
+}
+
+// currencySpace is the space to put between two adjacent parts, where one
+// is the currency and the other the number and CLDR's rule says so.
+func (f *NumberFormat) currencySpace(left, right Part) (string, bool) {
+	var rule *spacingRule
+	var currencyFacing, numberFacing rune
+	var ok bool
+	switch {
+	case left.Kind == PartCurrency && isNumberPart(right.Kind):
+		rule = f.afterCurrency
+		if currencyFacing, ok = lastRune(left.Value); ok {
+			numberFacing, ok = firstRune(right.Value)
+		}
+	case isNumberPart(left.Kind) && right.Kind == PartCurrency:
+		rule = f.beforeCurrency
+		if currencyFacing, ok = firstRune(right.Value); ok {
+			numberFacing, ok = lastRune(left.Value)
+		}
+	default:
+		return "", false
+	}
+	if !ok || !rule.applies(currencyFacing, numberFacing) {
+		return "", false
+	}
+	return rule.insert, true
 }
 
 // isNumberPart reports whether a piece is part of the number itself, as
@@ -705,7 +811,7 @@ func (f *NumberFormat) digits(s string) string {
 
 // affixParts turns a pattern's prefix or suffix into pieces, replacing the
 // marks that stand for something: the currency and the percent sign.
-func (f *NumberFormat) affixParts(affix string) []Part {
+func (f *NumberFormat) affixParts(affix string, signSymbols []Part) []Part {
 	if affix == "" {
 		return nil
 	}
@@ -726,8 +832,9 @@ func (f *NumberFormat) affixParts(affix string) []Part {
 			flush()
 			parts = append(parts, Part{PartPercentSign, f.data.Symbols.PercentSign})
 		case '-':
+			// The pattern's sign, which is whatever the number shows there.
 			flush()
-			parts = append(parts, Part{PartMinusSign, f.data.Symbols.MinusSign})
+			parts = append(parts, signSymbols...)
 		case '+':
 			flush()
 			parts = append(parts, Part{PartPlusSign, f.data.Symbols.PlusSign})
