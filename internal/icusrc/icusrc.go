@@ -88,6 +88,12 @@ func OpenTree(zipPath, tree string) (*Locales, error) {
 	return out, nil
 }
 
+// ReadMisc reads one of the data archive's non-locale files, data/misc/
+// <name>.txt.
+func (c *Locales) ReadMisc(name string) ([]byte, error) {
+	return ReadFile(c.z, "data/misc/"+name+".txt")
+}
+
 // Has reports whether the tree has a bundle of this name.
 func (c *Locales) Has(name string) bool {
 	_, ok := c.files[name]

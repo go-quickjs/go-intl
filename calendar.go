@@ -1,6 +1,7 @@
 package intl
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -42,6 +43,8 @@ const (
 	ROC CalendarSystem = "roc"
 	// Hebrew is the lunisolar Hebrew calendar.
 	Hebrew CalendarSystem = "hebrew"
+	// Japanese counts the Gregorian years by the eras of Japan's reigns.
+	Japanese CalendarSystem = "japanese"
 )
 
 // implemented lists the calendars this can reckon in. The rest of CLDR's are
@@ -58,6 +61,7 @@ var implemented = map[CalendarSystem]bool{
 	IslamicTabular:    true,
 	ROC:               true,
 	Hebrew:            true,
+	Japanese:          true,
 }
 
 // calendarPreferences maps a region to the calendar it reckons in, as lines of
@@ -135,7 +139,7 @@ func (e *unimplementedCalendarError) Error() string {
 // Only the year and the era differ between the two implemented calendars: the
 // Buddhist one keeps the Gregorian months and days and counts the years from
 // 543 years earlier, so 2024 is 2567 and every date is in its single era.
-func reckon(t time.Time, system CalendarSystem) dateParts {
+func reckon(t time.Time, system CalendarSystem, eras []eraStart) dateParts {
 	p := partsOf(t)
 	// The Gregorian calendar's own fields, which the Buddhist one keeps:
 	// its extended year is the Gregorian one, counting on through 0 for
@@ -143,7 +147,7 @@ func reckon(t time.Time, system CalendarSystem) dateParts {
 	p.extYear, p.dayOfYear, p.relatedYear = t.Year(), t.YearDay(), t.Year()
 	p.yearLength = gregorianYearLength
 	switch system {
-	case Buddhist, ROC:
+	case Buddhist, ROC, Japanese:
 		// V8 makes ICU's Gregorian calendar proleptic, but only a calendar
 		// that is exactly ICU's GregorianCalendar; the Buddhist and ROC
 		// calendars are subclasses, and keep its Julian dates before the
@@ -219,12 +223,52 @@ func reckon(t time.Time, system CalendarSystem) dateParts {
 		}
 		return p
 	}
+	if system == Japanese {
+		// JapaneseCalendar::handleComputeFields: the era is the last to
+		// start on or before the date, the first era counting back before
+		// its own start, and the year counts from the era's first.
+		p.era = 0
+		for i := len(eras) - 1; i >= 0; i-- {
+			e := eras[i]
+			if e.year < p.extYear || e.year == p.extYear &&
+				(e.month < p.month || e.month == p.month && e.day <= p.day) {
+				p.era = e.era
+				p.year = p.extYear - e.year + 1
+				return p
+			}
+		}
+		if len(eras) > 0 {
+			p.era, p.year = eras[0].era, p.extYear-eras[0].year+1
+		}
+		return p
+	}
 	if system == Buddhist {
 		// BuddhistCalendar::handleComputeFields: the extended year stays.
 		p.year = p.extYear + 543
 		p.era = 0
 	}
 	return p
+}
+
+// eraStart is the first day of one of the Japanese calendar's eras.
+type eraStart struct {
+	era, year, month, day int
+}
+
+// loadJapaneseEras reads the Japanese calendar's eras, in order.
+func loadJapaneseEras(src Source) ([]eraStart, error) {
+	b, err := src.Open(MarkerJapaneseEras, DataLocale{})
+	if err != nil {
+		return nil, fmt.Errorf("intl: the Japanese eras: %w", err)
+	}
+	var out []eraStart
+	for _, line := range strings.Split(string(b), "\n") {
+		var e eraStart
+		if n, _ := fmt.Sscan(line, &e.era, &e.year, &e.month, &e.day); n == 4 {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }
 
 // gregorianCutover is the Julian day ICU's Gregorian calendar changes over

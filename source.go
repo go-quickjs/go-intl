@@ -61,6 +61,9 @@ const (
 	// MarkerTimeData is CLDR's hour-cycle preferences, by region or by
 	// language and region.
 	MarkerTimeData Marker = "timedata"
+	// MarkerJapaneseEras is the first day of each era of the Japanese
+	// calendar.
+	MarkerJapaneseEras Marker = "japaneseeras"
 	// MarkerRBNF is ICU's rules for its algorithmic numbering systems, the
 	// Roman and Hebrew numerals among them.
 	MarkerRBNF Marker = "rbnf"

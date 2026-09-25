@@ -38,7 +38,6 @@ var dateTimeGaps = []struct {
 	{"", "", "islamic-rgsa", "the Saudi Islamic calendar"},
 	{"", "", "islamic-umalqura", "the Umm al-Qura calendar"},
 	{"", "", "iso8601", "the ISO 8601 calendar"},
-	{"", "", "japanese", "the Japanese calendar"},
 }
 
 // dateTimeGap returns why a case is a known gap, if it is one.

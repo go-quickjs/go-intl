@@ -72,3 +72,40 @@ func TestHebrewCalendar(t *testing.T) {
 		}
 	}
 }
+
+// The Japanese calendar changes era on the day an era starts, calls an
+// era's first year 元年 in Japanese, keeps ICU's Julian dates before 1582,
+// and before the first era counts back through it. The expectations are
+// Node's.
+func TestJapaneseCalendar(t *testing.T) {
+	dates := []time.Time{
+		time.Date(2019, 5, 30, 0, 0, 0, 0, time.UTC),
+		time.Date(1989, 1, 7, 0, 0, 0, 0, time.UTC),
+		time.Date(1989, 1, 8, 0, 0, 0, 0, time.UTC),
+		time.Date(1912, 7, 29, 0, 0, 0, 0, time.UTC),
+		time.Date(1912, 7, 30, 0, 0, 0, 0, time.UTC),
+		time.Date(1868, 10, 23, 0, 0, 0, 0, time.UTC),
+		time.Date(600, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(1500, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	for _, c := range []struct {
+		tag  string
+		opts intl.DateTimeFormatOptions
+		want []string
+	}{
+		{"en-u-ca-japanese", intl.DateTimeFormatOptions{TimeZone: "UTC", Era: intl.WidthLong,
+			Year: intl.WidthNumeric, Month: intl.WidthNumeric, Day: intl.WidthNumeric},
+			[]string{"5/30/1 Reiwa", "1/7/64 Shōwa", "1/8/1 Heisei", "7/29/45 Meiji", "7/30/1 Taishō",
+				"10/23/1 Meiji", "12/30/-45 Taika (645–650)", "12/23/8 Meiō (1492–1501)"}},
+		{"ja-u-ca-japanese", intl.DateTimeFormatOptions{TimeZone: "UTC", DateStyle: intl.LengthLong},
+			[]string{"令和元年5月30日", "昭和64年1月7日", "平成元年1月8日", "明治45年7月29日", "大正元年7月30日",
+				"明治元年10月23日", "大化-45年12月30日", "明応8年12月23日"}},
+	} {
+		f := newDateTime(t, c.tag, c.opts)
+		for i, d := range dates {
+			if got := f.Format(d); got != c.want[i] {
+				t.Errorf("%s %s = %q, want %q", c.tag, d.Format("2006-01-02"), got, c.want[i])
+			}
+		}
+	}
+}

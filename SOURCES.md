@@ -57,7 +57,7 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 | `cldr-cal-islamic-full` | 48.2.0 | `ea139d42f68105a135d72e49eed1eb84d6e6970173b35e83924412c12022b885` | `dategen` (civil and tabular so far) |
 | `cldr-cal-roc-full` | 48.2.0 | `c90f6e4b718d1384f11a1b005101f26e6b6573e08274584ce84a51f3e4530983` | `dategen` |
 | `cldr-cal-hebrew-full` | 48.2.0 | `b06b8f2834564e843a3bda0410b9cc6152b010a54e08fda34d3530892a0d3e7f` | `dategen` |
-| `cldr-cal-japanese-full` | 48.2.0 | `05d2e6709e87349ee8dfbe733b93b2e8a8da375164d838b9aa01fc5d759ec49b` | to come |
+| `cldr-cal-japanese-full` | 48.2.0 | `05d2e6709e87349ee8dfbe733b93b2e8a8da375164d838b9aa01fc5d759ec49b` | `dategen`; the eras' start dates come from ICU's `misc/supplementalData.txt` |
 | `cldr-cal-chinese-full` | 48.2.0 | `cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2` | to come |
 | `cldr-cal-dangi-full` | 48.2.0 | `67171aaa6fe075c0ba3c86c67788a26c8b6f5f595d5fb76276a0fbaddc722e73` | to come |
 

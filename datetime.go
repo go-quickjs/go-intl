@@ -178,6 +178,8 @@ type DateTimeFormat struct {
 	// week is the region's week conventions, read when the pattern has a
 	// week-based year.
 	week weekRules
+	// eras are the Japanese calendar's, read when it is the one in use.
+	eras []eraStart
 	// hourCycle is the cycle resolvedOptions reports, unset unless an hour
 	// or a time style was asked for.
 	hourCycle HourCycle
@@ -236,6 +238,11 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 
 	f := &DateTimeFormat{locale: loc, opts: opts, data: data, calendar: cal, system: system}
+	if system == Japanese {
+		if f.eras, err = loadJapaneseEras(src); err != nil {
+			return nil, err
+		}
+	}
 	if f.location, f.zoneName, f.zoneID, err = loadZone(opts.TimeZone); err != nil {
 		return nil, err
 	}

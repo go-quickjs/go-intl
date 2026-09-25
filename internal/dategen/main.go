@@ -35,6 +35,7 @@ import (
 
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
+	"github.com/go-quickjs/go-intl/internal/icutxt"
 )
 
 //go:embed calendarPreferenceData.json
@@ -79,6 +80,7 @@ var extras = []struct{ cldr, bcp47, pkg string }{
 	{"islamic-tbla", "islamic-tbla", "islamic"},
 	{"roc", "roc", "roc"},
 	{"hebrew", "hebrew", "hebrew"},
+	{"japanese", "japanese", "japanese"},
 }
 
 // packageOf finds the unpacked package a calendar comes from, among those
@@ -249,6 +251,13 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	if err != nil {
 		return err
 	}
+	eras, err := japaneseEras(icu)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "japaneseeras.bin"), eras, 0o644); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join("data", "weekdata.bin"), week, 0o644); err != nil {
 		return err
 	}
@@ -372,6 +381,50 @@ func timeData() ([]byte, error) {
 			strings.Join(strings.Fields(d.Allowed), ","))
 	}
 	return []byte(b.String()), nil
+}
+
+// japaneseEras writes the start dates of the Japanese calendar's eras, from
+// ICU's supplemental data, as EraRules reads them: one line each, the era's
+// number and its first day, "236 2019 5 1". Tentative eras, which have no
+// name yet, are left out, as ICU leaves them out unless told otherwise.
+func japaneseEras(icu *icusrc.Locales) ([]byte, error) {
+	b, err := icu.ReadMisc("supplementalData")
+	if err != nil {
+		return nil, err
+	}
+	root, err := icutxt.Parse(string(b))
+	if err != nil {
+		return nil, fmt.Errorf("supplementalData.txt: %w", err)
+	}
+	eras := root.Get("calendarData", "japanese", "eras")
+	if eras == nil {
+		return nil, fmt.Errorf("supplementalData.txt has no Japanese eras")
+	}
+	type era struct{ n, y, m, d int }
+	var list []era
+	for _, e := range eras.Children {
+		if named := e.Get("named"); named != nil && named.Value == "false" {
+			continue
+		}
+		start := e.Get("start")
+		n, err := strconv.Atoi(e.Key)
+		if start == nil || len(start.Values) != 3 || err != nil {
+			return nil, fmt.Errorf("supplementalData.txt: Japanese era %s", e.Key)
+		}
+		var ymd [3]int
+		for i, v := range start.Values {
+			if ymd[i], err = strconv.Atoi(v); err != nil {
+				return nil, fmt.Errorf("supplementalData.txt: Japanese era %s", e.Key)
+			}
+		}
+		list = append(list, era{n, ymd[0], ymd[1], ymd[2]})
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].n < list[j].n })
+	var out strings.Builder
+	for _, e := range list {
+		fmt.Fprintf(&out, "%d %d %d %d\n", e.n, e.y, e.m, e.d)
+	}
+	return []byte(out.String()), nil
 }
 
 // weekData writes CLDR's week conventions, which are a property of a
@@ -565,7 +618,21 @@ func readCalendar(main, name, calendarName, fileName string) (*datedata.Calendar
 			})
 		}
 		if set, ok := source.Eras[eraWidths[w]]; ok {
-			c.Eras[w].Text = []string{set["0"], set["1"]}
+			// Two eras in most calendars, one in some, and 237 in the
+			// Japanese; the "-alt-" names are left out.
+			count := 0
+			for key := range set {
+				if n, err := strconv.Atoi(key); err == nil && n+1 > count {
+					count = n + 1
+				}
+			}
+			text := make([]string, count)
+			for key, value := range set {
+				if n, err := strconv.Atoi(key); err == nil {
+					text[n] = value
+				}
+			}
+			c.Eras[w].Text = text
 		}
 	}
 
