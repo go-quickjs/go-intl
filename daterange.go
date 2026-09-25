@@ -53,10 +53,10 @@ type rangeFormat struct {
 	dateTimeGlue             string
 }
 
-// newRangeFormat builds the interval formatter as V8 creates it: from the
-// skeleton of the formatter's pattern, in the locale with the resolved hour
-// cycle.
-func (f *DateTimeFormat) newRangeFormat(src Source, g *dtpg, pattern string) (*rangeFormat, error) {
+// newRangeFormat builds the interval formatter as V8 creates it
+// (LazyCreateDateIntervalFormat): from a skeleton, the formatter's pattern's
+// or a Temporal kind's, in the locale with the resolved hour cycle.
+func (f *DateTimeFormat) newRangeFormat(src Source, g *dtpg, skeleton string) (*rangeFormat, error) {
 	if letter, ok := hourLetters[f.hourCycle]; ok && letter != g.defaultHourChar {
 		_, allowed, err := allowedHourFormats(src, f.locale)
 		if err != nil {
@@ -64,7 +64,7 @@ func (f *DateTimeFormat) newRangeFormat(src Source, g *dtpg, pattern string) (*r
 		}
 		g = newDTPG(f.calendar, f.data.FieldNames, f.decimal, letter, allowed)
 	}
-	r := &rangeFormat{info: newIntervalInfo(f.calendar), skeleton: staticSkeleton(pattern)}
+	r := &rangeFormat{info: newIntervalInfo(f.calendar), skeleton: skeleton}
 	r.pattern = g.bestPattern(r.skeleton, 0)
 	r.initialize(g, f.data.DateTimeGlue)
 	return r, nil

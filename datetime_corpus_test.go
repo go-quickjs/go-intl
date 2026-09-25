@@ -158,6 +158,8 @@ func dateTimeOptions(in map[string]any) (intl.DateTimeFormatOptions, error) {
 			}
 		case "calendar":
 			out.Calendar, _ = value.(string)
+		case "numberingSystem":
+			out.NumberingSystem, _ = value.(string)
 		case "hourCycle":
 			switch value {
 			case "h11":

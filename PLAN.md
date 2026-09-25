@@ -947,7 +947,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 286,519 cases against node, all match; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars |
+| 5. DateTimeFormat | 1,230/1,230, and 286,519 cases against node, all match; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars; Temporal values, 74,580 cases |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | **done** - not in the corpus; 21,202 cases against node, all match; V8's int64 overflow is a named NodeICU divergence |
@@ -1003,9 +1003,16 @@ Much of `internal/icu` serves things that are not Intl formatters at all.
 
 What go-quickjs's VM accepts and go-intl does not yet:
 
-| Area | What go-quickjs does | What it needs |
-|---|---|---|
-| Temporal arguments | `Intl.DateTimeFormat#format` and `formatRange` of a Temporal object, and each Temporal type's `toLocaleString`: V8 formats each kind with a formatter of its own, its fields filtered and defaulted for the kind, and Node's hour-cycle quirks | a DateTimeFormat for a Temporal kind, recorded against Node; found by the switch-over check of 2026-09-25 |
+None. Temporal values, the last, found by the switch-over check of
+2026-09-25, are done: `DateTimeFormat.ForTemporal` gives the formatter V8
+writes a kind of Temporal value with (GetSkeletonForPatternKind: the
+skeleton of the formatter's pattern cut to the kind's fields, or the kind's
+defaults, and a pattern generated for it), `CalendarMatches` is V8's
+CalendarEquals, and `ToLocaleStringTimeZone` is a ZonedDateTime's
+toLocaleString. The engine turns the value into an instant.
+`testdata/datetime_temporal_node.js` records format, formatToParts,
+formatRange and toLocaleString of every kind, 20 locales, 33 option sets,
+calendars and two zones, errors included: all 74,580 match.
 
 ### Beyond the formatters
 

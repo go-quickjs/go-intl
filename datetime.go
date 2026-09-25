@@ -148,6 +148,12 @@ type DateTimeFormatOptions struct {
 	Required DateTimeComponents
 	Defaults DateTimeComponents
 
+	// ToLocaleStringTimeZone says TimeZone is a Temporal.ZonedDateTime's,
+	// which its toLocaleString formats in, rather than one asked for. An
+	// instant written for it with no field asked for then has a zone name
+	// (see ForTemporal).
+	ToLocaleStringTimeZone bool
+
 	Compat Compat
 }
 
@@ -158,8 +164,18 @@ func Bool(v bool) *bool { return &v }
 // A DateTimeFormat writes instants in one locale. It never changes after it is
 // built and is safe for any number of goroutines to share.
 type DateTimeFormat struct {
-	locale   Locale
-	opts     DateTimeFormatOptions
+	// src and asked are where the formatter was built from and the locale
+	// asked for, which ForTemporal builds from again.
+	src    Source
+	asked  Locale
+	locale Locale
+	opts   DateTimeFormatOptions
+	// explicit are the fields the options named, before any defaults, as
+	// the skeleton letters that write them.
+	explicit string
+	// patternText is the pattern as chosen, before it was taken apart.
+	patternText string
+
 	data     *datedata.Locale
 	calendar *datedata.Calendar
 	system   CalendarSystem
@@ -217,6 +233,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	if (opts.DateStyle != LengthNone || opts.TimeStyle != LengthNone) && opts.hasFields() {
 		return nil, fmt.Errorf("intl: a date style cannot be combined with named fields")
 	}
+	explicit := opts.explicitLetters()
 	if err := opts.applyDefaults(); err != nil {
 		return nil, err
 	}
@@ -246,7 +263,8 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 
 	// Of the Unicode extension, DateTimeFormat uses the calendar, the hour
 	// cycle and the numbering system.
-	f := &DateTimeFormat{locale: loc.onlyKeywords("hc", "nu").withKeyword("ca", keep), opts: opts, data: data, calendar: cal, system: system}
+	f := &DateTimeFormat{src: src, asked: loc, explicit: explicit,
+		locale: loc.onlyKeywords("hc", "nu").withKeyword("ca", keep), opts: opts, data: data, calendar: cal, system: system}
 	if system == Japanese {
 		if f.rules.eras, err = loadJapaneseEras(src); err != nil {
 			return nil, err
@@ -276,18 +294,28 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		return nil, err
 	}
 	f.hourCycle = cycle
+	f.patternText = pattern
 	f.pattern = compileDatePattern(pattern, f.overrides)
-	if f.ranges, err = f.newRangeFormat(src, g, pattern); err != nil {
+	if f.ranges, err = f.newRangeFormat(src, g, staticSkeleton(pattern)); err != nil {
 		return nil, err
 	}
+	if err := f.loadPatternData(); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// loadPatternData reads what the pattern's fields need beyond the calendar:
+// the week conventions for a week-based year, and the zone names for a zone.
+func (f *DateTimeFormat) loadPatternData() error {
 	hasZone, hasWeek := false, false
 	for _, fd := range f.pattern.fields {
 		hasZone = hasZone || datePartKind(fd.letter) == PartTimeZoneName
 		hasWeek = hasWeek || fd.letter == 'Y'
 	}
-	if hasWeek {
-		f.week = loadWeekRules(src, loc)
-		if system == ISO8601 {
+	if hasWeek && f.week == (weekRules{}) {
+		f.week = loadWeekRules(f.src, f.asked)
+		if f.system == ISO8601 {
 			// ISO8601Calendar's weeks start on Monday and need four days,
 			// wherever the locale is.
 			f.week = weekRules{firstDay: 1, minDays: 4}
@@ -295,13 +323,14 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	}
 	// Most patterns write no zone, and the zone names are much the largest
 	// thing a formatter would otherwise read.
-	if hasZone {
-		if f.zones, err = loadZoneNames(src, loc); err != nil {
-			return nil, err
+	if hasZone && f.zones == nil {
+		var err error
+		if f.zones, err = loadZoneNames(f.src, f.asked); err != nil {
+			return err
 		}
 		f.zone = f.zones.zone(f.zoneID, f.tz)
 	}
-	return f, nil
+	return nil
 }
 
 // applyDefaults supplies the fields nobody asked for, as ECMA-402's
@@ -348,6 +377,34 @@ func (o *DateTimeFormatOptions) applyDefaults() error {
 		o.Hour, o.Minute, o.Second = WidthNumeric, WidthNumeric, WidthNumeric
 	}
 	return nil
+}
+
+// explicitLetters are the fields the options name, as V8's
+// ExplicitComponentsSet spells them: every skeleton letter a field can be
+// written with.
+func (o *DateTimeFormatOptions) explicitLetters() string {
+	var b strings.Builder
+	for _, f := range []struct {
+		set     bool
+		letters string
+	}{
+		{o.Weekday != WidthNone, "Ec"},
+		{o.Era != WidthNone, "G"},
+		{o.Year != WidthNone, "y"},
+		{o.Month != WidthNone, "ML"},
+		{o.Day != WidthNone, "d"},
+		{o.DayPeriod != WidthNone, "Bb"},
+		{o.Hour != WidthNone, "HhKk"},
+		{o.Minute != WidthNone, "m"},
+		{o.Second != WidthNone, "s"},
+		{o.TimeZoneName != ZoneNone, "zOv"},
+		{o.FractionalSecondDigits != 0, "S"},
+	} {
+		if f.set {
+			b.WriteString(f.letters)
+		}
+	}
+	return b.String()
 }
 
 func (o *DateTimeFormatOptions) hasFields() bool {
