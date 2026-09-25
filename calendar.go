@@ -101,10 +101,12 @@ func (p calendarPreferences) all(region string) []string {
 	if region == "" {
 		return nil
 	}
+	// Only the region's own line is taken apart.
 	for line := range strings.SplitSeq(strings.TrimRight(string(p), "\n"), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) > 1 && fields[0] == region {
-			return fields[1:]
+		if name, rest, ok := strings.Cut(line, " "); ok && name == region {
+			if fields := strings.Fields(rest); len(fields) > 0 {
+				return fields
+			}
 		}
 	}
 	return nil

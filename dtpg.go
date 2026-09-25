@@ -441,17 +441,26 @@ func (s *ptnSkeleton) distance(other *ptnSkeleton, includeMask int) (dist, missi
 
 // ptnElem is one pattern the generator knows.
 type ptnElem struct {
-	basePattern string
-	skeleton    ptnSkeleton
-	pattern     string
-	specified   bool
+	skeleton  ptnSkeleton
+	pattern   string
+	specified bool
+	// next is the next element of the bucket, counting from one; zero
+	// ends it.
+	next int32
 }
 
 // patternMap is ICU's PatternMap: the patterns, bucketed by the first letter
 // of their base pattern, A to Z and then a to z, in the order added. That
 // order is the iteration order, and so decides ties.
+//
+// The elements are kept in one slice, and each bucket is a chain through
+// it, counting from one so that zero is none. A base pattern is compared as
+// the skeleton fields it is written from: every letter belongs to one field,
+// so two base patterns are the same text exactly when their fields are the
+// same.
 type patternMap struct {
-	boot [52][]*ptnElem
+	elems      []ptnElem
+	head, tail [52]int32
 }
 
 func bootIndex(c byte) int {
@@ -464,35 +473,36 @@ func bootIndex(c byte) int {
 	return -1
 }
 
-func (m *patternMap) add(basePattern string, skeleton ptnSkeleton, pattern string, specified bool) {
-	if basePattern == "" {
-		return
-	}
-	b := bootIndex(basePattern[0])
+func (m *patternMap) add(skeleton *ptnSkeleton, pattern string, specified bool) {
+	b := bootIndex(skeleton.baseOriginal.firstChar())
 	if b < 0 {
 		return
 	}
-	for _, e := range m.boot[b] {
-		if e.basePattern == basePattern && e.skeleton.typ == skeleton.typ {
+	for i := m.head[b]; i != 0; i = m.elems[i-1].next {
+		e := &m.elems[i-1]
+		if e.skeleton.baseOriginal == skeleton.baseOriginal && e.skeleton.typ == skeleton.typ {
 			e.pattern = pattern
 			e.specified = specified
 			return
 		}
 	}
-	m.boot[b] = append(m.boot[b], &ptnElem{basePattern: basePattern, skeleton: skeleton,
-		pattern: pattern, specified: specified})
+	m.elems = append(m.elems, ptnElem{skeleton: *skeleton, pattern: pattern, specified: specified})
+	n := int32(len(m.elems))
+	if m.tail[b] == 0 {
+		m.head[b] = n
+	} else {
+		m.elems[m.tail[b]-1].next = n
+	}
+	m.tail[b] = n
 }
 
-func (m *patternMap) fromBasePattern(basePattern string) (*ptnElem, bool) {
-	if basePattern == "" {
-		return nil, false
-	}
-	b := bootIndex(basePattern[0])
+func (m *patternMap) fromBasePattern(base *skeletonFields) (*ptnElem, bool) {
+	b := bootIndex(base.firstChar())
 	if b < 0 {
 		return nil, false
 	}
-	for _, e := range m.boot[b] {
-		if e.basePattern == basePattern {
+	for i := m.head[b]; i != 0; i = m.elems[i-1].next {
+		if e := &m.elems[i-1]; e.skeleton.baseOriginal == *base {
 			return e, true
 		}
 	}
@@ -506,7 +516,8 @@ func (m *patternMap) fromSkeleton(s *ptnSkeleton) (string, *ptnSkeleton, bool) {
 	if b < 0 {
 		return "", nil, false
 	}
-	for _, e := range m.boot[b] {
+	for i := m.head[b]; i != 0; i = m.elems[i-1].next {
+		e := &m.elems[i-1]
 		if e.skeleton.original == s.original {
 			if e.specified {
 				return e.pattern, &e.skeleton, true
@@ -529,8 +540,6 @@ type dtpg struct {
 	// cycles the locale allows, preferred first.
 	defaultHourChar byte
 	allowedHours    []string
-	// availableKeys are the availableFormats skeletons already added.
-	availableKeys map[string]bool
 }
 
 // newDTPG builds a generator as ICU's initData does: the canonical letters,
@@ -538,17 +547,18 @@ type dtpg struct {
 // its date-time glue.
 func newDTPG(cal *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
 	hourChar byte, allowed []string) *dtpg {
-	g := &dtpg{decimal: decimal, defaultHourChar: hourChar, allowedHours: allowed,
-		availableKeys: map[string]bool{}}
+	g := &dtpg{decimal: decimal, defaultHourChar: hourChar, allowedHours: allowed}
+	// Room for every pattern, so that the elements are allocated once.
+	g.patterns.elems = make([]ptnElem, 0, len(canonicalItems)+2*datedata.Lengths+len(cal.Available))
 	var fp formatParser
 	for i := 0; i < len(canonicalItems); i++ {
-		g.addPattern(string(canonicalItems[i]), nil, false, &fp)
+		g.addPattern(string(canonicalItems[i]), "", false, false, &fp)
 	}
 	// The style patterns, the times from full to short and then the dates.
 	for _, set := range [][datedata.Lengths]string{cal.TimeFormats, cal.DateFormats} {
 		for _, p := range set {
 			if p != "" {
-				g.addPattern(p, nil, false, &fp)
+				g.addPattern(p, "", false, false, &fp)
 			}
 		}
 	}
@@ -562,13 +572,14 @@ func newDTPG(cal *datedata.Calendar, fieldNames [datedata.Fields]string, decimal
 			g.fieldNames[i] = "F" + strconv.Itoa(i)
 		}
 	}
+	// The availableFormats skeletons already added.
+	added := make(map[string]bool, len(cal.Available))
 	for _, s := range cal.Available {
-		if g.availableKeys[s.ID] {
+		if added[s.ID] {
 			continue
 		}
-		g.availableKeys[s.ID] = true
-		id := s.ID
-		g.addPattern(s.Pattern, &id, true, &fp)
+		added[s.ID] = true
+		g.addPattern(s.Pattern, s.ID, true, true, &fp)
 	}
 	for i := 0; i < 4; i++ {
 		g.dateTimeFormat[i] = cal.AtTimeFormats[i]
@@ -579,27 +590,27 @@ func newDTPG(cal *datedata.Calendar, fieldNames [datedata.Fields]string, decimal
 	return g
 }
 
-// addPattern is addPatternWithOptionalSkeleton.
-func (g *dtpg) addPattern(pattern string, skeletonToUse *string, override bool, fp *formatParser) {
+// addPattern is addPatternWithOptionalSkeleton: the pattern, under the
+// skeleton given, if hasSkeleton, or else its own.
+func (g *dtpg) addPattern(pattern, skeletonToUse string, hasSkeleton, override bool, fp *formatParser) {
 	var skeleton ptnSkeleton
-	if skeletonToUse == nil {
+	if !hasSkeleton {
 		skeleton = setSkeleton(pattern, fp)
 	} else {
-		skeleton = setSkeleton(*skeletonToUse, fp)
+		skeleton = setSkeleton(skeletonToUse, fp)
 	}
-	basePattern := skeleton.baseOriginal.String()
-	if dup, ok := g.patterns.fromBasePattern(basePattern); ok &&
-		(!dup.specified || (skeletonToUse != nil && !override)) {
+	if dup, ok := g.patterns.fromBasePattern(&skeleton.baseOriginal); ok &&
+		(!dup.specified || (hasSkeleton && !override)) {
 		if !override {
 			return
 		}
 	}
 	if _, specified, ok := g.patterns.fromSkeleton(&skeleton); ok {
-		if !override || (skeletonToUse != nil && specified != nil) {
+		if !override || (hasSkeleton && specified != nil) {
 			return
 		}
 	}
-	g.patterns.add(basePattern, skeleton, pattern, skeletonToUse != nil)
+	g.patterns.add(&skeleton, pattern, hasSkeleton)
 }
 
 // bestRaw is getBestRaw: the closest pattern to a skeleton, counting only
@@ -608,8 +619,9 @@ func (g *dtpg) bestRaw(source *ptnSkeleton, includeMask int) (pattern string, sp
 	bestDistance := int(^uint(0) >> 1)
 	bestMissing := -1
 	found := false
-	for b := range g.patterns.boot {
-		for _, e := range g.patterns.boot[b] {
+	for b := range g.patterns.head {
+		for i := g.patterns.head[b]; i != 0; i = g.patterns.elems[i-1].next {
+			e := &g.patterns.elems[i-1]
 			d, m, x := source.distance(&e.skeleton, includeMask)
 			if d < bestDistance || (d == bestDistance && bestMissing < m) {
 				bestDistance, bestMissing = d, m
