@@ -176,10 +176,14 @@ type DateTimeFormat struct {
 	pattern datePattern
 	// ranges writes a range of two moments, as ICU's interval formatter.
 	ranges *rangeFormat
+	// week is the region's week conventions, read when the pattern has a
+	// week-based year.
+	week weekRules
 	// hourCycle is the cycle resolvedOptions reports, unset unless an hour
 	// or a time style was asked for.
 	hourCycle HourCycle
 	decimal   string
+	minus     string
 	// overrides are the numbering systems some fields of a style pattern
 	// are written in, by pattern letter; nil for most.
 	overrides map[byte]string
@@ -242,6 +246,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		f.numbers = &numberDigits{digits: chosen.Digits, system: chosen.NumberingSystem}
 		f.locale = f.locale.withKeyword("nu", nu)
 		f.decimal = chosen.Symbols.Decimal
+		f.minus = chosen.Symbols.MinusSign
 	}
 
 	pattern, cycle, g, err := f.choosePattern(src, f.decimal)
@@ -253,9 +258,13 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	if f.ranges, err = f.newRangeFormat(src, g, pattern); err != nil {
 		return nil, err
 	}
-	hasZone := false
+	hasZone, hasWeek := false, false
 	for _, fd := range f.pattern.fields {
 		hasZone = hasZone || datePartKind(fd.letter) == PartTimeZoneName
+		hasWeek = hasWeek || fd.letter == 'Y'
+	}
+	if hasWeek {
+		f.week = loadWeekRules(src, loc)
 	}
 	// Most patterns write no zone, and the zone names are much the largest
 	// thing a formatter would otherwise read.
@@ -425,6 +434,19 @@ func quoteLiteral(s string) string {
 // digits writes ASCII digits in the locale's own, where they differ.
 // number writes a numeric field, in the numbering system an override gives
 // its letter or else the formatter's.
+// signedNumber is number for a year that may be before the first: the
+// extended year of 1 BC is 0, and of 2 BC -1.
+func (f *DateTimeFormat) signedNumber(p *dateParts, letter byte, v, width int) string {
+	if v < 0 {
+		minus := f.minus
+		if minus == "" {
+			minus = "-"
+		}
+		return minus + f.number(p, letter, -v, width)
+	}
+	return f.number(p, letter, v, width)
+}
+
 func (f *DateTimeFormat) number(p *dateParts, letter byte, v, width int) string {
 	if system, ok := p.overrides[letter]; ok {
 		switch system {

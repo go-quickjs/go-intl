@@ -61,6 +61,9 @@ const (
 	// MarkerTimeData is CLDR's hour-cycle preferences, by region or by
 	// language and region.
 	MarkerTimeData Marker = "timedata"
+	// MarkerWeekData is CLDR's week conventions by region: the first day of
+	// the week, the days the first week of a year needs, the weekend.
+	MarkerWeekData Marker = "weekdata"
 	// MarkerNormalization is how characters come apart and go back together,
 	// which is Unicode's rather than any locale's.
 	MarkerNormalization Marker = "normalization"

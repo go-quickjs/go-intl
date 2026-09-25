@@ -25,6 +25,8 @@ const (
 	Gregory CalendarSystem = "gregory"
 	// Buddhist counts its years from 543 BC, and is what Thailand reckons in.
 	Buddhist CalendarSystem = "buddhist"
+	// Persian is the solar hijri calendar of Iran and Afghanistan.
+	Persian CalendarSystem = "persian"
 )
 
 // implemented lists the calendars this can reckon in. The rest of CLDR's are
@@ -32,6 +34,7 @@ const (
 var implemented = map[CalendarSystem]bool{
 	Gregory:  true,
 	Buddhist: true,
+	Persian:  true,
 }
 
 // calendarPreferences maps a region to the calendar it reckons in, as lines of
@@ -88,6 +91,15 @@ func chooseCalendar(src Source, loc Locale, asked string) (CalendarSystem, error
 	return Gregory, nil
 }
 
+// gregorianYearLength is the proleptic Gregorian year's length, as V8 sets
+// ICU's Gregorian calendar to reckon with no Julian changeover.
+func gregorianYearLength(year int) int {
+	if year%4 == 0 && (year%100 != 0 || year%400 == 0) {
+		return 366
+	}
+	return 365
+}
+
 // unimplementedCalendarError names a calendar CLDR has and this does not.
 type unimplementedCalendarError struct{ name string }
 
@@ -102,6 +114,21 @@ func (e *unimplementedCalendarError) Error() string {
 // 543 years earlier, so 2024 is 2567 and every date is in its single era.
 func reckon(t time.Time, system CalendarSystem) dateParts {
 	p := partsOf(t)
+	// The Gregorian calendar's own fields, which the Buddhist one keeps:
+	// its extended year is the Gregorian one, counting on through 0 for
+	// 1 BC.
+	p.extYear, p.dayOfYear, p.relatedYear = t.Year(), t.YearDay(), t.Year()
+	p.yearLength = gregorianYearLength
+	switch system {
+	case Persian:
+		p.year, p.month, p.day = persianDate(julianDay(t))
+		p.era = 0
+		p.extYear = p.year
+		p.dayOfYear = persianMonthStart[p.month-1] + p.day
+		p.relatedYear = p.year + 622
+		p.yearLength = persianYearLength
+		return p
+	}
 	if system == Buddhist {
 		// partsOf has already turned a year before the epoch into a positive
 		// count in the earlier era, which has to be undone before the offset.

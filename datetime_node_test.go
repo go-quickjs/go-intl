@@ -19,8 +19,8 @@ import (
 // meet yet, each with the reason. A case in one that starts to pass is
 // reported, so the entry goes.
 var dateTimeGaps = []struct {
-	zone, style string
-	why         string
+	zone, style, calendar string
+	why                   string
 }{
 	// Ireland's summer is its standard time and its winter a negative
 	// daylight saving in the tz database, which is how Go's copy has it.
@@ -28,14 +28,32 @@ var dateTimeGaps = []struct {
 	// everywhere else, so Node calls a January instant Greenwich Mean Time
 	// and go-intl Irish Standard Time. Taking offsets and seasons from ICU's
 	// zoneinfo64 rather than Go's tzdata is the fix; see PLAN.md.
-	{"Europe/Dublin", "short", "Go's tzdata has Ireland's negative DST"},
-	{"Europe/Dublin", "long", "Go's tzdata has Ireland's negative DST"},
+	{"Europe/Dublin", "short", "", "Go's tzdata has Ireland's negative DST"},
+	{"Europe/Dublin", "long", "", "Go's tzdata has Ireland's negative DST"},
+
+	// The calendars not implemented yet; see PLAN.md.
+	{"", "", "chinese", "the Chinese calendar"},
+	{"", "", "dangi", "the Dangi calendar"},
+	{"", "", "coptic", "the Coptic calendar"},
+	{"", "", "ethiopic", "the Ethiopic calendar"},
+	{"", "", "ethioaa", "the Ethiopic Amete Alem calendar"},
+	{"", "", "hebrew", "the Hebrew calendar"},
+	{"", "", "indian", "the Indian calendar"},
+	{"", "", "islamic", "the Islamic calendar"},
+	{"", "", "islamic-civil", "the civil Islamic calendar"},
+	{"", "", "islamic-rgsa", "the Saudi Islamic calendar"},
+	{"", "", "islamic-tbla", "the tabular Islamic calendar"},
+	{"", "", "islamic-umalqura", "the Umm al-Qura calendar"},
+	{"", "", "iso8601", "the ISO 8601 calendar"},
+	{"", "", "japanese", "the Japanese calendar"},
+	{"", "", "roc", "the ROC calendar"},
 }
 
 // dateTimeGap returns why a case is a known gap, if it is one.
 func dateTimeGap(opts map[string]any) (string, bool) {
 	for _, g := range dateTimeGaps {
-		if opts["timeZone"] == g.zone && opts["timeZoneName"] == g.style {
+		if g.calendar != "" && opts["calendar"] == g.calendar ||
+			g.calendar == "" && opts["timeZone"] == g.zone && opts["timeZoneName"] == g.style {
 			return g.why, true
 		}
 	}
@@ -54,6 +72,13 @@ func TestDateTimeFormatMatchesNode(t *testing.T) {
 // expectations are written by testdata/datetime_zones_node.js.
 func TestDateTimeZonesMatchNode(t *testing.T) {
 	testDateTimeAgainstNode(t, "testdata/datetime_zones_node.txt.gz")
+}
+
+// TestDateTimeCalendarsMatchNode holds every calendar Node supports to Node,
+// in forty locales. The expectations are written by
+// testdata/datetime_calendars_node.js.
+func TestDateTimeCalendarsMatchNode(t *testing.T) {
+	testDateTimeAgainstNode(t, "testdata/datetime_calendars_node.txt.gz")
 }
 
 // TestDateTimeFeaturesMatchNode holds dayPeriod, fractionalSecondDigits and
@@ -117,12 +142,16 @@ func testDateTimeAgainstNode(t *testing.T, file string) {
 			last, lastErr = intl.NewDateTimeFormat(loc, o)
 			lastKey = key
 		}
-		if lastErr != nil {
+		why, gap := dateTimeGap(opts)
+		if lastErr != nil && !gap {
 			differences = append(differences, name+": "+lastErr.Error())
 			continue
 		}
-		got := last.Format(time.UnixMilli(int64(when)))
-		if why, gap := dateTimeGap(opts); gap {
+		got := ""
+		if lastErr == nil {
+			got = last.Format(time.UnixMilli(int64(when)))
+		}
+		if gap {
 			// Some cases of a gap pass by chance -- a locale that writes
 			// the offset either way -- so a gap is over only when all do.
 			ran--

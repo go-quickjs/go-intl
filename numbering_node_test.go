@@ -18,12 +18,7 @@ import (
 // numberingGaps are cases these expectations hold go-intl to that it cannot
 // meet yet, for a reason that is not about numbering systems. Each is checked
 // all the same: one that starts to pass is reported, so the entry goes.
-var numberingGaps = map[string]string{
-	// Persian and Pashto reckon in the Persian calendar, which is not
-	// implemented; see PLAN.md, "What is left".
-	"DateTimeFormat fa": "the Persian calendar",
-	"DateTimeFormat ps": "the Persian calendar",
-}
+var numberingGaps = map[string]string{}
 
 // TestNumberingSystemsMatchNode holds every numeric numbering system, asked for
 // by keyword and by option in locales that do and do not have it, to what

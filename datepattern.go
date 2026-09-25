@@ -92,6 +92,15 @@ type dateParts struct {
 	// overrides are its numbering overrides, by letter.
 	hasMinute, hasSecond bool
 	overrides            map[byte]string
+	// extYear is the calendar's extended year, which counts on through the
+	// eras and is what the week-based year is reckoned from: the Gregorian
+	// year in the Buddhist calendar, whose years only relabel it. dayOfYear
+	// counts from one, and relatedYear is the Gregorian year the calendar's
+	// year mostly falls in.
+	extYear, dayOfYear, relatedYear int
+	// yearLength is the length in days of a year of the calendar, by
+	// extended year.
+	yearLength func(int) int
 	// hour12 and dayPeriod are worked out once rather than per field.
 	hour12    int
 	afternoon bool
@@ -177,11 +186,21 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 		}
 		return cal.Era(width, p.era)
 
-	case 'y', 'Y', 'u', 'r':
+	case 'y':
 		if fd.count == 2 {
 			return f.number(p, fd.letter, p.year%100, 2)
 		}
 		return f.number(p, fd.letter, p.year, fd.count)
+	case 'Y':
+		year := f.weekYear(p)
+		if fd.count == 2 {
+			return f.number(p, fd.letter, mod(year, 100), 2)
+		}
+		return f.signedNumber(p, fd.letter, year, fd.count)
+	case 'u':
+		return f.signedNumber(p, fd.letter, p.extYear, fd.count)
+	case 'r':
+		return f.signedNumber(p, fd.letter, p.relatedYear, fd.count)
 
 	case 'M', 'L':
 		context := datedata.Format

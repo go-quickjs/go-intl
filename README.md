@@ -44,7 +44,7 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 | Service | State |
 |---|---|
 | `NumberFormat` | Complete: every style, notation, rounding option and numbering system, exact decimal input (`ParseDecimal`, `FormatDecimal`), ranges |
-| `DateTimeFormat` | Complete for the Gregorian and Buddhist calendars: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges. The other 14 calendars are to come |
+| `DateTimeFormat` | Complete for the Gregorian, Buddhist and Persian calendars: styles, fields, hour cycles, day periods, fractional seconds, every `timeZoneName` style, offset time zones, ranges. The other 14 calendars are to come |
 | `PluralRules` | Complete, with `SelectRange` |
 | `Collator` | Complete but for Korean `searchjl`: every other tailoring, sensitivity, numeric ordering, case order |
 | `ListFormat`, `RelativeTimeFormat`, `DisplayNames` | Complete |
@@ -59,12 +59,12 @@ The answers are checked, not assumed:
 
 - **A golden corpus** of 7,949 cases taken from Node, run by `go test`.
 - **Sweeps against Node** over every locale Node supports, recorded under
-  [`testdata`](testdata) by the scripts beside them: about 466,000 cases across
-  dates, date ranges, zone names, numbering systems, number ranges, exact
-  decimals, plural ranges and selection, and collation orders. Every one
-  matches except 358, in three named gaps: Persian-calendar dates (the
-  calendar is not implemented yet), Dublin's zone names (Go's time-zone data
-  differs from ICU's for Ireland) and Korean `searchjl` collation. A gap that
+  [`testdata`](testdata) by the scripts beside them: about 515,000 cases across
+  dates, date ranges, calendars, zone names, numbering systems, number
+  ranges, exact decimals, plural ranges and selection, and collation orders.
+  Every one matches except the named gaps: the calendars not yet
+  implemented, Dublin's zone names (Go's time-zone data differs from ICU's
+  for Ireland) and Korean `searchjl` collation. A gap that
   starts passing fails its test, so the entry gets removed.
 
 Where Node and ECMA-402 disagree, the difference is a named entry in

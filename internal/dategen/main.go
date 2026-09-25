@@ -43,6 +43,9 @@ var calendarPreferenceJSON []byte
 //go:embed dayPeriods.json
 var dayPeriodsJSON []byte
 
+//go:embed weekData.json
+var weekDataJSON []byte
+
 //go:embed timeData.json
 var timeDataJSON []byte
 
@@ -65,6 +68,7 @@ var fieldNames = [datedata.Fields]string{
 // is the name ECMA-402 uses and the one stored.
 var extras = []struct{ cldr, bcp47 string }{
 	{"buddhist", "buddhist"},
+	{"persian", "persian"},
 }
 
 type file struct {
@@ -219,6 +223,13 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	if err != nil {
 		return err
 	}
+	week, err := weekData()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "weekdata.bin"), week, 0o644); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join("data", "timedata.bin"), hours, 0o644); err != nil {
 		return err
 	}
@@ -339,6 +350,53 @@ func timeData() ([]byte, error) {
 			strings.Join(strings.Fields(d.Allowed), ","))
 	}
 	return []byte(b.String()), nil
+}
+
+// weekData writes CLDR's week conventions, which are a property of a
+// region: one line each, the field, the region and the value, sorted. The
+// days are numbered from Sunday, zero. "001" is the world's.
+func weekData() ([]byte, error) {
+	var res struct {
+		Supplemental struct {
+			WeekData struct {
+				MinDays      map[string]string `json:"minDays"`
+				FirstDay     map[string]string `json:"firstDay"`
+				WeekendStart map[string]string `json:"weekendStart"`
+				WeekendEnd   map[string]string `json:"weekendEnd"`
+			} `json:"weekData"`
+		} `json:"supplemental"`
+	}
+	if err := json.Unmarshal(weekDataJSON, &res); err != nil {
+		return nil, fmt.Errorf("weekData.json: %w", err)
+	}
+	days := map[string]int{"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
+	var lines []string
+	w := res.Supplemental.WeekData
+	for _, f := range []struct {
+		name   string
+		values map[string]string
+		isDay  bool
+	}{
+		{"firstDay", w.FirstDay, true}, {"minDays", w.MinDays, false},
+		{"weekendStart", w.WeekendStart, true}, {"weekendEnd", w.WeekendEnd, true},
+	} {
+		for region, v := range f.values {
+			// CLDR adds variants such as "GB-alt-variant", which ICU leaves out.
+			if strings.Contains(region, "-") {
+				continue
+			}
+			if f.isDay {
+				d, ok := days[v]
+				if !ok {
+					return nil, fmt.Errorf("weekData.json: %s %s is %q", f.name, region, v)
+				}
+				v = strconv.Itoa(d)
+			}
+			lines = append(lines, f.name+" "+region+" "+v)
+		}
+	}
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
 // periodRuleSets are CLDR's day-period rules, read once.

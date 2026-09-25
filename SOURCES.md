@@ -43,13 +43,14 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 
 | Package | Version | sha256 | Used by |
 |---|---|---|---|
-| `cldr-core` | 48.2.0 | `5310e0c7a06c1feb83dc8e54c8584bbe0b9c2ea8320172a18d541986b124585d` | `localegen`, `numbergen`, `pluralgen` (plurals, ordinals and plural ranges, vendored), `dategen` |
+| `cldr-core` | 48.2.0 | `5310e0c7a06c1feb83dc8e54c8584bbe0b9c2ea8320172a18d541986b124585d` | `localegen`, `numbergen`, `pluralgen` (plurals, ordinals and plural ranges, vendored), `dategen` (time data and week data, vendored) |
 | `cldr-numbers-full` | 48.2.0 | `2d17a1453c559a62112caeed52e0bcfe3cb8539c99d239ae7b7ed4d0827679d9` | `numbergen` |
 | `cldr-misc-full` | 48.2.0 | `c6ba8384d7ea8701cf86935db0461379231ddd970cc41c249f4a33b9857ded3c` | `listgen` |
 | `cldr-units-full` | 48.2.0 | `754d55f183570c53029a77493302f432fb3e905df35a715f9cb022e2ebcb093c` | `unitgen` |
 | `cldr-dates-full` | 48.2.0 | `0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430` | `reltimegen`, `namegen`, `dategen` |
 | `cldr-localenames-full` | 48.2.0 | `7f2ac7fd3b5d90f56ad127f9ed5ae67b58b3e556818f55530b9f47bb81bcde57` | `namegen` |
 | `cldr-cal-buddhist-full` | 48.2.0 | `3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff` | `dategen` |
+| `cldr-cal-persian-full` | 48.2.0 | `937af05a2e84a3a38e9fd6880888c622ff14db6577fc254d71a91d2e0442f41f` | `dategen` |
 
 Each calendar beyond the Gregorian one is its own CLDR package, so the
 remaining fourteen arrive as fourteen more rows here rather than as a change
