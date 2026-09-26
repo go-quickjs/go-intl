@@ -112,18 +112,120 @@ func (z *TimeZone) PreviousTransition(ms int64) (ZoneTransition, bool) {
 // /etc/localtime links to, then the zone file it is a copy of. A name ICU
 // does not know is a zone of the host's standard offset, and no name at all
 // is Etc/Unknown, which is UTC.
+//
+// ICU on Windows does not read TZ, and Node sets ICU's default zone from
+// it there itself, when it starts: a TZ that is not empty is the zone
+// createTimeZone makes of it, as Node's is.
 func HostTimeZone(src Source) *TimeZone {
+	if tz, ok := nodeTZ(); ok {
+		return createTimeZone(src, tz)
+	}
 	id, raw := hostZone(src)
 	return detectHostZone(src, id, raw, time.Now().UnixMilli())
+}
+
+// unknownZone is Etc/Unknown, which is UTC.
+func unknownZone() *TimeZone {
+	unknown := fixedZone(0)
+	unknown.name, unknown.id = "Etc/Unknown", "Etc/Unknown"
+	return &TimeZone{z: unknown, id: "Etc/Unknown", canonical: "Etc/Unknown"}
+}
+
+// createTimeZone is ICU's TimeZone::createTimeZone: the zone of a name
+// exactly as ICU spells it, else of a custom ID, "GMT+05:30", else
+// Etc/Unknown.
+func createTimeZone(src Source, id string) *TimeZone {
+	if z, err := loadTimeZone(src, id); err == nil && z.name == id {
+		return &TimeZone{z: z, id: z.name, canonical: z.resolvedID()}
+	}
+	if seconds, custom, ok := parseCustomID(id); ok {
+		// V8 reports a custom zone as its offset, "+05:30" for
+		// "GMT+05:30" (Intl::TimeZoneIdToString).
+		canonical := strings.TrimPrefix(custom, "GMT")
+		if canonical == "" {
+			canonical = "+00:00"
+		}
+		z := fixedZone(seconds)
+		z.name = custom
+		return &TimeZone{z: z, id: custom, canonical: canonical}
+	}
+	return unknownZone()
+}
+
+// parseCustomID is ICU's TimeZone::parseCustomID and formatCustomID: "GMT"
+// in any case, a sign, and the hours, minutes and seconds as "H", "HH",
+// "Hmm", "HHmm", "Hmmss", "HHmmss", "H:mm", "HH:mm", "H:mm:ss" or
+// "HH:mm:ss", at most 23:59:59. It returns the offset in seconds and the
+// ID as ICU writes it, "GMT+05:30", or "GMT" for none.
+func parseCustomID(id string) (int, string, bool) {
+	if len(id) < 4 || !strings.EqualFold(id[:3], "GMT") || id[3] != '+' && id[3] != '-' {
+		return 0, "", false
+	}
+	sign := 1
+	if id[3] == '-' {
+		sign = -1
+	}
+	rest := id[4:]
+	digits := func(s string) (int, int) {
+		n, i := 0, 0
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			n = n*10 + int(s[i]-'0')
+			i++
+		}
+		return n, i
+	}
+	hour, n := digits(rest)
+	var min, sec int
+	switch {
+	case n == len(rest):
+		switch n {
+		case 1, 2:
+		case 3, 4:
+			hour, min = hour/100, hour%100
+		case 5, 6:
+			hour, min, sec = hour/10000, hour/100%100, hour%100
+		default:
+			return 0, "", false
+		}
+	default:
+		if n < 1 || n > 2 || rest[n] != ':' {
+			return 0, "", false
+		}
+		rest = rest[n+1:]
+		if min, n = digits(rest); n != 2 {
+			return 0, "", false
+		}
+		if rest = rest[n:]; rest != "" {
+			if rest[0] != ':' {
+				return 0, "", false
+			}
+			if sec, n = digits(rest[1:]); n != 2 || n+1 != len(rest) {
+				return 0, "", false
+			}
+		}
+	}
+	if hour > 23 || min > 59 || sec > 59 {
+		return 0, "", false
+	}
+	custom := "GMT"
+	if hour|min|sec != 0 {
+		c := byte('+')
+		if sign < 0 {
+			c = '-'
+		}
+		custom = fmt.Sprintf("GMT%c%02d:%02d", c, hour, min)
+		if sec != 0 {
+			custom += fmt.Sprintf(":%02d", sec)
+		}
+	}
+	return sign * ((hour*60+min)*60 + sec), custom, true
 }
 
 // detectHostZone is the rest of detectHostTimeZone: the zone the host's
 // name and raw offset, in seconds east, make at an instant.
 func detectHostZone(src Source, id string, raw int, now int64) *TimeZone {
 	if id == "" {
-		unknown := fixedZone(0)
-		unknown.name, unknown.id = "Etc/Unknown", "Etc/Unknown"
-		return &TimeZone{z: unknown, id: "Etc/Unknown", canonical: "Etc/Unknown"}
+		return unknownZone()
 	}
 	// createSystemTimeZone takes a name only as ICU spells it.
 	z, err := loadTimeZone(src, id)

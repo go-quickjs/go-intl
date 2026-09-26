@@ -4,13 +4,21 @@ package intl
 
 import (
 	"fmt"
+	"os"
 	"syscall"
 	"unsafe"
 )
 
 // The zone a Windows machine is set to, as ICU's uprv_detectWindowsTimeZone
-// (wintz.cpp) finds it, which is what Node reports there. TZ is not
-// consulted: ICU on Windows does not read it.
+// (wintz.cpp) finds it, which is what Node reports there where TZ is not
+// set. ICU on Windows does not read TZ; Node does (see nodeTZ).
+
+// nodeTZ is TZ, where it is not empty, which Node on Windows sets ICU's
+// default zone from when it starts (InitializeOncePerProcess).
+func nodeTZ() (string, bool) {
+	tz := os.Getenv("TZ")
+	return tz, tz != ""
+}
 
 var (
 	kernel32                          = syscall.NewLazyDLL("kernel32.dll")

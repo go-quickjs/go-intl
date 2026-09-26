@@ -24,6 +24,10 @@ const (
 	tzZoneInfo = "/usr/share/zoneinfo/"
 )
 
+// nodeTZ is Node's reading of TZ, which it does itself only on Windows;
+// here ICU reads it (hostZoneName).
+func nodeTZ() (string, bool) { return "", false }
+
 // hostZone is uprv_tzname(0), and the host's standard offset, in seconds
 // east, which is the C library's timezone.
 func hostZone(src Source) (string, int) {
