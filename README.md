@@ -7,8 +7,9 @@ canonicalization, for every locale ICU has data for. It is built to give the
 same answers as ICU 78.3 as Node 26 ships it, and to be usable by any Go
 program, not only a JavaScript engine.
 
-It is the base of `Intl` in the [go-quickjs](https://github.com/go-quickjs/go-quickjs)
-engine, which is moving onto it a service at a time. There is no cgo, no
+It is the base of `Intl` and `Date` in the
+[go-quickjs](https://github.com/go-quickjs/go-quickjs) engine, whose Temporal
+is moving onto its `temporal` package. There is no cgo, no
 WebAssembly and no C compiler: it builds wherever Go does.
 
 > **Status: pre-release.** Every service is done and held to Node, but the API
