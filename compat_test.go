@@ -212,3 +212,33 @@ func TestCurrencyNames(t *testing.T) {
 		}
 	}
 }
+
+// Numeric minutes after numeric hours that are left out: a group of their
+// own, as test262's digital-style-with-hours-display-auto-with-zero-hour
+// requires of the standard, or joined to what came before, as Node writes.
+func TestDurationSeparator(t *testing.T) {
+	loc, _ := intl.ParseLocale("en")
+	for _, c := range []struct {
+		compat intl.Compat
+		want   [3]string
+	}{
+		{intl.Standard, [3]string{"1 day, 01:02", "-1 day, 01:02", "01:02"}},
+		{intl.DurationSeparator, [3]string{"1 day:01:02", "-1 day:01:02", "01:02"}},
+	} {
+		opts := intl.DurationFormatOptions{Style: intl.DurationDigital, Compat: c.compat}
+		opts.Display[intl.DurationHours] = intl.DurationDisplayAuto
+		f, err := intl.NewDurationFormat(loc, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, d := range []intl.Duration{
+			{intl.DurationDays: 1, intl.DurationMinutes: 1, intl.DurationSeconds: 2},
+			{intl.DurationDays: -1, intl.DurationMinutes: -1, intl.DurationSeconds: -2},
+			{intl.DurationMinutes: 1, intl.DurationSeconds: 2},
+		} {
+			if got, err := f.Format(d); err != nil || got != c.want[i] {
+				t.Errorf("%v %v: %q, %v; want %q", c.compat, d, got, err, c.want[i])
+			}
+		}
+	}
+}

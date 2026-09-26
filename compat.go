@@ -13,7 +13,9 @@ import "strings"
 // The choice is made divergence by divergence, because a host may want Node
 // in most places and the standard in a few: go-quickjs answers as Node does
 // but for the Japanese twelve-hour clock, the Islamic eras, Temporal's
-// formats, the keyword value "yes" and the currencies DisplayNames names. Standard and NodeICU are the two ends.
+// formats, the keyword value "yes", the currencies DisplayNames names, a
+// duration's fraction of a second and the separator a digital duration's
+// minutes take. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -54,6 +56,9 @@ const (
 	// CurrencyNames names every currency CLDR has a name for, where the
 	// standard names only those Intl.supportedValuesOf lists.
 	CurrencyNames
+	// DurationSeparator joins numeric minutes to whatever came before them
+	// by the time separator, as V8 does, when the hours were left out.
+	DurationSeparator
 )
 
 const (
@@ -62,7 +67,8 @@ const (
 	// NodeICU reproduces Node's and ICU4C's observable behavior in every
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
-		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames
+		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
+		DurationSeparator
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -173,6 +179,16 @@ var Divergences = []Divergence{
 			"(test262's currencies-accepted-by-DisplayNames)",
 		Node: "V8 lists ICU's current currencies but names every one CLDR does: " +
 			"\"Andorran Peseta\"",
+	},
+	{
+		Name: "DurationSeparator", Flag: DurationSeparator,
+		Area: "DurationFormat",
+		What: "numeric minutes when numeric hours are left out",
+		Standard: "the proposal's PartitionDurationFormatPattern joins the minutes to the hours " +
+			"only where the hours were written, so the minutes start a group of their own: " +
+			"\"1 day, 01:02\" (test262's digital-style-with-hours-display-auto-with-zero-hour)",
+		Node: "V8 joins them to whatever was written last by the time separator: " +
+			"\"1 day:01:02\"",
 	},
 }
 

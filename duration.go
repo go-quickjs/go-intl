@@ -394,28 +394,34 @@ func (f *DurationFormat) FormatToParts(d Duration) ([]DurationPart, error) {
 	}
 	// The hours, minutes and seconds, as OutputLongShortNarrowNumericOr2Digit.
 	hoursNumeric := f.styles[DurationHours] == styleNumeric || f.styles[DurationHours] == styleTwoDigit
-	clock := func(i int, maybeJoin, required bool) {
+	clock := func(i int, maybeJoin, required bool) bool {
 		if d[i] == 0 && auto(i) && !required {
-			return
+			return false
 		}
 		if f.styles[i] == styleTwoDigit {
 			w.write(i, DecimalFromFloat(d[i]+0), maybeJoin, true)
-			return
+			return true
 		}
 		// A zero the display would leave out stays out, whatever was
 		// required.
 		if d[i] == 0 && auto(i) {
-			return
+			return false
 		}
 		w.write(i, DecimalFromFloat(d[i]+0), maybeJoin && f.styles[i] == styleNumeric, true)
+		return true
 	}
-	clock(DurationHours, false, false)
+	hoursWritten := clock(DurationHours, false, false)
 	// DisplayRequired: numeric hours that are written, and a second or less
 	// after them.
 	required := hoursNumeric && (!auto(DurationHours) || d[DurationHours] != 0) &&
 		(f.display[DurationSeconds] == DurationDisplayAlways || d[DurationSeconds] != 0 ||
 			d[DurationMilliseconds] != 0 || d[DurationMicroseconds] != 0 || d[DurationNanoseconds] != 0)
-	clock(DurationMinutes, hoursNumeric, required)
+	// The minutes join the hours by the time separator. V8 joins them to
+	// whatever was written last when the hours are numeric but were left
+	// out, "1 day:01:02" (DurationSeparator); the proposal starts a new
+	// group, "1 day, 01:02".
+	joinMinutes := hoursNumeric && (hoursWritten || f.opts.Compat.Has(DurationSeparator))
+	clock(DurationMinutes, joinMinutes, required)
 
 	for i := DurationSeconds; i < DurationUnits; i++ {
 		if f.takesFraction(i) {
