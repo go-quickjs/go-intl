@@ -16,7 +16,7 @@ import (
 // TestLocaleInfoMatchesNode replays testdata/localeinfo_node.js: what
 // Intl.Locale says of 690 locales, part by part.
 func TestLocaleInfoMatchesNode(t *testing.T) {
-	info, err := intl.NewLocaleInfo(intl.Embedded)
+	info, err := intl.NewLocaleInfo(intl.Embedded, intl.LocaleInfoOptions{Compat: intl.NodeICU})
 	if err != nil {
 		t.Fatal(err)
 	}

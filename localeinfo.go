@@ -16,15 +16,39 @@ import (
 type LocaleInfo struct {
 	src    Source
 	likely *Fallbacker
+	opts   LocaleInfoOptions
+}
+
+// LocaleInfoOptions choose how a LocaleInfo answers.
+type LocaleInfoOptions struct {
+	Compat Compat
 }
 
 // NewLocaleInfo reads what it needs from a source.
-func NewLocaleInfo(src Source) (*LocaleInfo, error) {
+func NewLocaleInfo(src Source, opts LocaleInfoOptions) (*LocaleInfo, error) {
 	fb, err := NewFallbacker(src)
 	if err != nil {
 		return nil, err
 	}
-	return &LocaleInfo{src: src, likely: fb}, nil
+	return &LocaleInfo{src: src, likely: fb, opts: opts}, nil
+}
+
+// keyword is the value of a Unicode extension keyword a getter answers
+// with, where the locale has one: its type, and for a key with none,
+// which stands for "true", "true", as the locale's getters answer. ICU
+// answers "yes", its own spelling of it (YesValues).
+func (i *LocaleInfo) keyword(l Locale, key string) ([]string, bool) {
+	v, ok := l.Keyword(key)
+	if !ok {
+		return nil, false
+	}
+	if v == "" {
+		v = "true"
+		if i.opts.Compat.Has(YesValues) {
+			v = "yes"
+		}
+	}
+	return []string{v}, true
 }
 
 // withBase is the locale with another language, script and region, its
@@ -84,8 +108,8 @@ func (i *LocaleInfo) supplementalRegion(l Locale, infer bool) string {
 // the region reckons in, most preferred first (Calendar::
 // getKeywordValuesForLocale, commonly used).
 func (i *LocaleInfo) Calendars(l Locale) []string {
-	if ca, ok := l.Keyword("ca"); ok && ca != "" {
-		return []string{ca}
+	if ca, ok := i.keyword(l, "ca"); ok {
+		return ca
 	}
 	b, err := i.src.Open(MarkerCalendarPrefs, DataLocale{})
 	if err != nil {
@@ -105,8 +129,8 @@ func (i *LocaleInfo) Calendars(l Locale) []string {
 // collation the collation tree has along the locale's chain, but "standard"
 // and "search", sorted (Collator::getKeywordValuesForLocale).
 func (i *LocaleInfo) Collations(l Locale) ([]string, error) {
-	if co, ok := l.Keyword("co"); ok && co != "" {
-		return []string{co}, nil
+	if co, ok := i.keyword(l, "co"); ok {
+		return co, nil
 	}
 	chain, err := collationChain(i.src, l.Data())
 	if err != nil {
@@ -148,8 +172,8 @@ func (i *LocaleInfo) Collations(l Locale) ([]string, error) {
 // drops "-u-rg-" before building one, and Node's formats 12-hour time for
 // "en-US-u-rg-dezzzz", whose Intl.Locale says h23.
 func (i *LocaleInfo) HourCycles(l Locale) ([]string, error) {
-	if hc, ok := l.Keyword("hc"); ok && hc != "" {
-		return []string{hc}, nil
+	if hc, ok := i.keyword(l, "hc"); ok {
+		return hc, nil
 	}
 	hourChar, _, err := allowedHourFormats(i.src, l)
 	if err != nil {
@@ -163,8 +187,8 @@ func (i *LocaleInfo) HourCycles(l Locale) ([]string, error) {
 // NumberingSystems is getNumberingSystems: the "-u-nu-" keyword's system,
 // else the locale's default.
 func (i *LocaleInfo) NumberingSystems(l Locale) ([]string, error) {
-	if nu, ok := l.Keyword("nu"); ok && nu != "" {
-		return []string{nu}, nil
+	if nu, ok := i.keyword(l, "nu"); ok {
+		return nu, nil
 	}
 	data, err := loadNumbers(i.src, l)
 	if err != nil {

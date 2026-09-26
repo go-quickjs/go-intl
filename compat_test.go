@@ -178,6 +178,42 @@ func TestYesValues(t *testing.T) {
 			}
 		}
 	}
+
+	// A key with no value, which stands for "true": Intl.Locale's
+	// getCalendars and the like answer "true", as its getters do, and Node
+	// answers ICU's "yes".
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "true"},
+		{intl.YesValues, "yes"},
+	} {
+		info, err := intl.NewLocaleInfo(intl.Embedded, intl.LocaleInfoOptions{Compat: c.compat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"ca", "co", "hc", "nu"} {
+			l, err := intl.ParseLocale("en-u-" + key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			switch key {
+			case "ca":
+				got = info.Calendars(l)
+			case "co":
+				got, err = info.Collations(l)
+			case "hc":
+				got, err = info.HourCycles(l)
+			case "nu":
+				got, err = info.NumberingSystems(l)
+			}
+			if err != nil || len(got) != 1 || got[0] != c.want {
+				t.Errorf("%v: en-u-%s answers %q, %v, want [%q]", c.compat, key, got, err, c.want)
+			}
+		}
+	}
 }
 
 // A currency Intl.supportedValuesOf does not list: named only on Node's

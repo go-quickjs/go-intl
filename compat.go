@@ -55,7 +55,9 @@ const (
 	// count an era as a field asked for and keep no hour cycle.
 	TemporalFormats
 	// YesValues leaves "yes" out of any Unicode extension keyword, as ICU
-	// does, rather than only where it stands for "true".
+	// does, rather than only where it stands for "true", and answers "yes"
+	// for a keyword with no value where Intl.Locale's getCalendars and the
+	// like give the keyword's value.
 	YesValues
 	// CurrencyNames names every currency CLDR has a name for, where the
 	// standard names only those Intl.supportedValuesOf lists.
@@ -195,7 +197,9 @@ var Divergences = []Divergence{
 			"only for the keys whose BCP 47 data has that alias -- kb, kc, kh, kk and kn -- " +
 			"so \"und-u-ka-yes\" stays as it is",
 		Node: "ICU takes \"yes\" for any key as \"true\" and leaves it out: " +
-			"\"und-u-ka-yes\" is \"und-u-ka\"",
+			"\"und-u-ka-yes\" is \"und-u-ka\"; and where a key has no value, which stands " +
+			"for \"true\", getCalendars and the like answer ICU's own spelling of it: " +
+			"\"en-u-ca\" has [\"yes\"], where its calendar is \"true\"",
 	},
 	{
 		Name: "CurrencyNames", Flag: CurrencyNames,
