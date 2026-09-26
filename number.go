@@ -1001,3 +1001,8 @@ func currencyDigits(src Source, code string) (int, error) {
 	}
 	return 2, nil
 }
+
+// CurrencyDigits is ECMA-402's CurrencyDigits: how many decimals a currency
+// is written with by default, from ISO 4217 as CLDR has it, two for a code it
+// does not list.
+func CurrencyDigits(src Source, code string) (int, error) { return currencyDigits(src, code) }

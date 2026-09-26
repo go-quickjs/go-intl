@@ -237,3 +237,11 @@ func TestCompactGroupingNeedsTwoDigits(t *testing.T) {
 		t.Errorf("ja compact = %q, want %q", got, want)
 	}
 }
+
+func TestCurrencyDigits(t *testing.T) {
+	for code, want := range map[string]int{"USD": 2, "jpy": 0, "KWD": 3, "XXX": 2, "ZZZ": 2} {
+		if got, err := intl.CurrencyDigits(intl.Embedded, code); err != nil || got != want {
+			t.Errorf("%s: %d, %v; want %d", code, got, err, want)
+		}
+	}
+}
