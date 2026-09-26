@@ -10,6 +10,10 @@ func (c *Calendar) isISO() bool { return c.id == "iso8601" }
 // hasEras is Calendar::calendar_has_eras.
 func (c *Calendar) hasEras() bool { return c.id != "iso8601" && c.id != "chinese" && c.id != "dangi" }
 
+// HasEras reports whether the calendar has eras, whose era and eraYear
+// fields an engine reads from a property bag (PrepareCalendarFields).
+func (c *Calendar) HasEras() bool { return c.hasEras() }
+
 // Equal is whether two calendars are the same, by identifier.
 func (c *Calendar) Equal(o *Calendar) bool { return c.id == o.id }
 

@@ -58,6 +58,10 @@ func (u Unit) isCalendarUnit() bool { return u == Year || u == Month || u == Wee
 func (u Unit) isDateUnit() bool     { return u >= Day }
 func (u Unit) isTimeUnit() bool     { return u >= Nanosecond && u <= Hour }
 
+// IsDateUnit reports whether the unit is a day or longer, which an engine
+// asks of a unit it validates (ValidateTemporalUnitValue).
+func (u Unit) IsDateUnit() bool { return u.isDateUnit() }
+
 // nanoseconds is a time unit's length, 0 for the calendar units.
 func (u Unit) nanoseconds() int64 {
 	switch u {

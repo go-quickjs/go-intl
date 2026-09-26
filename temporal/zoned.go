@@ -19,6 +19,13 @@ func NewZonedDateTime(ns int128, tz TimeZone, cal *Calendar) (ZonedDateTime, err
 	return newZonedDateTimeWithOffset(i, tz, cal)
 }
 
+// NewZonedDateTimeFromInstant is ZonedDateTime::try_new_with_provider for
+// an engine that holds the nanoseconds as an Instant, which it has checked
+// the range of in making it.
+func NewZonedDateTimeFromInstant(i Instant, tz TimeZone, cal *Calendar) (ZonedDateTime, error) {
+	return newZonedDateTimeWithOffset(i, tz, cal)
+}
+
 // newZonedDateTimeWithOffset is new_unchecked_with_provider.
 func newZonedDateTimeWithOffset(i Instant, tz TimeZone, cal *Calendar) (ZonedDateTime, error) {
 	off, err := tz.offsetNanosFor(i.ns)
