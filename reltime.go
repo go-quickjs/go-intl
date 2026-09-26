@@ -42,13 +42,6 @@ func ParseRelativeTimeUnit(name string) (RelativeTimeUnit, bool) {
 	return 0, false
 }
 
-func (u RelativeTimeUnit) String() string {
-	if int(u) < len(reltimedata.Names) {
-		return reltimedata.Names[u]
-	}
-	return "unit"
-}
-
 // RelativeTimeNumeric is whether a wording may stand in for the count.
 type RelativeTimeNumeric int
 

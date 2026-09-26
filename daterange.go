@@ -891,16 +891,6 @@ const (
 	SourceEndRange
 )
 
-func (s RangeSource) String() string {
-	switch s {
-	case SourceStartRange:
-		return "startRange"
-	case SourceEndRange:
-		return "endRange"
-	}
-	return "shared"
-}
-
 // A RangePart is one piece of a formatted range.
 type RangePart struct {
 	Kind   PartKind

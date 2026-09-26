@@ -30,34 +30,6 @@ func ParseUnit(s string) (Unit, bool) {
 	return u, ok
 }
 
-func (u Unit) String() string {
-	switch u {
-	case UnitAuto:
-		return "auto"
-	case Nanosecond:
-		return "nanosecond"
-	case Microsecond:
-		return "microsecond"
-	case Millisecond:
-		return "millisecond"
-	case Second:
-		return "second"
-	case Minute:
-		return "minute"
-	case Hour:
-		return "hour"
-	case Day:
-		return "day"
-	case Week:
-		return "week"
-	case Month:
-		return "month"
-	case Year:
-		return "year"
-	}
-	return "unset"
-}
-
 func (u Unit) isCalendarUnit() bool { return u == Year || u == Month || u == Week }
 func (u Unit) isDateUnit() bool     { return u >= Day }
 func (u Unit) isTimeUnit() bool     { return u >= Nanosecond && u <= Hour }

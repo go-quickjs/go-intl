@@ -66,28 +66,6 @@ const (
 	CaseFirstFalse
 )
 
-func (c CaseFirst) String() string {
-	switch c {
-	case CaseFirstUpper:
-		return "upper"
-	case CaseFirstLower:
-		return "lower"
-	}
-	return "false"
-}
-
-func (s Sensitivity) String() string {
-	switch s {
-	case SensitivityBase:
-		return "base"
-	case SensitivityAccent:
-		return "accent"
-	case SensitivityCase:
-		return "case"
-	}
-	return "variant"
-}
-
 // CollatorOptions is Intl.Collator's option bag.
 type CollatorOptions struct {
 	Usage       CollatorUsage
@@ -536,12 +514,4 @@ func (c *Collator) sortElements(s string) []uint64 {
 		c.shiftVariables(ces)
 	}
 	return ces
-}
-
-// collationUsageName is for printing.
-func (u CollatorUsage) String() string {
-	if u == UsageSearch {
-		return "search"
-	}
-	return "sort"
 }

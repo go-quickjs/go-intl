@@ -127,7 +127,10 @@ nf, err := intl.NewNumberFormatFrom(src, loc, opts)
 - A formatter is immutable after construction and safe for concurrent use.
   There is no package-level mutable state and no global cache.
 - Constructors return an `error` where ECMA-402 throws.
-- Options are structs whose zero value is ECMA-402's default.
+- Options are structs whose zero value is ECMA-402's default, and every
+  option's value prints as JavaScript spells it: `intl.Width2Digit` is
+  "2-digit", `intl.HalfExpand` "halfExpand", an option not given
+  "undefined".
 
 [DESIGN.md](DESIGN.md) has the architecture and why it is shaped this way.
 [AGENTS.md](AGENTS.md) has the working rules for changing it.

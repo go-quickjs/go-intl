@@ -20,16 +20,6 @@ const (
 	GranularitySentence
 )
 
-func (g Granularity) String() string {
-	switch g {
-	case GranularityWord:
-		return "word"
-	case GranularitySentence:
-		return "sentence"
-	}
-	return "grapheme"
-}
-
 // SegmenterOptions are Intl.Segmenter's options.
 type SegmenterOptions struct {
 	Granularity Granularity
