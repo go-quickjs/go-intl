@@ -24,11 +24,11 @@ func TestSupportedValuesMatchNode(t *testing.T) {
 		t.Fatalf("the expectations come from ICU %v, not 78.3", want["icu"])
 	}
 	lists := map[string]func() ([]string, error){
-		"calendar":        func() ([]string, error) { return intl.Calendars(), nil },
+		"calendar":        func() ([]string, error) { return intl.Calendars(intl.NodeICU), nil },
 		"collation":       intl.Collations,
 		"currency":        intl.Currencies,
 		"numberingSystem": intl.NumberingSystems,
-		"timeZone":        intl.TimeZones,
+		"timeZone":        func() ([]string, error) { return intl.TimeZones(intl.NodeICU) },
 		"unit":            func() ([]string, error) { return intl.SanctionedUnits(), nil },
 	}
 	for key, list := range lists {

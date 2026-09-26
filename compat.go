@@ -19,8 +19,8 @@ import "strings"
 // deprecated Islamic calendars, when a resolved locale keeps its hour cycle,
 // the zone a plain Temporal value is read in, the time zone names a
 // DateTimeFormat takes and reports, a coptic year before the era, the days
-// of the Chinese and Korean calendars, and the region of a locale's hour
-// cycles. Standard and NodeICU are the two ends.
+// of the Chinese and Korean calendars, the region of a locale's hour
+// cycles, and the time zones Intl.supportedValuesOf lists. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -70,7 +70,8 @@ const (
 	// reports from its pattern's quoted literals as well as its fields.
 	LiteralFields
 	// IslamicFallback keeps the calendars islamic and islamic-rgsa for a
-	// DateTimeFormat, where the standard settles them on islamic-civil.
+	// DateTimeFormat, where the standard settles them on islamic-civil,
+	// and lists them among the calendars.
 	IslamicFallback
 	// HourCycleKeyword keeps a DateTimeFormat's -u-hc keyword where
 	// hour12 or hourCycle was given only if the hour cycle it settled on is
@@ -91,6 +92,9 @@ const (
 	// SubdivisionHourCycles passes over a locale's "-u-sd-" subdivision
 	// for the region of Intl.Locale's getHourCycles.
 	SubdivisionHourCycles
+	// RegionZones lists only the time zones in a region, where the
+	// standard lists UTC and Etc/GMT's as well.
+	RegionZones
 )
 
 const (
@@ -101,7 +105,7 @@ const (
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
-		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles
+		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -241,9 +245,10 @@ var Divergences = []Divergence{
 		What: "the calendars islamic and islamic-rgsa",
 		Standard: "CreateDateTimeFormat settles either on a calendar AvailableCalendars lists, " +
 			"implementation-defined; go-intl takes islamic-civil, and writes in it " +
-			"(test262's constructor-options-calendar-islamic-fallback)",
+			"(test262's constructor-options-calendar-islamic-fallback), and Intl.supportedValuesOf " +
+			"lists neither (calendars-accepted-by-DateTimeFormat)",
 		Node: "V8 keeps them, and ICU writes in its astronomical Islamic calendar: " +
-			"resolvedOptions().calendar is \"islamic\"",
+			"resolvedOptions().calendar is \"islamic\", and both are listed",
 	},
 	{
 		Name: "HourCycleKeyword", Flag: HourCycleKeyword,
@@ -304,6 +309,14 @@ var Divergences = []Divergence{
 			"and subdivision-region)",
 		Node: "ICU's pattern generator passes over the subdivision, and V8 answers America's: " +
 			"[\"h12\"]",
+	},
+	{
+		Name: "RegionZones", Flag: RegionZones,
+		Area: "supportedValuesOf",
+		What: "the time zones in no region",
+		Standard: "Intl.supportedValuesOf(\"timeZone\") lists UTC and Etc/GMT+1 to Etc/GMT-14 " +
+			"among the rest (test262's timeZones-include-non-continental)",
+		Node: "V8 lists only ICU's canonical zones that are in a region, 418 without them",
 	},
 }
 

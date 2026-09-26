@@ -1,6 +1,7 @@
 package intl_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -592,6 +593,50 @@ func TestSubdivisionHourCycles(t *testing.T) {
 			}
 			if got, err := info.HourCycles(l); err != nil || len(got) != 1 || got[0] != c.want[i] {
 				t.Errorf("%s %v: %v, %v, want [%s]", c.tag, compat, got, err, c.want[i])
+			}
+		}
+	}
+}
+
+// The lists Intl.supportedValuesOf answers with where they differ: the
+// calendars a DateTimeFormat resolves to themselves, and the time zones in
+// no region, on the standard side, as test262's
+// calendars-accepted-by-DateTimeFormat and timeZones-include-non-continental
+// require; Node's, which list islamic and islamic-rgsa and leave out UTC and
+// Etc/GMT's.
+func TestSupportedValues(t *testing.T) {
+	for _, c := range []struct {
+		compat             intl.Compat
+		calendars, zones   int
+		islamic, nonRegion bool
+	}{
+		{intl.Standard, 16, 445, false, true},
+		{intl.IslamicFallback | intl.RegionZones, 18, 418, true, false},
+	} {
+		calendars := intl.Calendars(c.compat)
+		zones, err := intl.TimeZones(c.compat)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(calendars) != c.calendars || slices.Contains(calendars, "islamic") != c.islamic ||
+			slices.Contains(calendars, "islamic-rgsa") != c.islamic {
+			t.Errorf("%v: %d calendars %v", c.compat, len(calendars), calendars)
+		}
+		nonRegion := slices.Contains(zones, "UTC") && slices.Contains(zones, "Etc/GMT+12") &&
+			slices.Contains(zones, "Etc/GMT-14")
+		if len(zones) != c.zones || nonRegion != c.nonRegion || !slices.IsSorted(zones) {
+			t.Errorf("%v: %d zones, UTC and Etc/GMT's %v", c.compat, len(zones), nonRegion)
+		}
+		// Each zone listed is one a DateTimeFormat resolves to itself.
+		for _, zone := range zones {
+			if got, err := intl.ResolveTimeZone(intl.Embedded, zone, c.compat); err != nil || got != zone {
+				t.Errorf("%v: %s resolves to %q, %v", c.compat, zone, got, err)
+			}
+		}
+		for _, cal := range calendars {
+			f, err := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{Calendar: cal, Compat: c.compat})
+			if err != nil || f.ResolvedOptions().Calendar != cal {
+				t.Errorf("%v: %s resolves otherwise, %v", c.compat, cal, err)
 			}
 		}
 	}
