@@ -7,14 +7,16 @@ canonicalization, for every locale ICU has data for. It is built to give the
 same answers as ICU 78.3 as Node 26 ships it, and to be usable by any Go
 program, not only a JavaScript engine.
 
-It is the base of `Intl` and `Date` in the
-[go-quickjs](https://github.com/go-quickjs/go-quickjs) engine, whose Temporal
-is moving onto its `temporal` package. There is no cgo, no
-WebAssembly and no C compiler: it builds wherever Go does.
+It is the base of `Intl`, `Date` and `Temporal` in the
+[go-quickjs](https://github.com/go-quickjs/go-quickjs) engine. There is no
+cgo, no WebAssembly and no C compiler: it builds wherever Go does.
 
-> **Status: pre-release.** Every service is done and held to Node, but the API
-> may still change while go-quickjs moves onto it. See [PLAN.md](PLAN.md) for
-> the state of each part.
+> **Status: v0.** Every service is done and held to Node. Releases are v0.x,
+> and the API may still change between minor versions.
+
+```sh
+go get github.com/go-quickjs/go-intl
+```
 
 ```go
 import intl "github.com/go-quickjs/go-intl"
@@ -87,9 +89,10 @@ The answers are checked, not assumed:
 Where Node and the standard disagree, the difference is a named divergence in
 [`compat.go`](compat.go), tested on both sides. `Compat` chooses them one by
 one; its zero value, `Standard`, is ECMA-402 in every one, and `NodeICU` is
-Node in every one. There are nine, among them the plain space V8 writes where
-ICU writes U+202F, V8's twelve-hour clock for Japanese, and the era V8 counts
-as a field asked for when it writes a Temporal value.
+Node in every one. There are twenty-two, among them the plain space V8 writes
+where ICU writes U+202F, V8's twelve-hour clock for Japanese, the era V8
+counts as a field asked for when it writes a Temporal value, and two roundings
+the standard fixed after the temporal_rs Node runs.
 
 Where ICU's implementation decides an answer, the implementation is ported:
 the pattern generator, the interval and number-range formatters, the zone

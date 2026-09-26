@@ -8,8 +8,8 @@ This file applies to the entire repository.
 consumed by the go-quickjs JavaScript engine and is meant to be usable by any
 Go program on its own.
 
-Read [DESIGN.md](DESIGN.md) for the architecture and [PLAN.md](PLAN.md) for the
-staging and current state. Both are authoritative; this file is how to work.
+Read [DESIGN.md](DESIGN.md) for the architecture and why it is shaped this
+way; it is authoritative. This file is how to work.
 
 Module path: `github.com/go-quickjs/go-intl`. Targets Go 1.24, matching
 go-quickjs, so consuming it never forces a toolchain upgrade.
@@ -78,14 +78,37 @@ go-intl's own tests:
 go test ./...
 ```
 
-The gates that govern whether work may land are measured in go-quickjs. See
-PLAN.md for the current floors and the exact commands. Re-measure before
-changing anything, and on both Linux and Windows - the platforms disagree, and
-a bug has already hidden on one of them.
+The gates that govern whether work may land are measured in go-quickjs, with
+go-intl required at the commit under test. Each is a floor: nothing lands that
+lowers one.
+
+| Gate | Floor |
+|---|---|
+| test262, all of it | 93,010 pass, 0 fail, 5,550 skip (98,560 variants, test262 `045bf6f9`) |
+| The golden corpus through the engine | 7,948 of 7,949, the one named |
+| `go test ./...` in go-quickjs | green |
+
+```sh
+cd ../go-quickjs
+TEST262_DIR=/path/to/test262 go test ./conformance -run TestConformance \
+  -conformance.max-failures=0 -timeout=90m
+go test ./...
+```
+
+For a change to dates, zones or Temporal, compare with Node across every
+locale and zone as well (about ten minutes, in parallel):
+
+```sh
+QUICKJS_COMPARE_NODE_TEMPORAL=1 go test . \
+  -run '^TestTemporalMatchesNodeAcrossLocalesAndTimeZones$' -count=1 -timeout=60m
+```
+
+Re-measure before changing anything, and on both Linux and Windows - the
+platforms disagree, and a bug has already hidden on one of them.
 
 ## Commits
 
 - Explain the behavior and why it changed, not the diff.
-- Update PLAN.md's Status table in the same commit as the work it describes.
+- A new divergence updates the count in DESIGN.md and README.md with it.
 - Branch rather than committing to the default branch.
 - Do not push unless asked.

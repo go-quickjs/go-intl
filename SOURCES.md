@@ -252,9 +252,11 @@ Two choices it seemed to force, both settled:
   any trie. The root's are in `root_standard_dia` and `root_standard_jamo`,
   and a tailoring that changes the diacritics (Vietnamese, Ewe) has a `dia`
   file of its own.
-- A tailoring's jamo are dropped altogether. For the search collations they
-  are read from ICU's rule sources in the data archive; Korean `searchjl`
-  cannot be, and is a recorded gap (PLAN.md, stage 7).
+- A tailoring's jamo are dropped altogether. A collation type whose
+  compiled trie tailors any conjoining jamo -- the search collations, Korean
+  `searchjl` among them -- is taken whole from ICU's compiled data
+  (`icudt78l.dat`, read by `internal/icudat`); its settings, reordering and
+  diacritics still come from the export.
 - The collation tree - aliases, parents, default types, the installed
   locales - is not in the export. It is in the data archive's `data/coll`:
   `LOCALE_DEPS.json` and each locale's `default`. It is not the ordinary

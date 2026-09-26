@@ -14,7 +14,8 @@ import (
 )
 
 // The collation gaps: what go-intl does not do, each with the reason, so that
-// the test says exactly what it does not hold go-intl to. See PLAN.md.
+// the test says exactly what it does not hold go-intl to. There are none; the
+// last, Korean searchjl, closed when its jamo came from ICU's compiled data.
 var collatorGaps = map[string]string{}
 
 // TestCollatorMatchesNode holds every collation locale, under every option and
