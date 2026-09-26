@@ -109,6 +109,10 @@ func (m *LocaleMatcher) Available(tag string) bool {
 
 // Locales is the service's available locales, ECMA-402's
 // [[AvailableLocales]], in the order their tags sort.
+//
+// V8 lists ICU's legacy aliases too, with "_" made "-", and one of them,
+// "no-NO-NY", is not a language tag: no request can name it, so it decides
+// nothing, and it is left out here, where a caller would pass it on.
 func (m *LocaleMatcher) Locales() []string {
 	prefix := m.list + " "
 	first := sort.Search(m.available.Len(), func(i int) bool {
@@ -121,6 +125,9 @@ func (m *LocaleMatcher) Locales() []string {
 		tag, ok := strings.CutPrefix(string(k), prefix)
 		if !ok {
 			break
+		}
+		if _, err := ParseLocale(tag); err != nil {
+			continue
 		}
 		tags = append(tags, tag)
 	}

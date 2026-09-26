@@ -54,13 +54,15 @@ func TestLocaleMatcherResolve(t *testing.T) {
 }
 
 // A service's available locales, as data/available.bin records V8's: each
-// one the matcher finds, in order, and no locale ICU has no data for.
+// one the matcher finds, in order, and no locale ICU has no data for. V8's
+// "no-NO-NY", ICU's legacy alias, is kept for matching but not listed,
+// since it is not a language tag.
 func TestLocaleMatcherLocales(t *testing.T) {
 	for service, want := range map[intl.Service]int{
-		intl.ServiceDateTimeFormat: 970,
-		intl.ServiceNumberFormat:   962,
+		intl.ServiceDateTimeFormat: 969,
+		intl.ServiceNumberFormat:   961,
 		intl.ServiceCollator:       154,
-		intl.ServiceSegmenter:      972,
+		intl.ServiceSegmenter:      971,
 	} {
 		m, err := intl.NewLocaleMatcher(intl.Embedded, service)
 		if err != nil {
@@ -77,6 +79,12 @@ func TestLocaleMatcherLocales(t *testing.T) {
 			if tag == "ht" || tag == "az-Arab" {
 				t.Errorf("%s: lists %q, which ICU has no data for", service, tag)
 			}
+			if _, err := intl.ParseLocale(tag); err != nil {
+				t.Errorf("%s: lists %q, which is not a tag", service, tag)
+			}
+		}
+		if service == intl.ServiceDateTimeFormat && !m.Available("no-NO-NY") {
+			t.Errorf("%s: V8's no-NO-NY is not available", service)
 		}
 	}
 }
