@@ -54,7 +54,9 @@ func koreaOffset(ms float64) float64 {
 // daysToMillis is the UTC moment the zone's day starts, the day counted
 // from 1970.
 func (c chineseReckoner) daysToMillis(days float64) float64 {
-	millis := days * astroDayMS
+	// Rounded before the difference, as ICU's two statements are, where an
+	// arm64 build would fuse them.
+	millis := float64(days * astroDayMS)
 	return millis - c.offset(millis)
 }
 

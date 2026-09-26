@@ -106,7 +106,10 @@ func fractionToFloat64(numerator int128, denominator float64) float64 {
 	hi := numerator.float64()
 	lo := numerator.sub(int128FromFloat(hi)).float64()
 	q0 := hi / denominator
-	product := q0 * denominator
+	// The product is rounded, and its error found by the one fused
+	// multiply-add asked for; the conversion keeps an arm64 build from
+	// fusing the product into the sums below as well, which Rust never does.
+	product := float64(q0 * denominator)
 	productLo := math.FMA(q0, denominator, -product)
 	sum := hi - product
 	one, two := hi, -product

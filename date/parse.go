@@ -29,7 +29,8 @@ func (e *Environment) Parse(s []uint16) float64 {
 		ms := int64(date)
 		return TimeClip(float64(ms - e.offsetFromLocal(ms)))
 	}
-	return TimeClip(date - out[outUTCOffset]*1000)
+	// The product is rounded before the difference, as MakeDate's is.
+	return TimeClip(date - float64(out[outUTCOffset]*1000))
 }
 
 // ParseString is Parse for a Go string.

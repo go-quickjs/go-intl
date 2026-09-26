@@ -305,11 +305,17 @@ func BreakDown(t float64) Fields {
 }
 
 // MakeTime is ECMA-262's MakeTime, NaN unless all are finite.
+//
+// Each product is rounded before it is added, as the specification's
+// arithmetic and V8's are: the conversions keep an arm64 build from fusing a
+// multiply and an add into one rounding, which at these magnitudes gives
+// another answer (Go's spec, "Arithmetic operators").
 func MakeTime(hour, min, sec, ms float64) float64 {
 	if !finite(hour) || !finite(min) || !finite(sec) || !finite(ms) {
 		return math.NaN()
 	}
-	return math.Trunc(hour)*msPerHour + math.Trunc(min)*msPerMinute + math.Trunc(sec)*msPerSecond + math.Trunc(ms)
+	return float64(float64(float64(math.Trunc(hour)*msPerHour)+float64(math.Trunc(min)*msPerMinute))+
+		float64(math.Trunc(sec)*msPerSecond)) + math.Trunc(ms)
 }
 
 // MakeDay is ECMA-262's MakeDay as V8 bounds it: NaN for a year beyond a
@@ -322,12 +328,13 @@ func MakeDay(year, month, date float64) float64 {
 	return float64(daysFromYearMonth(y, m)) + math.Trunc(date) - 1
 }
 
-// MakeDate is ECMA-262's MakeDate.
+// MakeDate is ECMA-262's MakeDate, its product rounded before the sum as
+// MakeTime's are.
 func MakeDate(day, t float64) float64 {
 	if !finite(day) || !finite(t) {
 		return math.NaN()
 	}
-	return t + day*msPerDay
+	return t + float64(day*msPerDay)
 }
 
 func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
