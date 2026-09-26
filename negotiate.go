@@ -107,6 +107,26 @@ func (m *LocaleMatcher) Available(tag string) bool {
 	return ok
 }
 
+// Locales is the service's available locales, ECMA-402's
+// [[AvailableLocales]], in the order their tags sort.
+func (m *LocaleMatcher) Locales() []string {
+	prefix := m.list + " "
+	first := sort.Search(m.available.Len(), func(i int) bool {
+		k, _ := m.available.At(i)
+		return string(k) >= prefix
+	})
+	var tags []string
+	for i := first; i < m.available.Len(); i++ {
+		k, _ := m.available.At(i)
+		tag, ok := strings.CutPrefix(string(k), prefix)
+		if !ok {
+			break
+		}
+		tags = append(tags, tag)
+	}
+	return tags
+}
+
 // bestAvailable is ECMA-402's BestAvailableLocale: the tag, or the longest
 // part of it the service is available in, cutting it short a subtag at a
 // time and a singleton with the subtag after it; empty if none.

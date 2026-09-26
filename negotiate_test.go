@@ -52,3 +52,31 @@ func TestLocaleMatcherResolve(t *testing.T) {
 		}
 	}
 }
+
+// A service's available locales, as data/available.bin records V8's: each
+// one the matcher finds, in order, and no locale ICU has no data for.
+func TestLocaleMatcherLocales(t *testing.T) {
+	for service, want := range map[intl.Service]int{
+		intl.ServiceDateTimeFormat: 970,
+		intl.ServiceNumberFormat:   962,
+		intl.ServiceCollator:       154,
+		intl.ServiceSegmenter:      972,
+	} {
+		m, err := intl.NewLocaleMatcher(intl.Embedded, service)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tags := m.Locales()
+		if len(tags) != want {
+			t.Errorf("%s: %d locales, want %d", service, len(tags), want)
+		}
+		for i, tag := range tags {
+			if !m.Available(tag) || i > 0 && tags[i-1] >= tag {
+				t.Errorf("%s: %q unavailable or out of order", service, tag)
+			}
+			if tag == "ht" || tag == "az-Arab" {
+				t.Errorf("%s: lists %q, which ICU has no data for", service, tag)
+			}
+		}
+	}
+}
