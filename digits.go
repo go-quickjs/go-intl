@@ -49,6 +49,46 @@ type digitPlan struct {
 	mode             RoundingMode
 	increment        int
 	trailingZero     TrailingZeroDisplay
+	priority         RoundingPriority
+	// reportFrac and reportSig say which of the two counts resolvedOptions
+	// reports: both, but for the decimals where significant digits alone
+	// decide and the other way round.
+	reportFrac, reportSig bool
+}
+
+// ResolvedDigits are the digit and rounding options a NumberFormat or a
+// PluralRules settled on, as resolvedOptions reports them. The decimals and
+// the significant digits are nil where it leaves them out: the decimals
+// where significant digits alone decide, the significant digits where
+// decimals alone do.
+type ResolvedDigits struct {
+	MinimumIntegerDigits     int
+	MinimumFractionDigits    *int
+	MaximumFractionDigits    *int
+	MinimumSignificantDigits *int
+	MaximumSignificantDigits *int
+	RoundingIncrement        int
+	RoundingMode             RoundingMode
+	RoundingPriority         RoundingPriority
+	TrailingZeroDisplay      TrailingZeroDisplay
+}
+
+// resolved is what resolvedOptions reports of the plan.
+func (p *digitPlan) resolved() ResolvedDigits {
+	r := ResolvedDigits{
+		MinimumIntegerDigits: p.minInt,
+		RoundingIncrement:    max(p.increment, 1),
+		RoundingMode:         p.mode,
+		RoundingPriority:     p.priority,
+		TrailingZeroDisplay:  p.trailingZero,
+	}
+	if p.reportFrac {
+		r.MinimumFractionDigits, r.MaximumFractionDigits = Digits(p.minFrac), Digits(p.maxFrac)
+	}
+	if p.reportSig {
+		r.MinimumSignificantDigits, r.MaximumSignificantDigits = Digits(p.minSig), Digits(p.maxSig)
+	}
+	return r
 }
 
 // resolve settles the counts, by ECMA-402's SetNumberFormatDigitOptions.
@@ -58,7 +98,7 @@ type digitPlan struct {
 // priority -- whichever of the two keeps more or less.
 func (r digitRequest) resolve() (digitPlan, error) {
 	var p digitPlan
-	p.mode, p.increment, p.trailingZero = r.mode, r.increment, r.trailingZero
+	p.mode, p.increment, p.trailingZero, p.priority = r.mode, r.increment, r.trailingZero, r.priority
 
 	p.minInt = r.minInt
 	if p.minInt <= 0 {
@@ -68,13 +108,21 @@ func (r digitRequest) resolve() (digitPlan, error) {
 	hasFrac := r.minFrac != nil || r.maxFrac != nil
 	hasSig := r.minSig != nil || r.maxSig != nil
 
-	p.minFrac = r.minFracDefault
-	if r.minFrac != nil {
-		p.minFrac = *r.minFrac
-	}
-	p.maxFrac = max(p.minFrac, r.maxFracDefault)
-	if r.maxFrac != nil {
+	// SetNumberFormatDigitOptions: a minimum not given is the default, or
+	// the maximum where that is less, and a maximum not given the default,
+	// or the minimum where that is more.
+	switch {
+	case r.minFrac == nil && r.maxFrac != nil:
 		p.maxFrac = *r.maxFrac
+		p.minFrac = min(r.minFracDefault, p.maxFrac)
+	case r.minFrac != nil && r.maxFrac == nil:
+		p.minFrac = *r.minFrac
+		p.maxFrac = max(r.maxFracDefault, p.minFrac)
+	case r.minFrac != nil:
+		p.minFrac, p.maxFrac = *r.minFrac, *r.maxFrac
+	default:
+		p.minFrac = r.minFracDefault
+		p.maxFrac = max(p.minFrac, r.maxFracDefault)
 	}
 	if p.minFrac > p.maxFrac {
 		return p, fmt.Errorf("intl: at least %d decimals but at most %d",
@@ -107,10 +155,24 @@ func (r digitRequest) resolve() (digitPlan, error) {
 	case r.compact:
 		p.minSig, p.maxSig = 1, 2
 		p.minFrac, p.maxFrac = 0, 0
-		p.rounding = roundMorePrecision
+		// ECMA-402's [[ComputedRoundingPriority]], which resolvedOptions
+		// reports.
+		p.rounding, p.priority = roundMorePrecision, MorePrecision
 	default:
 		p.rounding = roundFractionDigits
 	}
+
+	// Which counts resolvedOptions reports: under the automatic priority,
+	// the significant digits only where they were asked for, and the
+	// decimals unless significant digits were asked for or a compact number
+	// asked for neither; both, where either priority was asked for.
+	needSig, needFrac := true, true
+	if r.priority == PriorityAuto {
+		needSig = hasSig
+		needFrac = !hasSig && (hasFrac || !r.compact)
+	}
+	p.reportSig = needSig || !needFrac
+	p.reportFrac = needFrac || !needSig
 
 	if p.increment > 1 && (p.rounding != roundFractionDigits || p.minFrac != p.maxFrac) {
 		return p, fmt.Errorf("intl: a rounding increment needs the same " +

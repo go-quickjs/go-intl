@@ -159,7 +159,7 @@ standard's of the rest; `--node-quirks` takes Node's of all.
 
 Every divergence is a named, documented entry in `compat.go`
 (`Divergences`), with what the standard and Node each answer and a test on
-both sides. There are twenty-two.
+both sides. There are twenty-three.
 
 **If the list passes roughly twenty entries, standards mode is wrong somewhere
 and the profile is hiding it.** That is a tripwire, not a budget. The list

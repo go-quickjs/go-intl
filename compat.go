@@ -22,8 +22,8 @@ import "strings"
 // of the Chinese and Korean calendars, the region of a locale's hour
 // cycles, the time zones Intl.supportedValuesOf lists, and two roundings
 // that Temporal's normative fixes of May 2026 changed after the
-// temporal_rs Node has, and the patterns of Uzbek in Afghanistan. Standard
-// and NodeICU are the two ends.
+// temporal_rs Node has, the patterns of Uzbek in Afghanistan, and the digit
+// options PluralRules reports. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -113,6 +113,10 @@ const (
 	// another calendar's patterns for, when no calendar is asked for, with
 	// that calendar's patterns: uz-AF's Persian dates in Gregorian ones.
 	PatternCalendar
+	// PluralRulesDigits reports only the significant digits among a
+	// PluralRules' resolved options where both they and the decimals were
+	// settled on, as V8 does.
+	PluralRulesDigits
 )
 
 const (
@@ -124,7 +128,7 @@ const (
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
-		RoundingWindow | RepeatedMidnight | PatternCalendar
+		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -373,6 +377,17 @@ var Divergences = []Divergence{
 			"ures_getFunctionalEquivalent, which passes over uz-Arab, where the default is, for " +
 			"the root's Gregorian: Persian dates in Gregorian patterns, \"۱۳۴۸-۱۰-۱۱\", unless " +
 			"-u-ca or the calendar option names one",
+	},
+	{
+		Name: "PluralRulesDigits", Flag: PluralRulesDigits,
+		Area: "PluralRules",
+		What: "the digit options resolvedOptions reports where both kinds were settled on: a " +
+			"roundingPriority given, or compact notation asking for no digits",
+		Standard: "SetNumberFormatDigitOptions sets the decimals and the significant digits, and " +
+			"resolvedOptions reports both, as NumberFormat's does: {roundingPriority: " +
+			"\"morePrecision\"} reports 0 to 3 decimals and 1 to 21 significant digits",
+		Node: "V8 reads them back from ICU's number skeleton, which holds the significant " +
+			"digits, and reports only those (js-plural-rules.cc)",
 	},
 }
 

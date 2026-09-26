@@ -397,11 +397,13 @@ func loadNumbersAlong(src Source, loc Locale, chain []DataLocale) (*numdata.Loca
 
 // resolveDigits builds the digit plan from the option bag and the style.
 func (f *NumberFormat) resolveDigits(src Source) error {
+	// InitializeNumberFormat: a currency's own number of decimals only in
+	// standard notation; 0 to 3 otherwise, and none at all for a percentage.
 	minFracDefault, maxFracDefault := 0, 3
-	switch f.opts.Style {
-	case StylePercent:
+	switch {
+	case f.opts.Style == StylePercent:
 		minFracDefault, maxFracDefault = 0, 0
-	case StyleCurrency:
+	case f.opts.Style == StyleCurrency && f.opts.Notation == NotationStandard:
 		d, err := currencyDigits(src, f.opts.Currency)
 		if err != nil {
 			return err
@@ -947,34 +949,49 @@ func (f *NumberFormat) affixParts(affix string, signSymbols []Part) []Part {
 // ResolvedNumberFormat is what a formatter settled on, mirroring
 // Intl.NumberFormat.prototype.resolvedOptions.
 type ResolvedNumberFormat struct {
-	Locale                string
-	NumberingSystem       string
-	Style                 Style
-	Currency              string
-	CurrencyDisplay       CurrencyDisplay
-	MinimumIntegerDigits  int
-	MinimumFractionDigits int
-	MaximumFractionDigits int
-	UseGrouping           bool
-	SignDisplay           SignDisplay
-	Notation              Notation
+	Locale          string
+	NumberingSystem string
+	Style           Style
+	// Currency, CurrencyDisplay and CurrencySign are meaningful only in the
+	// currency style, and Unit and UnitDisplay in the unit style, the only
+	// ones resolvedOptions reports them for.
+	Currency        string
+	CurrencyDisplay CurrencyDisplay
+	CurrencySign    CurrencySign
+	Unit            string
+	UnitDisplay     UnitDisplay
+	ResolvedDigits
+	// UseGrouping is the grouping settled on: GroupingMin2 for a compact
+	// number that asked for none.
+	UseGrouping Grouping
+	Notation    Notation
+	// CompactDisplay is meaningful only in compact notation, which is the
+	// only one resolvedOptions reports it for.
+	CompactDisplay CompactDisplay
+	SignDisplay    SignDisplay
 }
 
 // ResolvedOptions returns what the formatter settled on.
 func (f *NumberFormat) ResolvedOptions() ResolvedNumberFormat {
-	return ResolvedNumberFormat{
-		Locale:                f.locale.String(),
-		NumberingSystem:       f.data.NumberingSystem,
-		Style:                 f.opts.Style,
-		Currency:              strings.ToUpper(f.opts.Currency),
-		CurrencyDisplay:       f.opts.CurrencyDisplay,
-		MinimumIntegerDigits:  f.minInt,
-		MinimumFractionDigits: f.minFrac,
-		MaximumFractionDigits: f.maxFrac,
-		UseGrouping:           f.grouping,
-		SignDisplay:           f.opts.SignDisplay,
-		Notation:              f.opts.Notation,
+	r := ResolvedNumberFormat{
+		Locale:          f.locale.String(),
+		NumberingSystem: f.data.NumberingSystem,
+		Style:           f.opts.Style,
+		Currency:        strings.ToUpper(f.opts.Currency),
+		CurrencyDisplay: f.opts.CurrencyDisplay,
+		CurrencySign:    f.opts.CurrencySign,
+		Unit:            f.opts.Unit,
+		UnitDisplay:     f.opts.UnitDisplay,
+		ResolvedDigits:  f.digitPlan.resolved(),
+		UseGrouping:     f.opts.UseGrouping,
+		Notation:        f.opts.Notation,
+		CompactDisplay:  f.opts.CompactDisplay,
+		SignDisplay:     f.opts.SignDisplay,
 	}
+	if r.UseGrouping == GroupingAuto && r.Notation == NotationCompact {
+		r.UseGrouping = GroupingMin2
+	}
+	return r
 }
 
 // currencyDigits is how many decimals a currency is written with: none for the

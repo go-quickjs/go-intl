@@ -64,6 +64,9 @@ type PluralRulesOptions struct {
 	// decides the power of ten written apart: a locale may have a word for
 	// ten thousand in one width and not the other.
 	CompactDisplay CompactDisplay
+
+	// Compat chooses Node's side of PluralRulesDigits.
+	Compat Compat
 }
 
 // A PluralRules chooses the plural form for a number in one locale. It never
@@ -244,13 +247,11 @@ func (p *PluralRules) Categories() []PluralCategory {
 
 // ResolvedPluralRules is what a PluralRules settled on.
 type ResolvedPluralRules struct {
-	Locale                string
-	Type                  PluralType
-	MinimumIntegerDigits  int
-	MinimumFractionDigits int
-	MaximumFractionDigits int
-	PluralCategories      []PluralCategory
-	Notation              Notation
+	Locale string
+	Type   PluralType
+	ResolvedDigits
+	PluralCategories []PluralCategory
+	Notation         Notation
 	// CompactDisplay is meaningful only in compact notation, which is the
 	// only one ECMA-402 reports it for.
 	CompactDisplay CompactDisplay
@@ -258,14 +259,18 @@ type ResolvedPluralRules struct {
 
 // ResolvedOptions returns what the rules settled on.
 func (p *PluralRules) ResolvedOptions() ResolvedPluralRules {
+	digits := p.digitPlan.resolved()
+	if p.opts.Compat.Has(PluralRulesDigits) && digits.MinimumSignificantDigits != nil {
+		// V8 reports the significant digits alone where its skeleton has
+		// them (PluralRulesDigits).
+		digits.MinimumFractionDigits, digits.MaximumFractionDigits = nil, nil
+	}
 	return ResolvedPluralRules{
-		Locale:                p.locale.String(),
-		Type:                  p.opts.Type,
-		MinimumIntegerDigits:  p.minInt,
-		MinimumFractionDigits: p.minFrac,
-		MaximumFractionDigits: p.maxFrac,
-		PluralCategories:      p.Categories(),
-		Notation:              p.opts.Notation,
-		CompactDisplay:        p.opts.CompactDisplay,
+		Locale:           p.locale.String(),
+		Type:             p.opts.Type,
+		ResolvedDigits:   digits,
+		PluralCategories: p.Categories(),
+		Notation:         p.opts.Notation,
+		CompactDisplay:   p.opts.CompactDisplay,
 	}
 }

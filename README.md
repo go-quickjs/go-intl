@@ -89,7 +89,7 @@ The answers are checked, not assumed:
 Where Node and the standard disagree, the difference is a named divergence in
 [`compat.go`](compat.go), tested on both sides. `Compat` chooses them one by
 one; its zero value, `Standard`, is ECMA-402 in every one, and `NodeICU` is
-Node in every one. There are twenty-two, among them the plain space V8 writes
+Node in every one. There are twenty-three, among them the plain space V8 writes
 where ICU writes U+202F, V8's twelve-hour clock for Japanese, the era V8
 counts as a field asked for when it writes a Temporal value, and two roundings
 the standard fixed after the temporal_rs Node runs.
