@@ -946,6 +946,19 @@ throws).
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
 README's Intl section.
 
+**Done.** go-quickjs's `internal/icu`, its generators and `extract.mjs` are
+gone, with the `intldata` package; `golden.mjs` is `testdata/intl_golden.js`.
+Temporal was the last service on it, and is now a binding over the
+`temporal` package with V8's glue in the engine. Replayed through the engine
+with `--node-quirks`, the recordings here match: 311,526 calendar-field cases,
+and 368,399 method calls but for one message the engine's ToBigInt throws.
+go-quickjs's opt-in comparison of Temporal's `toLocaleString`, zone names and
+zone arithmetic with Node, every locale DateTimeFormat is available in by
+every zone Node lists, matches all 405,042 pairs; getting there found the
+metazone bounds before 1970, V8's "no-NO-NY" among the available locales,
+and `PatternCalendar`. The full gates hold at 93,010 passed, none failed,
+5,550 skipped.
+
 ## Status
 
 | Stage | State |
@@ -972,7 +985,7 @@ README's Intl section.
 | **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB; packed into one embedded file read in place, 18.7 MB with the tables that are looked up |
 | **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; twenty-two named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator, the fields a date pattern's literals seem to write, the deprecated Islamic calendars, when a resolved locale keeps its hour cycle, the zone a plain Temporal value is read in, the time zone names a DateTimeFormat takes and reports, a coptic year before the era, the days of the Chinese and Korean calendars, the region of a locale's hour cycles, the time zones in no region, Temporal's rounding window and repeated midnight, and the calendar uz-AF's patterns are read from, each tested on both sides |
 | **Load time** | data read in place from one embedded pack; tables looked up by binary search rather than decoded, strings not copied; every constructor in English under 0.11 ms, most under 25 µs (see Loading time) |
-| 9. Retire internal/icu | not started |
+| 9. Retire internal/icu | **done** - Intl, Date and Temporal on go-intl in go-quickjs; `internal/icu` and `intldata` deleted; full gates 93,010 / 0 / 5,550 |
 
 **Corpus coverage: 7,949 of 7,949 cases, every one of them exact.**
 
@@ -988,12 +1001,12 @@ README's Intl section.
 | legacy `toLocale*` | 90 | 90 |
 | Segmenter | 140 | 140 |
 
-Switched over in go-quickjs, on its `intl-go-intl` branch and not yet merged:
-Collator and `localeCompare`, PluralRules, DisplayNames, ListFormat,
-RelativeTimeFormat, Segmenter, DurationFormat, NumberFormat, and
-DateTimeFormat with Date's and Temporal's `toLocaleString`, Intl.Locale,
-and `supportedValuesOf`, and Date on the `date` package, each with the quick
-gates at their floor. Still on `internal/icu`: Temporal. The maintainer gave rule 5's word
+Switched over in go-quickjs, locally and not yet pushed: Collator and
+`localeCompare`, PluralRules, DisplayNames, ListFormat, RelativeTimeFormat,
+Segmenter, DurationFormat, NumberFormat, and DateTimeFormat with Date's and
+Temporal's `toLocaleString`, Intl.Locale, and `supportedValuesOf`, Date on
+the `date` package, and Temporal on the `temporal` package, each with the
+quick gates at their floor; `internal/icu` is retired. The maintainer gave rule 5's word
 on 2026-09-25: switch go-quickjs over, a service at a time on a branch, with
 the gates measured after each; drop `WarmupDateTimeData`, `WarmupIntlData`
 and the `intldata` package, which go-intl has no use for; go-quickjs
