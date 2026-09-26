@@ -326,14 +326,16 @@ func truncate(d DataLocale) DataLocale {
 
 // Maximize fills in what an identifier left out, by UTS #35's likely-subtags
 // lookup: the most specific key first, then progressively less of it. What the
-// identifier did say is kept, so maximizing never overrules the caller.
+// identifier did say is kept, so maximizing never overrules the caller. A
+// language the data does not know is not maximized at all, as ICU's
+// LikelySubtags leaves it: "xyz-DE" is itself, not "xyz-Latn-DE" by way of
+// "und"; only "und" itself reaches the root's entry.
 func (f *Fallbacker) Maximize(d DataLocale) (DataLocale, bool) {
 	keys := [...]DataLocale{
 		d,
 		{Language: d.Language, Region: d.Region},
 		{Language: d.Language, Script: d.Script},
 		{Language: d.Language},
-		{},
 	}
 	for _, key := range keys {
 		got, ok := f.likely.lookup(key)
