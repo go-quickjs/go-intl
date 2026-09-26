@@ -18,8 +18,9 @@ import "strings"
 // minutes take, the fields a date pattern's literals seem to write, the
 // deprecated Islamic calendars, when a resolved locale keeps its hour cycle,
 // the zone a plain Temporal value is read in, the time zone names a
-// DateTimeFormat takes and reports, a coptic year before the era, and the
-// days of the Chinese and Korean calendars. Standard and NodeICU are the two ends.
+// DateTimeFormat takes and reports, a coptic year before the era, the days
+// of the Chinese and Korean calendars, and the region of a locale's hour
+// cycles. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -87,6 +88,9 @@ const (
 	// ChineseAstronomy reckons a DateTimeFormat's Chinese calendar and
 	// Dangi by ICU4C's astronomy, rather than as Temporal does.
 	ChineseAstronomy
+	// SubdivisionHourCycles passes over a locale's "-u-sd-" subdivision
+	// for the region of Intl.Locale's getHourCycles.
+	SubdivisionHourCycles
 )
 
 const (
@@ -97,7 +101,7 @@ const (
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
-		ZoneIdentifiers | CopticEra | ChineseAstronomy
+		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -290,6 +294,16 @@ var Divergences = []Divergence{
 			"of the first month (test262's compare-to-temporal-lunisolar)",
 		Node: "V8 formats with ICU4C, whose calendar computes the astronomy, and whose day is " +
 			"not Temporal's there: the 30th",
+	},
+	{
+		Name: "SubdivisionHourCycles", Flag: SubdivisionHourCycles,
+		Area: "Locale",
+		What: "getHourCycles of a locale with a \"-u-sd-\" subdivision and no region subtag",
+		Standard: "RegionPreference takes the subdivision's region before the likely one: " +
+			"\"en-u-sd-gbeng\" has Britain's [\"h23\"] (test262's getHourCycles/region-priority " +
+			"and subdivision-region)",
+		Node: "ICU's pattern generator passes over the subdivision, and V8 answers America's: " +
+			"[\"h12\"]",
 	},
 }
 

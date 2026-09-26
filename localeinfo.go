@@ -82,24 +82,27 @@ func (i *LocaleInfo) Minimize(l Locale) Locale {
 // "-u-rg-", else the region subtag, else, when inferring, that of "-u-sd-"
 // or the likely region.
 func (i *LocaleInfo) supplementalRegion(l Locale, infer bool) string {
-	fromKey := func(key string) string {
-		v, ok := l.Keyword(key)
-		if ok && len(v) >= 3 && len(v) <= 6 && isAlpha(v[0]) && isAlpha(v[1]) {
-			return strings.ToUpper(v[:2])
-		}
-		return ""
-	}
-	if r := fromKey("rg"); r != "" {
+	if r := keywordRegion(l, "rg"); r != "" {
 		return r
 	}
 	if !l.Region.IsZero() || !infer {
 		return l.Region.String()
 	}
-	if r := fromKey("sd"); r != "" {
+	if r := keywordRegion(l, "sd"); r != "" {
 		return r
 	}
 	if full, ok := i.likely.Maximize(l.Data()); ok {
 		return full.Region.String()
+	}
+	return ""
+}
+
+// keywordRegion is the region of a "-u-rg-" or "-u-sd-" keyword's value,
+// its first two letters; empty where it has none.
+func keywordRegion(l Locale, key string) string {
+	v, ok := l.Keyword(key)
+	if ok && len(v) >= 3 && len(v) <= 6 && isAlpha(v[0]) && isAlpha(v[1]) {
+		return strings.ToUpper(v[:2])
 	}
 	return ""
 }
@@ -171,9 +174,18 @@ func (i *LocaleInfo) Collations(l Locale) ([]string, error) {
 // keyword's where there is one. A DateTimeFormat does not answer this: V8
 // drops "-u-rg-" before building one, and Node's formats 12-hour time for
 // "en-US-u-rg-dezzzz", whose Intl.Locale says h23.
+//
+// ECMA-402's RegionPreference takes a locale without a region subtag to
+// be in its "-u-sd-" subdivision's before its likely region; ICU's pattern
+// generator passes over the subdivision (SubdivisionHourCycles).
 func (i *LocaleInfo) HourCycles(l Locale) ([]string, error) {
 	if hc, ok := i.keyword(l, "hc"); ok {
 		return hc, nil
+	}
+	if l.Region.IsZero() && !i.opts.Compat.Has(SubdivisionHourCycles) {
+		if r, err := ParseRegion(keywordRegion(l, "sd")); err == nil && !r.IsZero() {
+			l.Region = r
+		}
 	}
 	hourChar, _, err := allowedHourFormats(i.src, l)
 	if err != nil {

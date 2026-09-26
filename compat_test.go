@@ -564,3 +564,35 @@ func TestChineseAstronomy(t *testing.T) {
 		}
 	}
 }
+
+// The region of a locale's hour cycles: ECMA-402's RegionPreference, the
+// "-u-rg-" override, the region subtag, the "-u-sd-" subdivision, the
+// likely region, then the world's, as test262's getHourCycles/region-priority
+// requires; ICU's pattern generator, and so Node, passes over the
+// subdivision.
+func TestSubdivisionHourCycles(t *testing.T) {
+	for _, c := range []struct {
+		tag  string
+		want [2]string // Standard, SubdivisionHourCycles
+	}{
+		{"en-US-u-sd-gbeng-rg-gbzzzz", [2]string{"h23", "h23"}},
+		{"en-US-u-sd-gbeng", [2]string{"h12", "h12"}},
+		{"en-u-sd-gbeng", [2]string{"h23", "h12"}},
+		{"en", [2]string{"h12", "h12"}},
+		{"eo", [2]string{"h23", "h23"}},
+	} {
+		for i, compat := range []intl.Compat{intl.Standard, intl.SubdivisionHourCycles} {
+			info, err := intl.NewLocaleInfo(intl.Embedded, intl.LocaleInfoOptions{Compat: compat})
+			if err != nil {
+				t.Fatal(err)
+			}
+			l, err := intl.ParseLocale(c.tag)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := info.HourCycles(l); err != nil || len(got) != 1 || got[0] != c.want[i] {
+				t.Errorf("%s %v: %v, %v, want [%s]", c.tag, compat, got, err, c.want[i])
+			}
+		}
+	}
+}

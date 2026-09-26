@@ -960,7 +960,7 @@ README's Intl section.
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
 | **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB; packed into one embedded file read in place, 18.7 MB with the tables that are looked up |
-| **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; seventeen named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator, the fields a date pattern's literals seem to write, the deprecated Islamic calendars, when a resolved locale keeps its hour cycle, the zone a plain Temporal value is read in, the time zone names a DateTimeFormat takes and reports, a coptic year before the era, and the days of the Chinese and Korean calendars, each tested on both sides |
+| **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; eighteen named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator, the fields a date pattern's literals seem to write, the deprecated Islamic calendars, when a resolved locale keeps its hour cycle, the zone a plain Temporal value is read in, the time zone names a DateTimeFormat takes and reports, a coptic year before the era, the days of the Chinese and Korean calendars, and the region of a locale's hour cycles, each tested on both sides |
 | **Load time** | data read in place from one embedded pack; tables looked up by binary search rather than decoded, strings not copied; every constructor in English under 0.11 ms, most under 25 µs (see Loading time) |
 | 9. Retire internal/icu | not started |
 
@@ -982,7 +982,7 @@ Switched over in go-quickjs, on its `intl-go-intl` branch and not yet merged:
 Collator and `localeCompare`, PluralRules, DisplayNames, ListFormat,
 RelativeTimeFormat, Segmenter, DurationFormat, NumberFormat, and
 DateTimeFormat with Date's and Temporal's `toLocaleString`, each with the
-quick gates at their floor. Still on `internal/icu`: Intl.Locale,
+quick gates at their floor. Intl.Locale is next. Still on `internal/icu`:
 `supportedValuesOf` for calendars, numbering systems, zones and units, Date
 and Temporal. The maintainer gave rule 5's word
 on 2026-09-25: switch go-quickjs over, a service at a time on a branch, with
