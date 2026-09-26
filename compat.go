@@ -14,8 +14,8 @@ import "strings"
 // in most places and the standard in a few: go-quickjs answers as Node does
 // but for the Japanese twelve-hour clock, the Islamic eras, Temporal's
 // formats, the keyword value "yes", the currencies DisplayNames names, a
-// duration's fraction of a second and the separator a digital duration's
-// minutes take. Standard and NodeICU are the two ends.
+// duration's fraction of a second, the separator a digital duration's
+// minutes take and the fields a date pattern's literals seem to write. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -59,6 +59,9 @@ const (
 	// DurationSeparator joins numeric minutes to whatever came before them
 	// by the time separator, as V8 does, when the hours were left out.
 	DurationSeparator
+	// LiteralFields reads the fields DateTimeFormat's resolvedOptions
+	// reports from its pattern's quoted literals as well as its fields.
+	LiteralFields
 )
 
 const (
@@ -68,7 +71,7 @@ const (
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
-		DurationSeparator
+		DurationSeparator | LiteralFields
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -189,6 +192,16 @@ var Divergences = []Divergence{
 			"\"1 day, 01:02\" (test262's digital-style-with-hours-display-auto-with-zero-hour)",
 		Node: "V8 joins them to whatever was written last by the time separator: " +
 			"\"1 day:01:02\"",
+	},
+	{
+		Name: "LiteralFields", Flag: LiteralFields,
+		Area: "DateTimeFormat",
+		What: "resolvedOptions of a pattern whose quoted literal holds a field's letter",
+		Standard: "CreateDateTimeFormat keeps the fields of the format it chose, and resolvedOptions " +
+			"reports those: Portuguese {month: \"long\", year: \"numeric\"}, written " +
+			"\"MMMM 'de' y\", reports a month and a year",
+		Node: "V8 looks for each field's letters anywhere in the pattern's text, and finds the d " +
+			"of 'de': it reports day: \"numeric\" too",
 	},
 }
 

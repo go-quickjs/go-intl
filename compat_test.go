@@ -242,3 +242,29 @@ func TestDurationSeparator(t *testing.T) {
 		}
 	}
 }
+
+// A pattern whose quoted literal holds a field's letter: Portuguese writes a
+// long month and a year "MMMM 'de' y". The standard reports the fields of
+// the format chosen; Node finds a day in the "de".
+func TestLiteralFields(t *testing.T) {
+	loc, _ := intl.ParseLocale("pt")
+	for _, c := range []struct {
+		compat intl.Compat
+		day    intl.FieldWidth
+	}{
+		{intl.Standard, intl.WidthNone},
+		{intl.LiteralFields, intl.WidthNumeric},
+	} {
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+			Year: intl.WidthNumeric, Month: intl.WidthLong, Compat: c.compat,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := f.ResolvedOptions()
+		if r.Year != intl.WidthNumeric || r.Month != intl.WidthLong || r.Day != c.day {
+			t.Errorf("%v: year %v month %v day %v, want %v %v %v", c.compat,
+				r.Year, r.Month, r.Day, intl.WidthNumeric, intl.WidthLong, c.day)
+		}
+	}
+}

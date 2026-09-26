@@ -637,7 +637,26 @@ type ResolvedDateTimeFormat struct {
 	Calendar        string
 	NumberingSystem string
 	TimeZone        string
-	HourCycle       HourCycle
+	// HourCycle is unset unless an hour or a time style was asked for.
+	HourCycle HourCycle
+
+	// DateStyle and TimeStyle are the styles asked for. A formatter asked
+	// for neither reports the fields below instead: those its pattern
+	// writes, at the widths it writes them, which need not be the ones
+	// asked for -- a Japanese short month is written "M月", and numeric.
+	DateStyle, TimeStyle DateTimeLength
+
+	Weekday                FieldWidth
+	Era                    FieldWidth
+	Year                   FieldWidth
+	Month                  FieldWidth
+	Day                    FieldWidth
+	DayPeriod              FieldWidth
+	Hour                   FieldWidth
+	Minute                 FieldWidth
+	Second                 FieldWidth
+	FractionalSecondDigits int
+	TimeZoneName           ZoneStyle
 }
 
 // ResolvedOptions returns what the formatter settled on.
@@ -647,11 +666,101 @@ func (f *DateTimeFormat) ResolvedOptions() ResolvedDateTimeFormat {
 		system = f.numbers.system
 	}
 	cycle := f.hourCycle
-	return ResolvedDateTimeFormat{
+	r := ResolvedDateTimeFormat{
 		Locale:          f.locale.String(),
 		Calendar:        string(f.system),
 		NumberingSystem: system,
 		TimeZone:        f.zoneName,
 		HourCycle:       cycle,
+		DateStyle:       f.opts.DateStyle,
+		TimeStyle:       f.opts.TimeStyle,
+	}
+	if r.DateStyle == LengthNone && r.TimeStyle == LengthNone {
+		f.resolvedFields(&r)
+	}
+	return r
+}
+
+// resolvedFieldRuns are the fields resolvedOptions reports, in its order,
+// each with the letter runs that write it and the width each run is, as
+// V8's pattern items list them: the first run a pattern holds decides.
+var resolvedFieldRuns = [...]struct {
+	into func(*ResolvedDateTimeFormat) *FieldWidth
+	runs []string
+	as   []FieldWidth
+}{
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Weekday },
+		[]string{"EEEEE", "EEEE", "EEE", "ccccc", "cccc", "ccc"},
+		[]FieldWidth{WidthNarrow, WidthLong, WidthShort, WidthNarrow, WidthLong, WidthShort}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Era },
+		[]string{"GGGGG", "GGGG", "GGG"},
+		[]FieldWidth{WidthNarrow, WidthLong, WidthShort}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Year },
+		[]string{"yy", "y"},
+		[]FieldWidth{Width2Digit, WidthNumeric}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Month },
+		[]string{"MMMMM", "MMMM", "MMM", "MM", "M", "LLLLL", "LLLL", "LLL", "LL", "L"},
+		[]FieldWidth{WidthNarrow, WidthLong, WidthShort, Width2Digit, WidthNumeric,
+			WidthNarrow, WidthLong, WidthShort, Width2Digit, WidthNumeric}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Day },
+		[]string{"dd", "d"},
+		[]FieldWidth{Width2Digit, WidthNumeric}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.DayPeriod },
+		[]string{"BBBBB", "bbbbb", "BBBB", "bbbb", "B", "b"},
+		[]FieldWidth{WidthNarrow, WidthNarrow, WidthLong, WidthLong, WidthShort, WidthShort}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Hour },
+		[]string{"HH", "H", "hh", "h", "kk", "k", "KK", "K"},
+		[]FieldWidth{Width2Digit, WidthNumeric, Width2Digit, WidthNumeric,
+			Width2Digit, WidthNumeric, Width2Digit, WidthNumeric}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Minute },
+		[]string{"mm", "m"},
+		[]FieldWidth{Width2Digit, WidthNumeric}},
+	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Second },
+		[]string{"ss", "s"},
+		[]FieldWidth{Width2Digit, WidthNumeric}},
+}
+
+// resolvedZoneRuns are the time zone name's, as resolvedFieldRuns.
+var resolvedZoneRuns = [...]struct {
+	run string
+	as  ZoneStyle
+}{
+	{"zzzz", ZoneLong}, {"z", ZoneShort}, {"OOOO", ZoneLongOffset},
+	{"O", ZoneShortOffset}, {"vvvv", ZoneLongGeneric}, {"v", ZoneShortGeneric},
+}
+
+// resolvedFields reads the fields resolvedOptions reports from the pattern,
+// as ECMA-402 reports the fields of the format it chose: each at the width
+// of the first of its letter runs the pattern's fields hold. V8 looks for
+// the runs in the pattern's text, its quoted literals as well, so the "de"
+// of "MMMM 'de' y" is a day (LiteralFields).
+func (f *DateTimeFormat) resolvedFields(r *ResolvedDateTimeFormat) {
+	text := f.patternText
+	if !f.opts.Compat.Has(LiteralFields) {
+		// The fields alone, apart, so that no two run together.
+		var b strings.Builder
+		for _, fd := range parseDatePattern(f.patternText) {
+			if fd.letter != 0 {
+				b.WriteString(strings.Repeat(string(fd.letter), fd.count))
+				b.WriteByte(' ')
+			}
+		}
+		text = b.String()
+	}
+	for _, item := range resolvedFieldRuns {
+		for i, run := range item.runs {
+			if strings.Contains(text, run) {
+				*item.into(r) = item.as[i]
+				break
+			}
+		}
+	}
+	// V8's FractionalSecondDigitsFromPattern: every S, up to three.
+	r.FractionalSecondDigits = min(strings.Count(text, "S"), 3)
+	for _, z := range resolvedZoneRuns {
+		if strings.Contains(text, z.run) {
+			r.TimeZoneName = z.as
+			break
+		}
 	}
 }
