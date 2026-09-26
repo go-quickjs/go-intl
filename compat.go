@@ -16,8 +16,9 @@ import "strings"
 // formats, the keyword value "yes", the currencies DisplayNames names, a
 // duration's fraction of a second, the separator a digital duration's
 // minutes take, the fields a date pattern's literals seem to write, the
-// deprecated Islamic calendars, when a resolved locale keeps its hour cycle
-// and the zone a plain Temporal value is read in. Standard and NodeICU are the two ends.
+// deprecated Islamic calendars, when a resolved locale keeps its hour cycle,
+// the zone a plain Temporal value is read in, the time zone names a
+// DateTimeFormat takes and reports, and a coptic year before the era. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -74,6 +75,12 @@ const (
 	// PlainValueZone writes a plain Temporal value as the instant it names
 	// in a DateTimeFormat's zone, rather than as its wall-clock fields.
 	PlainValueZone
+	// ZoneIdentifiers takes any time zone ICU knows for a DateTimeFormat,
+	// and reports ICU's canonical name for it rather than the one given.
+	ZoneIdentifiers
+	// CopticEra writes a coptic year before the era as ICU4C does, in an
+	// era no data names.
+	CopticEra
 )
 
 const (
@@ -83,7 +90,8 @@ const (
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
-		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone
+		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
+		ZoneIdentifiers | CopticEra
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -244,6 +252,26 @@ var Divergences = []Divergence{
 			"(test262's PlainDate/prototype/toLocaleString/ignore-timezone)",
 		Node: "V8 reads the value as the instant it names in the zone, with \"compatible\", " +
 			"and writes that instant there: \"12/31/2011\"",
+	},
+	{
+		Name: "ZoneIdentifiers", Flag: ZoneIdentifiers,
+		Area: "DateTimeFormat",
+		What: "the time zone names a DateTimeFormat takes, and the one resolvedOptions reports",
+		Standard: "the IANA database's names, reported as given in its case: \"Asia/Calcutta\" is " +
+			"\"Asia/Calcutta\", and \"ACT\" a RangeError (test262's timezone-not-canonicalized, " +
+			"canonicalize-timezone and timezone-legacy-non-iana)",
+		Node: "V8 takes any name ICU knows and reports ICU's canonical one: \"Asia/Kolkata\" is " +
+			"\"Asia/Calcutta\", and \"ACT\" is \"Australia/Darwin\"",
+	},
+	{
+		Name: "CopticEra", Flag: CopticEra,
+		Area: "DateTimeFormat",
+		What: "a coptic year before the era",
+		Standard: "the calendar has one era, as Temporal and the era and month code proposal count " +
+			"it, and a year before its first is 0 or below: 250 CE is \"-34 Anno Martyrum\" " +
+			"(test262's formatToParts/era)",
+		Node: "ICU4C writes an era before it, which neither ICU nor CLDR names: \"35\" and " +
+			"no era",
 	},
 }
 

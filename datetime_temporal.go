@@ -95,6 +95,20 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		return nil, ErrTemporalFormat
 	}
 
+	d := *f
+	if kind != TemporalInstant && !f.opts.Compat.Has(PlainValueZone) {
+		// A plain value's fields are written as they are, which
+		// PlainInstant makes an instant in UTC.
+		d.tz, d.zoneID = fixedZone(0), ""
+	}
+	if !node && (dateStyle || timeStyle) && skeleton == staticSkeleton(f.patternText) {
+		// AdjustDateTimeStyleFormat keeps a style's format where the kind
+		// has each of its fields (test262's
+		// datestyle-not-adjusted-when-no-conflicting-options); V8 makes
+		// one again from its skeleton.
+		return &d, nil
+	}
+
 	// DateFormat::createInstanceForSkeleton: the best pattern for the
 	// skeleton, in the formatter's locale, whose hour cycle is its own.
 	hourChar, allowed, err := allowedHourFormats(f.src, f.locale)
@@ -102,7 +116,6 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		return nil, err
 	}
 	g := newDTPG(f.calendar, f.data.FieldNames, f.decimal, hourChar, allowed)
-	d := *f
 	var pattern string
 	if node || dateStyle || timeStyle || !strings.ContainsAny(skeleton, "hHkKj") {
 		pattern = g.bestPattern(skeleton, 0)
@@ -112,11 +125,6 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		skeleton = withHourLetter(skeleton, f.clock)
 		pattern = replaceHourCycleInPattern(g.bestPattern(skeleton, matchHourFieldLength), f.clock)
 		d.hourCycle = f.clock
-	}
-	if kind != TemporalInstant && !f.opts.Compat.Has(PlainValueZone) {
-		// A plain value's fields are written as they are, which
-		// PlainInstant makes an instant in UTC.
-		d.tz, d.zoneID = fixedZone(0), ""
 	}
 	d.overrides, d.systems, d.rbnf = nil, nil, nil
 	d.patternText = pattern

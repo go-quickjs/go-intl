@@ -1,6 +1,7 @@
 package intl_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -375,6 +376,123 @@ func TestPlainValueZone(t *testing.T) {
 			v := c.fields
 			if got := kf.Format(f.PlainInstant(v[0], time.Month(v[1]), v[2], v[3], v[4], v[5], 0)); got != c.want[i] {
 				t.Errorf("%s %v %v: %q, want %q", c.zone, v, compat, got, c.want[i])
+			}
+		}
+	}
+}
+
+// The time zone names a DateTimeFormat takes and reports: the IANA
+// database's, as given, as test262's timezone-not-canonicalized,
+// canonicalize-timezone and timezone-legacy-non-iana require; Node takes
+// any ICU knows, and reports ICU's canonical name.
+func TestZoneIdentifiers(t *testing.T) {
+	for _, c := range []struct {
+		zone string
+		want [2]string // Standard, ZoneIdentifiers; empty for an error
+	}{
+		{"Asia/Kolkata", [2]string{"Asia/Kolkata", "Asia/Calcutta"}},
+		{"asia/calcutta", [2]string{"Asia/Calcutta", "Asia/Calcutta"}},
+		{"Australia/Canberra", [2]string{"Australia/Canberra", "Australia/Sydney"}},
+		{"US/PACIFIC", [2]string{"US/Pacific", "America/Los_Angeles"}},
+		{"Etc/GMT", [2]string{"Etc/GMT", "UTC"}},
+		{"GMT", [2]string{"GMT", "UTC"}},
+		{"UTC", [2]string{"UTC", "UTC"}},
+		{"+05:30", [2]string{"+05:30", "+05:30"}},
+		{"ACT", [2]string{"", "Australia/Darwin"}},
+		{"SystemV/AST4ADT", [2]string{"", "SystemV/AST4ADT"}},
+		{"Mars/Base", [2]string{"", ""}},
+	} {
+		for i, compat := range []intl.Compat{intl.Standard, intl.ZoneIdentifiers} {
+			got, err := intl.ResolveTimeZone(intl.Embedded, c.zone, compat)
+			f, ferr := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{TimeZone: c.zone, Compat: compat})
+			if c.want[i] == "" {
+				if err == nil || ferr == nil {
+					t.Errorf("%s %v: %q, %v, want an error", c.zone, compat, got, ferr)
+				}
+				continue
+			}
+			if err != nil || ferr != nil {
+				t.Errorf("%s %v: %v, %v", c.zone, compat, err, ferr)
+				continue
+			}
+			if got != c.want[i] || f.ResolvedOptions().TimeZone != c.want[i] {
+				t.Errorf("%s %v: %q and %q, want %q", c.zone, compat, got, f.ResolvedOptions().TimeZone, c.want[i])
+			}
+		}
+	}
+	// A link is written as the zone it links to.
+	at := time.UnixMilli(0)
+	for _, compat := range []intl.Compat{intl.Standard, intl.ZoneIdentifiers} {
+		var out []string
+		for _, zone := range []string{"Asia/Calcutta", "Asia/Kolkata"} {
+			f, err := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{
+				TimeZone: zone, Hour: intl.WidthNumeric, TimeZoneName: intl.ZoneLong, Compat: compat,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, f.Format(at))
+		}
+		if out[0] != out[1] {
+			t.Errorf("%v: %q and %q differ", compat, out[0], out[1])
+		}
+	}
+}
+
+// A coptic year before the era: the standard's one era, as test262's
+// formatToParts/era requires; ICU4C's era no data names.
+func TestCopticEra(t *testing.T) {
+	loc, _ := intl.ParseLocale("en")
+	for _, c := range []struct {
+		compat intl.Compat
+		want   [2]string
+	}{
+		{intl.Standard, [2]string{"-34 Anno Martyrum", "1741 Anno Martyrum"}},
+		{intl.CopticEra, [2]string{"35", "1741 Anno Martyrum"}},
+	} {
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+			Calendar: "coptic", Era: intl.WidthLong, Year: intl.WidthNumeric, TimeZone: "UTC", Compat: c.compat,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, at := range []time.Time{time.Date(250, 6, 15, 0, 0, 0, 0, time.UTC), time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)} {
+			if got := strings.TrimSpace(f.Format(at)); got != c.want[i] {
+				t.Errorf("%v %d: %q, want %q", c.compat, at.Year(), got, c.want[i])
+			}
+		}
+	}
+}
+
+// A style whose fields a Temporal value has every one of: the standard keeps
+// the style's format, as a Date is written, as test262's
+// datestyle-not-adjusted-when-no-conflicting-options requires; Node makes
+// one again from its skeleton.
+func TestTemporalStyleKept(t *testing.T) {
+	loc, _ := intl.ParseLocale("ja")
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "1970年1月1日木曜日"},
+		{intl.TemporalFormats, "1970/1/1木曜日"},
+	} {
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+			DateStyle: intl.LengthFull, TimeZone: "UTC", Compat: c.compat,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.Format(time.UnixMilli(0)); got != "1970年1月1日木曜日" {
+			t.Errorf("%v: a Date is %q", c.compat, got)
+		}
+		for _, kind := range []intl.TemporalKind{intl.TemporalPlainDate, intl.TemporalPlainDateTime, intl.TemporalInstant} {
+			kf, err := f.ForTemporal(kind)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := kf.Format(f.PlainInstant(1970, 1, 1, 0, 0, 0, 0)); got != c.want {
+				t.Errorf("%v kind %d: %q, want %q", c.compat, kind, got, c.want)
 			}
 		}
 	}

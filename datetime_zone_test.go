@@ -143,9 +143,10 @@ func TestDublinSeasonsFromICU(t *testing.T) {
 	}
 }
 
-// TestZoneResolvedAsICUCanonical is the zone resolvedOptions reports: ICU's
-// canonical name, whatever the case of the one given, and "UTC" for
-// Etc/UTC and Etc/GMT, as V8 reports them. The expectations are Node 26's.
+// TestZoneResolvedAsICUCanonical is the zone resolvedOptions reports with
+// ZoneIdentifiers: ICU's canonical name, whatever the case of the one given,
+// and "UTC" for Etc/UTC and Etc/GMT, as V8 reports them. The expectations
+// are Node 26's.
 func TestZoneResolvedAsICUCanonical(t *testing.T) {
 	for in, want := range map[string]string{
 		"Asia/Kolkata":          "Asia/Calcutta",
@@ -161,7 +162,9 @@ func TestZoneResolvedAsICUCanonical(t *testing.T) {
 		"+0530":                 "+05:30",
 		"-00:00":                "+00:00",
 	} {
-		f, err := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{TimeZone: in})
+		f, err := intl.NewDateTimeFormat(intl.Locale{}, intl.DateTimeFormatOptions{
+			TimeZone: in, Compat: intl.ZoneIdentifiers,
+		})
 		if err != nil {
 			t.Errorf("%s: %v", in, err)
 			continue
@@ -178,7 +181,8 @@ func TestZoneResolvedAsICUCanonical(t *testing.T) {
 }
 
 // The zones V8 makes UTC before ICU sees them are written with UTC's names,
-// as Node writes them; the other links to Etc/GMT keep Greenwich's.
+// as Node writes them, and resolve as UTC with ZoneIdentifiers; the other
+// links to Etc/GMT keep Greenwich's.
 func TestUTCAliasNames(t *testing.T) {
 	loc, _ := intl.ParseLocale("en")
 	for zone, want := range map[string]string{
@@ -189,23 +193,25 @@ func TestUTCAliasNames(t *testing.T) {
 		"Etc/GMT0": "Greenwich Mean Time", "Etc/GMT-0": "Greenwich Mean Time",
 		"Greenwich": "Greenwich Mean Time", "Etc/Greenwich": "Greenwich Mean Time",
 	} {
-		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
-			TimeZone: zone, TimeZoneName: intl.ZoneLong,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var got string
-		for _, p := range f.FormatToParts(time.UnixMilli(0)) {
-			if p.Kind == intl.PartTimeZoneName {
-				got = p.Value
+		for _, compat := range []intl.Compat{intl.Standard, intl.ZoneIdentifiers} {
+			f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+				TimeZone: zone, TimeZoneName: intl.ZoneLong, Compat: compat,
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-		if got != want {
-			t.Errorf("%s: %q, want %q", zone, got, want)
-		}
-		if r := f.ResolvedOptions().TimeZone; r != "UTC" {
-			t.Errorf("%s: resolved %s, want UTC", zone, r)
+			var got string
+			for _, p := range f.FormatToParts(time.UnixMilli(0)) {
+				if p.Kind == intl.PartTimeZoneName {
+					got = p.Value
+				}
+			}
+			if got != want {
+				t.Errorf("%s %v: %q, want %q", zone, compat, got, want)
+			}
+			if r := f.ResolvedOptions().TimeZone; compat == intl.ZoneIdentifiers && r != "UTC" {
+				t.Errorf("%s: resolved %s, want UTC", zone, r)
+			}
 		}
 	}
 }

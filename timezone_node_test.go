@@ -58,7 +58,10 @@ func TestTimeZonesMatchNode(t *testing.T) {
 			ids++
 			var want *string
 			json.Unmarshal(c[2], &want)
-			df, err := NewDateTimeFormat(Locale{}, DateTimeFormatOptions{TimeZone: name})
+			df, err := NewDateTimeFormat(Locale{}, DateTimeFormatOptions{
+				// Node's names, ICU's canonical ones.
+				TimeZone: name, Compat: ZoneIdentifiers,
+			})
 			switch {
 			case want == nil && err == nil:
 				fail("resolved as %q, want an error", df.ResolvedOptions().TimeZone)

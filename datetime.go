@@ -290,7 +290,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 			return nil, err
 		}
 	}
-	if f.tz, f.zoneName, f.zoneID, err = loadZone(src, opts.TimeZone); err != nil {
+	if f.tz, f.zoneName, f.zoneID, err = loadZone(src, opts.TimeZone, opts.Compat); err != nil {
 		return nil, err
 	}
 	if numbers, err := loadNumbers(src, loc); err == nil {
@@ -475,12 +475,27 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 	return nil, fmt.Errorf("intl: no date data for %s: %w", loc, ErrNotFound)
 }
 
+// ResolveTimeZone is the zone a DateTimeFormat asked for a timeZone settles
+// on, as its resolvedOptions reports it, or an error for one it does not
+// know, which ECMA-402 throws as a RangeError. An engine reads it where
+// CreateDateTimeFormat reads the option, before the options after it.
+//
+// ECMA-402 takes the names of the IANA time zone database and reports one
+// as given, in the database's case: "Asia/Calcutta" is itself, and "ACT",
+// which only ICU knows, is no zone. V8 takes any name ICU knows and
+// reports ICU's canonical one, "Asia/Calcutta" for "Asia/Kolkata"
+// (ZoneIdentifiers).
+func ResolveTimeZone(src Source, name string, compat Compat) (string, error) {
+	_, resolved, _, err := loadZone(src, name, compat)
+	return resolved, err
+}
+
 // loadZone finds a time zone: a named one, or an offset from UTC. An empty
 // name is UTC, which is what ECMA-402 falls back to when the host says
 // nothing. It returns the zone, the name resolvedOptions reports, and the
 // identifier the zone is named by.
-func loadZone(src Source, name string) (*timeZone, string, string, error) {
-	if name == "" || isUTCAlias(name) {
+func loadZone(src Source, name string, compat Compat) (*timeZone, string, string, error) {
+	if name == "" {
 		name = "UTC"
 	}
 	if seconds, resolved, ok := parseOffsetZone(name); ok {
@@ -494,11 +509,49 @@ func loadZone(src Source, name string) (*timeZone, string, string, error) {
 		}
 		return fixedZone(seconds), resolved, id, nil
 	}
-	z, err := loadTimeZone(src, name)
+	given := ""
+	if !compat.Has(ZoneIdentifiers) {
+		var ok bool
+		if given, ok = ianaZoneName(src, name); !ok {
+			return nil, "", "", fmt.Errorf("intl: %q is %w", name, errNoZone)
+		}
+	}
+	load := name
+	if isUTCAlias(name) {
+		load = "UTC"
+	}
+	z, err := loadTimeZone(src, load)
 	if err != nil {
 		return nil, "", "", err
 	}
+	if given != "" {
+		return z, given, z.id, nil
+	}
 	return z, z.resolvedID(), z.id, nil
+}
+
+// ianaZoneName is a zone's name as the IANA time zone database spells it,
+// read in any case; false for a name the database does not have. The names
+// are Temporal's, which are the database's, backzone and links included, as
+// of the version Temporal's provider pins, which may be older than ICU's
+// zones: a name newer than it is refused.
+func ianaZoneName(src Source, name string) (string, bool) {
+	b, err := src.Open(MarkerTemporalZones, DataLocale{})
+	if err != nil {
+		return "", false
+	}
+	text := string(b)
+	// The first line is the database's version.
+	_, text, _ = strings.Cut(text, "\n")
+	for text != "" {
+		var line string
+		line, text, _ = strings.Cut(text, "\n")
+		zone, _, _ := strings.Cut(line, " ")
+		if strings.EqualFold(zone, name) {
+			return zone, true
+		}
+	}
+	return "", false
 }
 
 // isUTCAlias reports whether a zone is one V8's CanonicalizeTimeZoneID

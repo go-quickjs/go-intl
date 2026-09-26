@@ -504,6 +504,12 @@ func (f *DateTimeFormat) instant(t time.Time) dateParts {
 		// where ICU4C writes a year of the era after it (IslamicEras).
 		p.era, p.year = 1, 1-p.year
 	}
+	if f.system == Coptic && p.era == 0 && !f.opts.Compat.Has(CopticEra) {
+		// The coptic calendar's one era, its years before 1 counted as 0
+		// and below, where ICU4C writes an era CLDR names nowhere
+		// (CopticEra).
+		p.era, p.year = 1, 1-p.year
+	}
 	p.zoneOffset = offset
 	p.instant = local
 	return p
