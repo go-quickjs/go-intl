@@ -413,8 +413,8 @@ func (d PlainDate) ToZonedDateTime(tz TimeZone, t *PlainTime) (ZonedDateTime, er
 	var e epochAndOffset
 	var err error
 	if t != nil {
-		dt, err := newISODateTime(d.iso, t.iso)
-		if err != nil {
+		var dt ISODateTime
+		if dt, err = newISODateTime(d.iso, t.iso); err != nil {
 			return ZonedDateTime{}, err
 		}
 		e, err = tz.epochNanosecondsFor(dt, Compatible)
