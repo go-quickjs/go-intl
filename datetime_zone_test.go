@@ -176,3 +176,36 @@ func TestZoneResolvedAsICUCanonical(t *testing.T) {
 		}
 	}
 }
+
+// The zones V8 makes UTC before ICU sees them are written with UTC's names,
+// as Node writes them; the other links to Etc/GMT keep Greenwich's.
+func TestUTCAliasNames(t *testing.T) {
+	loc, _ := intl.ParseLocale("en")
+	for zone, want := range map[string]string{
+		"GMT": "Coordinated Universal Time", "Etc/GMT": "Coordinated Universal Time",
+		"etc/utc": "Coordinated Universal Time", "Etc/UCT": "Coordinated Universal Time",
+		"GMT0": "Coordinated Universal Time", "GMT+0": "Coordinated Universal Time",
+		"GMT-0": "Coordinated Universal Time", "UTC": "Coordinated Universal Time",
+		"Etc/GMT0": "Greenwich Mean Time", "Etc/GMT-0": "Greenwich Mean Time",
+		"Greenwich": "Greenwich Mean Time", "Etc/Greenwich": "Greenwich Mean Time",
+	} {
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+			TimeZone: zone, TimeZoneName: intl.ZoneLong,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got string
+		for _, p := range f.FormatToParts(time.UnixMilli(0)) {
+			if p.Kind == intl.PartTimeZoneName {
+				got = p.Value
+			}
+		}
+		if got != want {
+			t.Errorf("%s: %q, want %q", zone, got, want)
+		}
+		if r := f.ResolvedOptions().TimeZone; r != "UTC" {
+			t.Errorf("%s: resolved %s, want UTC", zone, r)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Temporal values.
@@ -24,12 +25,10 @@ import (
 // defaults beside an era, and makes a fields' pattern in the formatter's
 // hour cycle.
 //
-// The value itself is the engine's to turn into an instant: a plain value
-// is the instant it names in the formatter's zone, as Temporal's
-// GetEpochNanosecondsFor reckons it with "compatible", and a
-// ZonedDateTime's toLocaleString writes its instant in its own zone. Before
-// it does, the engine asks CalendarMatches, since a value in another
-// calendar is a RangeError, and V8 asks that first.
+// A plain value is written as the instant PlainInstant makes of its ISO
+// date and time, and a ZonedDateTime's toLocaleString writes its instant in
+// its own zone. Before it does, the engine asks CalendarMatches, since a
+// value in another calendar is a RangeError, and V8 asks that first.
 
 // A TemporalKind is a kind of Temporal value a DateTimeFormat writes.
 type TemporalKind int
@@ -114,6 +113,11 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		pattern = replaceHourCycleInPattern(g.bestPattern(skeleton, matchHourFieldLength), f.clock)
 		d.hourCycle = f.clock
 	}
+	if kind != TemporalInstant && !f.opts.Compat.Has(PlainValueZone) {
+		// A plain value's fields are written as they are, which
+		// PlainInstant makes an instant in UTC.
+		d.tz, d.zoneID = fixedZone(0), ""
+	}
 	d.overrides, d.systems, d.rbnf = nil, nil, nil
 	d.patternText = pattern
 	d.pattern = compileDatePattern(pattern, nil)
@@ -124,6 +128,25 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		return nil, err
 	}
 	return &d, nil
+}
+
+// PlainInstant is the instant a plain Temporal value, its ISO date and
+// wall-clock time, is written as by the formatter ForTemporal makes for its
+// kind. The proposal writes the fields as they are, whatever the
+// formatter's zone (test262's PlainDate/prototype/toLocaleString/
+// ignore-timezone): the instant is the fields read as UTC, where the kind's
+// formatter writes. V8 reads them as the instant they name in the
+// formatter's zone, as Temporal's GetEpochNanosecondsFor reckons it with
+// "compatible" -- a skipped time and a repeated one both with the offset
+// before the transition -- and writes that instant there, so a date or
+// time a transition skips moves (PlainValueZone).
+func (f *DateTimeFormat) PlainInstant(year int, month time.Month, day, hour, min, sec, nsec int) time.Time {
+	t := time.Date(year, month, day, hour, min, sec, nsec, time.UTC)
+	if !f.opts.Compat.Has(PlainValueZone) {
+		return t
+	}
+	offset := f.tz.offsetFromLocal(t.UnixMilli(), tzLocalFormer, tzLocalFormer)
+	return t.Add(-time.Duration(offset.raw+offset.dst) * time.Second)
 }
 
 // temporalSkeleton is V8's GetSkeletonForPatternKind: the skeleton a kind

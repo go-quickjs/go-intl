@@ -16,8 +16,8 @@ import "strings"
 // formats, the keyword value "yes", the currencies DisplayNames names, a
 // duration's fraction of a second, the separator a digital duration's
 // minutes take, the fields a date pattern's literals seem to write, the
-// deprecated Islamic calendars and when a resolved locale keeps its hour
-// cycle. Standard and NodeICU are the two ends.
+// deprecated Islamic calendars, when a resolved locale keeps its hour cycle
+// and the zone a plain Temporal value is read in. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -71,6 +71,9 @@ const (
 	// hour12 or hourCycle was given only if the hour cycle it settled on is
 	// the keyword's.
 	HourCycleKeyword
+	// PlainValueZone writes a plain Temporal value as the instant it names
+	// in a DateTimeFormat's zone, rather than as its wall-clock fields.
+	PlainValueZone
 )
 
 const (
@@ -80,7 +83,7 @@ const (
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
-		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword
+		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -231,6 +234,16 @@ var Divergences = []Divergence{
 			"is \"en\", and with {hourCycle: \"h23\"} alone \"en-u-hc-h23\"",
 		Node: "V8 drops it where the hour cycle the formatter settled on, none where it writes " +
 			"no hour, is another: the first is \"en-u-hc-h23\" and the second \"en\"",
+	},
+	{
+		Name: "PlainValueZone", Flag: PlainValueZone,
+		Area: "DateTimeFormat",
+		What: "a plain Temporal value whose wall-clock time the formatter's zone skips",
+		Standard: "the proposal writes a plain value's fields as they are, whatever the zone: " +
+			"PlainDate 2011-12-30 in Pacific/Apia, a day Samoa skipped, is \"12/30/2011\" " +
+			"(test262's PlainDate/prototype/toLocaleString/ignore-timezone)",
+		Node: "V8 reads the value as the instant it names in the zone, with \"compatible\", " +
+			"and writes that instant there: \"12/31/2011\"",
 	},
 }
 

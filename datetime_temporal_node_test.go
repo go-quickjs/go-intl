@@ -22,9 +22,8 @@ import (
 // The expectations are written by testdata/datetime_temporal_node.js.
 //
 // The replay does what an engine does around go-intl, as V8 does it: checks
-// the value's calendar, turns the value into an instant in the formatter's
-// zone with Temporal's "compatible" disambiguation, and asks ForTemporal for
-// the kind's formatter.
+// the value's calendar, asks PlainInstant for the instant a plain value is
+// written as, and asks ForTemporal for the kind's formatter.
 func TestDateTimeTemporalMatchesNode(t *testing.T) {
 	f, err := os.Open("testdata/datetime_temporal_node.txt.gz")
 	if err != nil {
@@ -37,18 +36,6 @@ func TestDateTimeTemporalMatchesNode(t *testing.T) {
 	}
 	s := bufio.NewScanner(z)
 	s.Buffer(make([]byte, 1<<20), 1<<20)
-
-	zones := map[string]*intl.TimeZone{}
-	zone := func(name string) *intl.TimeZone {
-		if zones[name] == nil {
-			tz, err := intl.LoadTimeZone(intl.Embedded, name)
-			if err != nil {
-				t.Fatal(err)
-			}
-			zones[name] = tz
-		}
-		return zones[name]
-	}
 
 	var ran, matched int
 	var differences []string
@@ -81,7 +68,7 @@ func TestDateTimeTemporalMatchesNode(t *testing.T) {
 		c.result = fields[6]
 		ran++
 
-		got := temporalOutcome(c.tag, c.opts, c.method, c.kind, c.calendar, c.values, zone)
+		got := temporalOutcome(c.tag, c.opts, c.method, c.kind, c.calendar, c.values)
 		var want any
 		if err := json.Unmarshal(c.result, &want); err != nil {
 			t.Fatal(err)
@@ -133,8 +120,7 @@ var temporalKinds = map[string]intl.TemporalKind{
 	"zoned": intl.TemporalInstant,
 }
 
-func temporalOutcome(tag string, in map[string]any, method, kind, calendar string, values [][]any,
-	zone func(string) *intl.TimeZone) any {
+func temporalOutcome(tag string, in map[string]any, method, kind, calendar string, values [][]any) any {
 	opts, err := dateTimeOptions(in)
 	if err != nil {
 		return err.Error()
@@ -171,10 +157,9 @@ func temporalOutcome(tag string, in map[string]any, method, kind, calendar strin
 	if !f.CalendarMatches(k, calendar) {
 		return rangeError
 	}
-	tz := zone(f.ResolvedOptions().TimeZone)
 	instants := make([]time.Time, len(values))
 	for i, v := range values {
-		instants[i] = temporalInstant(kind, v, tz)
+		instants[i] = temporalInstant(f, kind, v)
 	}
 	kf, err := f.ForTemporal(k)
 	if errors.Is(err, intl.ErrTemporalFormat) {
@@ -196,16 +181,12 @@ func temporalOutcome(tag string, in map[string]any, method, kind, calendar strin
 	return kf.Format(instants[0])
 }
 
-// temporalInstant is the instant a value names: a plain value's fields in
-// the zone, read as Temporal's "compatible" reads them -- a skipped time
-// and a repeated one both with the offset before the transition.
-func temporalInstant(kind string, v []any, tz *intl.TimeZone) time.Time {
-	n := func(i int) int64 { return int64(v[i].(float64)) }
+// temporalInstant is the instant a value is written as: an instant's own,
+// and PlainInstant's of a plain value's fields.
+func temporalInstant(f *intl.DateTimeFormat, kind string, v []any) time.Time {
+	n := func(i int) int { return int(v[i].(float64)) }
 	if kind == "instant" || kind == "zoned" {
-		return time.UnixMilli(n(0))
+		return time.UnixMilli(int64(n(0)))
 	}
-	day := time.Date(int(n(0)), time.Month(n(1)), int(n(2)), 0, 0, 0, 0, time.UTC).UnixMilli()
-	local := day + ((n(3)*60+n(4))*60+n(5))*1000 + n(6)
-	offset := tz.OffsetFromLocal(local, intl.Former, intl.Former)
-	return time.UnixMilli(local - int64(offset.Total())*1000)
+	return f.PlainInstant(n(0), time.Month(n(1)), n(2), n(3), n(4), n(5), n(6)*1_000_000)
 }

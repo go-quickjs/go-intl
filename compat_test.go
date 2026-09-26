@@ -337,3 +337,45 @@ func TestHourCycleKeyword(t *testing.T) {
 		}
 	}
 }
+
+// A plain Temporal value whose wall-clock time the formatter's zone skips:
+// the standard writes its fields as they are, as test262's
+// PlainDate/prototype/toLocaleString/ignore-timezone and its PlainDateTime
+// counterpart require; Node writes the instant they name in the zone.
+func TestPlainValueZone(t *testing.T) {
+	loc, _ := intl.ParseLocale("en-US")
+	for _, c := range []struct {
+		zone   string
+		kind   intl.TemporalKind
+		fields [6]int
+		want   [2]string // Standard, PlainValueZone
+	}{
+		{"Pacific/Apia", intl.TemporalPlainDate, [6]int{2011, 12, 30},
+			[2]string{"12/30/2011", "12/31/2011"}},
+		{"America/Los_Angeles", intl.TemporalPlainDateTime, [6]int{2026, 3, 8, 2, 30},
+			[2]string{"3/8/2026, 2:30:00 AM", "3/8/2026, 3:30:00 AM"}},
+		{"America/Los_Angeles", intl.TemporalPlainDateTime, [6]int{2026, 7, 8, 2, 30},
+			[2]string{"7/8/2026, 2:30:00 AM", "7/8/2026, 2:30:00 AM"}},
+	} {
+		for i, compat := range []intl.Compat{intl.Standard, intl.PlainValueZone} {
+			opts := intl.DateTimeFormatOptions{TimeZone: c.zone, Compat: compat}
+			if c.kind == intl.TemporalPlainDate {
+				opts.Required, opts.Defaults = intl.ComponentsDate, intl.ComponentsDate
+			} else {
+				opts.Required, opts.Defaults = intl.ComponentsAny, intl.ComponentsAll
+			}
+			f, err := intl.NewDateTimeFormat(loc, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			kf, err := f.ForTemporal(c.kind)
+			if err != nil {
+				t.Fatal(err)
+			}
+			v := c.fields
+			if got := kf.Format(f.PlainInstant(v[0], time.Month(v[1]), v[2], v[3], v[4], v[5], 0)); got != c.want[i] {
+				t.Errorf("%s %v %v: %q, want %q", c.zone, v, compat, got, c.want[i])
+			}
+		}
+	}
+}

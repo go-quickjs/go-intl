@@ -480,7 +480,7 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 // nothing. It returns the zone, the name resolvedOptions reports, and the
 // identifier the zone is named by.
 func loadZone(src Source, name string) (*timeZone, string, string, error) {
-	if name == "" {
+	if name == "" || isUTCAlias(name) {
 		name = "UTC"
 	}
 	if seconds, resolved, ok := parseOffsetZone(name); ok {
@@ -499,6 +499,18 @@ func loadZone(src Source, name string) (*timeZone, string, string, error) {
 		return nil, "", "", err
 	}
 	return z, z.resolvedID(), z.id, nil
+}
+
+// isUTCAlias reports whether a zone is one V8's CanonicalizeTimeZoneID
+// makes UTC before ICU sees it, and so is written with UTC's names, as
+// ECMA-262 makes UTC the primary identifier of GMT, Etc/GMT and Etc/UTC.
+// The other links to Etc/GMT keep Greenwich Mean Time's.
+func isUTCAlias(name string) bool {
+	switch strings.ToUpper(name) {
+	case "GMT", "ETC/UTC", "ETC/GMT", "ETC/UCT", "GMT0", "GMT+0", "GMT-0":
+		return true
+	}
+	return false
 }
 
 // parseOffsetZone reads an offset time zone as ECMA-402 allows one: a sign
