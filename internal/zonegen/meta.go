@@ -127,14 +127,19 @@ func readMeta(archive *zip.ReadCloser, tzDir string) (*zonedata.BuiltMeta, error
 				if len(el.Values) == 0 {
 					continue
 				}
-				u := zonedata.Use{Metazone: el.Values[0]}
+				// A use without dates is ICU's gDefaultFrom to gDefaultTo
+				// (zonemeta.cpp), not all time: no zone is in a metazone
+				// before 1970, so New York in 1880 is "GMT-04:56:02".
+				from, to := defaultFrom, defaultTo
 				if len(el.Values) == 3 {
-					if u.From, err = minutes(el.Values[1]); err != nil {
-						return nil, err
-					}
-					if u.To, err = minutes(el.Values[2]); err != nil {
-						return nil, err
-					}
+					from, to = el.Values[1], el.Values[2]
+				}
+				u := zonedata.Use{Metazone: el.Values[0]}
+				if u.From, err = minutes(from); err != nil {
+					return nil, err
+				}
+				if u.To, err = minutes(to); err != nil {
+					return nil, err
 				}
 				uses[id(c.Key)] = append(uses[id(c.Key)], u)
 			}
@@ -175,6 +180,12 @@ func readMeta(archive *zip.ReadCloser, tzDir string) (*zonedata.BuiltMeta, error
 	sort.Slice(m.Primary, func(i, j int) bool { return m.Primary[i].From < m.Primary[j].From })
 	return m, nil
 }
+
+// The bounds ICU gives a metazone use that names none.
+const (
+	defaultFrom = "1970-01-01 00:00"
+	defaultTo   = "9999-12-31 23:59"
+)
 
 // minutes turns metaZones.txt's "1970-01-01 00:00", which is UTC, into
 // minutes since 1970 plus one, so that zero can mean unbounded.

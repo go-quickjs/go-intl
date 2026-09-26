@@ -36,9 +36,10 @@ type MetaZone struct {
 }
 
 // A Use is a stretch of time a zone belonged to a metazone. From and To are
-// minutes since 1970 in UTC, plus one; zero means unbounded. They are 64
-// bits: ICU ends a use that has not ended at 9999-12-31, which is more
-// minutes than a 32-bit int holds.
+// minutes since 1970 in UTC, plus one; zero means unbounded, which ICU's
+// data never is: a use with no dates runs from 1970 to 9999-12-31 23:59.
+// They are 64 bits because that end is more minutes than a 32-bit int
+// holds.
 type Use struct {
 	Metazone string
 	From, To int64
