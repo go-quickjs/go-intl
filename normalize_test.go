@@ -100,3 +100,21 @@ func TestNormalizeCoverage(t *testing.T) {
 		}
 	}
 }
+
+// Canonical combining classes from UnicodeData.txt: a starter, the classes
+// above and below, the nukta and virama, the Adlam nukta and a Garay vowel
+// sign, which Unicode 16 added.
+func TestCombiningClass(t *testing.T) {
+	n, err := intl.NewNormalizer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for r, want := range map[rune]int{
+		'a': 0, 0x0301: 230, 0x0323: 220, 0x0307: 230, 0x093C: 7, 0x094D: 9,
+		0x0345: 240, 0x1E94A: 7, 0x10D69: 230,
+	} {
+		if got := n.CombiningClass(r); got != want {
+			t.Errorf("U+%04X: %d, want %d", r, got, want)
+		}
+	}
+}

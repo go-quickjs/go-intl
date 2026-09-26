@@ -96,6 +96,12 @@ func (n *Normalizer) Normalize(s string, form NormalizationForm) string {
 	return out
 }
 
+// CombiningClass is a character's canonical combining class, which decides
+// the order accents are written in and which of them combine: 0 for a
+// starter, 230 for most accents written above. Case mapping reads it too,
+// for the accents Lithuanian and Turkish keep a dot through.
+func (n *Normalizer) CombiningClass(r rune) int { return int(n.tables.Class(r)) }
+
 // decompose takes every character apart and puts the accents in order.
 func (n *Normalizer) decompose(s string, compatibility bool) string {
 	var b strings.Builder
