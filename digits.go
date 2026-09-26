@@ -123,18 +123,28 @@ func (r digitRequest) resolve() (digitPlan, error) {
 // way of counting the options settled on, and then pads or trims the decimals.
 func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 	var integer, fraction string
+	// significant is whether the significant digits decided, whose minimum
+	// the number is then padded to; otherwise the decimals' is.
+	significant := false
 	switch p.rounding {
 	case roundSignificantDigits:
+		significant = true
 		integer, fraction = roundSignificant(magnitude, p.maxSig, negative, p.mode)
 	case roundMorePrecision, roundLessPrecision:
 		// The two ways are compared by where each would round: the smaller
 		// place keeps more. Which of the two is wanted is the priority.
+		// FormatNumericToString: morePrecision takes the significant
+		// digits' result where its rounding magnitude is at or below the
+		// decimals', and lessPrecision takes the decimals' there.
 		sig := significantPlace(magnitude, p.maxSig)
 		frac := -p.maxFrac
-		useSig := sig < frac
+		useSig := sig <= frac
 		if p.rounding == roundLessPrecision {
 			useSig = sig > frac
 		}
+		// The one chosen is taken whole, its minimum with it, as ECMA-402's
+		// FormatNumericToString takes sResult or fResult.
+		significant = useSig
 		if useSig {
 			integer, fraction = roundSignificant(magnitude, p.maxSig, negative, p.mode)
 		} else {
@@ -150,14 +160,14 @@ func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 			integer, fraction = roundAt(magnitude, p.maxFrac, negative, p.mode)
 		}
 	}
-	return p.pad(integer, fraction)
+	return p.pad(integer, fraction, significant)
 }
 
-// pad trims the decimals that were not asked for and writes the ones that were.
-func (p *digitPlan) pad(integer, fraction string) (string, string) {
+// pad trims the decimals that were not asked for and writes the ones that
+// were, by the minimum of the way of counting that decided the rounding.
+func (p *digitPlan) pad(integer, fraction string, significant bool) (string, string) {
 	minFrac := p.minFrac
-	switch p.rounding {
-	case roundSignificantDigits, roundMorePrecision, roundLessPrecision:
+	if significant {
 		// Significant digits set their own minimum: enough decimals to make up
 		// the smallest count, and no more.
 		minFrac = 0

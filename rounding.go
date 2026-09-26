@@ -186,13 +186,15 @@ func roundSignificant(m mag, n int, negative bool, mode RoundingMode) (integer, 
 	return roundAt(m, n-1-m.exponent(), negative, mode)
 }
 
-// significantPlace and fractionPlace say where each way of counting would
-// round, as a power of ten. The smaller place keeps more.
+// significantPlace says where rounding to significant digits would round, as
+// a power of ten: ECMA-402's [[RoundingMagnitude]] of ToRawPrecision, whose
+// exponent is 0 for zero. The smaller place keeps more.
 func significantPlace(m mag, maxSignificant int) int {
-	if m.isZero() {
-		return 0
+	e := 0
+	if !m.isZero() {
+		e = m.exponent()
 	}
-	return m.exponent() - maxSignificant + 1
+	return e - maxSignificant + 1
 }
 
 // roundToIncrement rounds a number's digits, unrounded, to a multiple of an
