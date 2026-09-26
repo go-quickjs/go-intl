@@ -420,6 +420,12 @@ func TestZoneIdentifiers(t *testing.T) {
 			}
 		}
 	}
+	// A timeZone given as "" is no zone, on either side.
+	for _, compat := range []intl.Compat{intl.Standard, intl.ZoneIdentifiers} {
+		if got, err := intl.ResolveTimeZone(intl.Embedded, "", compat); err == nil {
+			t.Errorf("%v: \"\" is %q, want an error", compat, got)
+		}
+	}
 	// A link is written as the zone it links to.
 	at := time.UnixMilli(0)
 	for _, compat := range []intl.Compat{intl.Standard, intl.ZoneIdentifiers} {

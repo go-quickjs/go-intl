@@ -491,8 +491,12 @@ func loadDates(src Source, loc Locale) (*datedata.Locale, error) {
 // as given, in the database's case: "Asia/Calcutta" is itself, and "ACT",
 // which only ICU knows, is no zone. V8 takes any name ICU knows and
 // reports ICU's canonical one, "Asia/Calcutta" for "Asia/Kolkata"
-// (ZoneIdentifiers).
+// (ZoneIdentifiers). The empty name, which DateTimeFormatOptions takes as
+// UTC, is here an option given as "", and no zone.
 func ResolveTimeZone(src Source, name string, compat Compat) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("intl: %q is %w", name, errNoZone)
+	}
 	_, resolved, _, err := loadZone(src, name, compat)
 	return resolved, err
 }
