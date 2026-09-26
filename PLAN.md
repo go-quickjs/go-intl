@@ -982,8 +982,8 @@ Switched over in go-quickjs, on its `intl-go-intl` branch and not yet merged:
 Collator and `localeCompare`, PluralRules, DisplayNames, ListFormat,
 RelativeTimeFormat, Segmenter, DurationFormat, NumberFormat, and
 DateTimeFormat with Date's and Temporal's `toLocaleString`, Intl.Locale,
-and `supportedValuesOf`, each with the quick gates at their floor. Still on
-`internal/icu`: Date and Temporal. The maintainer gave rule 5's word
+and `supportedValuesOf`, and Date on the `date` package, each with the quick
+gates at their floor. Still on `internal/icu`: Temporal. The maintainer gave rule 5's word
 on 2026-09-25: switch go-quickjs over, a service at a time on a branch, with
 the gates measured after each; drop `WarmupDateTimeData`, `WarmupIntlData`
 and the `intldata` package, which go-intl has no use for; go-quickjs
