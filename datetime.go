@@ -797,8 +797,11 @@ type ResolvedDateTimeFormat struct {
 	Calendar        string
 	NumberingSystem string
 	TimeZone        string
-	// HourCycle is unset unless an hour or a time style was asked for.
+	// HourCycle is unset unless an hour or a time style was asked for, and
+	// Hour12 is meaningful only where it is set: true for h11 and h12, as
+	// ECMA-402 reports it beside the hour cycle.
 	HourCycle HourCycle
+	Hour12    bool
 
 	// DateStyle and TimeStyle are the styles asked for. A formatter asked
 	// for neither reports the fields below instead: those its pattern
@@ -832,6 +835,7 @@ func (f *DateTimeFormat) ResolvedOptions() ResolvedDateTimeFormat {
 		NumberingSystem: system,
 		TimeZone:        f.zoneName,
 		HourCycle:       cycle,
+		Hour12:          cycle == H11 || cycle == H12,
 		DateStyle:       f.opts.DateStyle,
 		TimeStyle:       f.opts.TimeStyle,
 	}

@@ -1,0 +1,10 @@
+# Node v26.10.0
+Collator caseFirst collation ignorePunctuation locale numeric sensitivity usage
+DateTimeFormat calendar dateStyle day dayPeriod era fractionalSecondDigits hour hour12 hourCycle locale minute month numberingSystem second timeStyle timeZone timeZoneName weekday year
+DisplayNames fallback languageDisplay locale style type
+DurationFormat days daysDisplay fractionalDigits hours hoursDisplay locale microseconds microsecondsDisplay milliseconds millisecondsDisplay minutes minutesDisplay months monthsDisplay nanoseconds nanosecondsDisplay numberingSystem seconds secondsDisplay style weeks weeksDisplay years yearsDisplay
+ListFormat locale style type
+NumberFormat compactDisplay currency currencyDisplay currencySign locale maximumFractionDigits maximumSignificantDigits minimumFractionDigits minimumIntegerDigits minimumSignificantDigits notation numberingSystem roundingIncrement roundingMode roundingPriority signDisplay style trailingZeroDisplay unit unitDisplay useGrouping
+PluralRules compactDisplay locale maximumFractionDigits maximumSignificantDigits minimumFractionDigits minimumIntegerDigits minimumSignificantDigits notation pluralCategories roundingIncrement roundingMode roundingPriority trailingZeroDisplay type
+RelativeTimeFormat locale numberingSystem numeric style
+Segmenter granularity locale

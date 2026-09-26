@@ -36,6 +36,20 @@ type Segmenter struct {
 	engines *breakEngines
 }
 
+// ResolvedSegmenter is what a segmenter settled on, mirroring
+// Intl.Segmenter.prototype.resolvedOptions.
+type ResolvedSegmenter struct {
+	Locale      string
+	Granularity Granularity
+}
+
+// ResolvedOptions returns what the segmenter settled on: its locale, which
+// keeps no Unicode extension keyword since a segmenter reads none, and its
+// granularity.
+func (s *Segmenter) ResolvedOptions() ResolvedSegmenter {
+	return ResolvedSegmenter{Locale: s.locale.onlyKeywords().String(), Granularity: s.granularity}
+}
+
 // NewSegmenter builds a Segmenter from the data built into the package.
 func NewSegmenter(loc Locale, opts SegmenterOptions) (*Segmenter, error) {
 	return NewSegmenterFrom(Embedded, loc, opts)
