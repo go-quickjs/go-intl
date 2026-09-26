@@ -126,7 +126,7 @@ func (s SignDisplay) String() string {
 // String is the useGrouping option's value, "false" for GroupingNever,
 // which the option takes as false.
 func (g Grouping) String() string {
-	return optionName("Grouping", int(g), "auto", "false", "always", "min2")
+	return optionName("Grouping", int(g), "undefined", "auto", "false", "always", "min2")
 }
 
 func (n Notation) String() string {

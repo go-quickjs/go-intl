@@ -53,12 +53,15 @@ const (
 	SignNegative
 )
 
-// Grouping is whether the thousands separators appear. Its zero value is the
-// default, which is that they do.
+// Grouping is whether the thousands separators appear. Its zero value is
+// useGrouping not given, which a formatter settles on GroupingAuto, or on
+// GroupingMin2 in compact notation, as ECMA-402 does; a formatter asked for
+// GroupingAuto keeps it, and reports it, in any notation.
 type Grouping int
 
 const (
-	GroupingAuto Grouping = iota
+	GroupingDefault Grouping = iota
+	GroupingAuto
 	GroupingNever
 	GroupingAlways
 	// GroupingMin2 writes a separator only where the leading group has at
@@ -246,6 +249,14 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 	}
 	src, loc, data := s.src, s.loc, s.data
 	var err error
+	if opts.UseGrouping == GroupingDefault {
+		// GetBooleanOrStringNumberFormatOption's fallback: "min2" for a
+		// compact number, "auto" for any other.
+		opts.UseGrouping = GroupingAuto
+		if opts.Notation == NotationCompact {
+			opts.UseGrouping = GroupingMin2
+		}
+	}
 
 	// Of the Unicode extension, NumberFormat uses only the numbering system.
 	f := &NumberFormat{locale: loc.onlyKeywords().withKeyword("nu", s.nu), data: data, opts: opts}
@@ -962,7 +973,7 @@ type ResolvedNumberFormat struct {
 	UnitDisplay     UnitDisplay
 	ResolvedDigits
 	// UseGrouping is the grouping settled on: GroupingMin2 for a compact
-	// number that asked for none.
+	// number that asked for none, never GroupingDefault.
 	UseGrouping Grouping
 	Notation    Notation
 	// CompactDisplay is meaningful only in compact notation, which is the
@@ -987,9 +998,6 @@ func (f *NumberFormat) ResolvedOptions() ResolvedNumberFormat {
 		Notation:        f.opts.Notation,
 		CompactDisplay:  f.opts.CompactDisplay,
 		SignDisplay:     f.opts.SignDisplay,
-	}
-	if r.UseGrouping == GroupingAuto && r.Notation == NotationCompact {
-		r.UseGrouping = GroupingMin2
 	}
 	return r
 }

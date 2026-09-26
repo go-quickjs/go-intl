@@ -38,7 +38,8 @@ const digits = [
   { roundingPriority: "morePrecision" }, { minimumIntegerDigits: 3 },
   { minimumFractionDigits: 3, maximumFractionDigits: 1 },
 ];
-const grouping = [{}, { useGrouping: false }, { useGrouping: "always" }, { useGrouping: "min2" }];
+const grouping = [{}, { useGrouping: false }, { useGrouping: "always" }, { useGrouping: "min2" },
+  { useGrouping: "auto" }];
 const rounding = [
   {}, { roundingMode: "ceil" }, { roundingMode: "halfEven", trailingZeroDisplay: "stripIfInteger" },
   { roundingIncrement: 5, maximumFractionDigits: 2, minimumFractionDigits: 2 },

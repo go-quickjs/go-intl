@@ -33,7 +33,7 @@ var (
 	notationNames     = names[intl.Notation](4)
 	compactDisplays   = names[intl.CompactDisplay](2)
 	signDisplays      = names[intl.SignDisplay](5)
-	groupingNames     = names[intl.Grouping](4)
+	groupingNames     = names[intl.Grouping](5)
 	roundingModes     = names[intl.RoundingMode](9)
 	roundingPriority  = names[intl.RoundingPriority](3)
 	trailingZeroNames = names[intl.TrailingZeroDisplay](2)
