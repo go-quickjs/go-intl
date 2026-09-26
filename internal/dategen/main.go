@@ -249,6 +249,13 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	if err := os.WriteFile(filepath.Join("data", "calendarprefs.bin"), prefs, 0o644); err != nil {
 		return err
 	}
+	patterns, err := patternCalendars(icu, fb)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "patterncalendars.bin"), patterns, 0o644); err != nil {
+		return err
+	}
 	hours, err := timeData()
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package intl
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -181,6 +182,9 @@ type DateTimeFormat struct {
 
 	data     *datedata.Locale
 	calendar *datedata.Calendar
+	// patterns is the calendar a pattern generator and the interval
+	// formats are read from: calendar, but for PatternCalendar.
+	patterns *datedata.Calendar
 	system   CalendarSystem
 	numbers  *numberDigits
 
@@ -279,7 +283,17 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	// Of the Unicode extension, DateTimeFormat uses the calendar, the hour
 	// cycle and the numbering system.
 	f := &DateTimeFormat{src: src, asked: loc, explicit: explicit,
-		locale: loc.onlyKeywords("hc", "nu").withKeyword("ca", keep), opts: opts, data: data, calendar: cal, system: system}
+		locale: loc.onlyKeywords("hc", "nu").withKeyword("ca", keep), opts: opts, data: data, calendar: cal,
+		patterns: cal, system: system}
+	if opts.Compat.Has(PatternCalendar) && !calendarAsked(loc, opts.Calendar) {
+		if name := patternCalendarOf(src, loc); name != "" && name != string(system) {
+			if pc, ok, err := data.Calendar(name); err != nil {
+				return nil, fmt.Errorf("intl: the dates for %s: %w", loc, err)
+			} else if ok {
+				f.patterns = pc
+			}
+		}
+	}
 	if system == Japanese {
 		if f.rules.eras, err = loadJapaneseEras(src); err != nil {
 			return nil, err
@@ -457,6 +471,41 @@ func (o *DateTimeFormatOptions) hasFields() bool {
 		o.Month != WidthNone || o.Day != WidthNone || o.Hour != WidthNone ||
 		o.Minute != WidthNone || o.Second != WidthNone || o.TimeZoneName != ZoneNone ||
 		o.DayPeriod != WidthNone || o.FractionalSecondDigits != 0
+}
+
+// calendarAsked reports whether a calendar was asked for, by the option or
+// by the locale's -u-ca, in a form chooseCalendar takes: V8 then hands ICU a
+// locale with the calendar keyword.
+func calendarAsked(loc Locale, option string) bool {
+	if option != "" && implemented[CalendarSystem(strings.ToLower(option))] {
+		return true
+	}
+	keyword, _ := loc.Keyword("ca")
+	return implemented[CalendarSystem(keyword)]
+}
+
+// patternCalendarOf is the calendar ICU's pattern generator reads the
+// locale's patterns from when none is asked for, where that is not the one
+// it reckons in (dategen's patternCalendars); "" for almost every locale.
+func patternCalendarOf(src Source, loc Locale) string {
+	b, err := src.Open(MarkerPatternCalendars, DataLocale{})
+	if err != nil {
+		return ""
+	}
+	tag := loc.Data().String()
+	for len(b) > 0 {
+		line := b
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			line, b = b[:i], b[i+1:]
+		} else {
+			b = nil
+		}
+		name, cal, ok := bytes.Cut(line, []byte(" "))
+		if ok && string(name) == tag {
+			return string(cal)
+		}
+	}
+	return ""
 }
 
 func loadDates(src Source, loc Locale) (*datedata.Locale, error) {

@@ -75,6 +75,10 @@ const (
 	// MarkerCalendarPrefs maps a region to the calendar it reckons in, which
 	// is likewise not a matter of language.
 	MarkerCalendarPrefs Marker = "calendarprefs"
+	// MarkerPatternCalendars maps the few locales whose patterns ICU reads
+	// from another calendar than the one they reckon in, when none is asked
+	// for, to that calendar (see PatternCalendar).
+	MarkerPatternCalendars Marker = "patterncalendars"
 	// MarkerTimeData is CLDR's hour-cycle preferences, by region or by
 	// language and region.
 	MarkerTimeData Marker = "timedata"

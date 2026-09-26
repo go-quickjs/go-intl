@@ -544,9 +544,13 @@ type dtpg struct {
 
 // newDTPG builds a generator as ICU's initData does: the canonical letters,
 // the locale's style patterns, its available formats, its append items and
-// its date-time glue.
-func newDTPG(cal *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
+// its date-time glue. The patterns are those of the calendar ICU's
+// getCalendarTypeToUse settles on, and the glue that of the calendar the
+// dates are reckoned in (setDateTimeFromCalendar), which differ only for
+// PatternCalendar.
+func newDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
 	hourChar byte, allowed []string) *dtpg {
+	cal := patterns
 	g := &dtpg{decimal: decimal, defaultHourChar: hourChar, allowedHours: allowed}
 	// Room for every pattern, so that the elements are allocated once.
 	g.patterns.elems = make([]ptnElem, 0, len(canonicalItems)+2*datedata.Lengths+len(cal.Available))
@@ -582,9 +586,9 @@ func newDTPG(cal *datedata.Calendar, fieldNames [datedata.Fields]string, decimal
 		g.addPattern(s.Pattern, s.ID, true, true, &fp)
 	}
 	for i := 0; i < 4; i++ {
-		g.dateTimeFormat[i] = cal.AtTimeFormats[i]
+		g.dateTimeFormat[i] = glue.AtTimeFormats[i]
 		if g.dateTimeFormat[i] == "" {
-			g.dateTimeFormat[i] = cal.DateTimeFormats[i]
+			g.dateTimeFormat[i] = glue.DateTimeFormats[i]
 		}
 	}
 	return g

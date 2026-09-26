@@ -32,7 +32,7 @@ func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, Hour
 	if err != nil {
 		return "", HourCycleAuto, nil, err
 	}
-	g := newDTPG(f.calendar, f.data.FieldNames, decimal, hourChar, allowed)
+	g := newDTPG(f.patterns, f.calendar, f.data.FieldNames, decimal, hourChar, allowed)
 	hc := f.resolveHourCycle(g.defaultHourCycle(), allowed)
 	f.clock = hc
 

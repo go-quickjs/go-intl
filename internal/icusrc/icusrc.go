@@ -246,6 +246,82 @@ func (c *Locales) Bundle(name string, fb Fallback) string {
 	return name
 }
 
+// FunctionalDefault is the value of a keyword ICU's
+// ures_getFunctionalEquivalent settles on for a locale that does not give
+// it: the "default" item of resName ("calendar") in the first bundle it
+// reads that has resName of its own, or "" where none has.
+//
+// That is not always the default the locale inherits. The walk opens each
+// locale in turn and takes a default only when resName is the bundle's own:
+// ures_getByKey finds an inherited one with a fallback warning, which the
+// walk passes over. It then moves to the %%Parent ures_getByKey finds, which
+// may be an ancestor's, skipping the ancestor that holds the default:
+// uz_Arab_AF, an empty bundle, goes to uz_Arab's parent, the root, and
+// settles on "gregorian" where uz_Arab says "persian".
+func (c *Locales) FunctionalDefault(name, resName string, fb Fallback) (string, error) {
+	parent := name
+	for i := 0; i < 16; i++ {
+		if parent == "" {
+			parent = "root"
+		}
+		found := c.Bundle(parent, fb)
+		chain, err := c.Resolve(parent, fb)
+		if err != nil {
+			return "", err
+		}
+		if len(chain) == 0 {
+			return "", nil
+		}
+		// ures_open answers without a warning only for a bundle that
+		// exists, and then resName counts only if the bundle has it.
+		if c.Has(parent) {
+			if res := chain[0].Get(resName); res != nil {
+				if d := res.Get("default"); d != nil && d.Value != "" {
+					return d.Value, nil
+				}
+			}
+		}
+		if found == "root" {
+			return "", nil
+		}
+		if found != parent {
+			parent = found
+			continue
+		}
+		// getParentForFunctionalEquivalent: %%Parent as ures_getByKey finds
+		// it, the bundle's own or an ancestor's, else the name truncated.
+		next := ""
+		for _, n := range chain {
+			if p := n.Get("%%Parent"); p != nil && p.Value != "" {
+				next = p.Value
+				break
+			}
+		}
+		if next == "" {
+			if cut := strings.LastIndex(found, "_"); cut > 0 {
+				next = found[:cut]
+			}
+		}
+		parent = next
+	}
+	return "", fmt.Errorf("icusrc: %s: no end to the fallback of %s", name, resName)
+}
+
+// Inherited is the value of resName's "default" item a locale inherits:
+// the first in the chain ures_open reads that has one.
+func (c *Locales) Inherited(name, resName string, fb Fallback) (string, error) {
+	chain, err := c.Resolve(name, fb)
+	if err != nil {
+		return "", err
+	}
+	for _, n := range chain {
+		if d := n.Get(resName, "default"); d != nil && d.Value != "" {
+			return d.Value, nil
+		}
+	}
+	return "", nil
+}
+
 // parent is ICU's getParentLocaleID for a bundle that does not exist.
 func (fb Fallback) parent(name, orig string) (string, bool) {
 	language, script, region, variant := splitName(name)

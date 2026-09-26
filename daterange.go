@@ -62,9 +62,9 @@ func (f *DateTimeFormat) newRangeFormat(src Source, g *dtpg, skeleton string) (*
 		if err != nil {
 			return nil, err
 		}
-		g = newDTPG(f.calendar, f.data.FieldNames, f.decimal, letter, allowed)
+		g = newDTPG(f.patterns, f.calendar, f.data.FieldNames, f.decimal, letter, allowed)
 	}
-	r := &rangeFormat{info: newIntervalInfo(f.calendar), skeleton: skeleton}
+	r := &rangeFormat{info: newIntervalInfo(f.patterns), skeleton: skeleton}
 	r.pattern = g.bestPattern(r.skeleton, 0)
 	r.initialize(g, f.data.DateTimeGlue)
 	return r, nil

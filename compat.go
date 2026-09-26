@@ -22,7 +22,8 @@ import "strings"
 // of the Chinese and Korean calendars, the region of a locale's hour
 // cycles, the time zones Intl.supportedValuesOf lists, and two roundings
 // that Temporal's normative fixes of May 2026 changed after the
-// temporal_rs Node has. Standard and NodeICU are the two ends.
+// temporal_rs Node has, and the patterns of Uzbek in Afghanistan. Standard
+// and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -108,6 +109,10 @@ const (
 	// its day ended before it, when the clock went back past midnight, as
 	// temporal_rs 0.2.3 does.
 	RepeatedMidnight
+	// PatternCalendar writes the few locales ICU's pattern generator reads
+	// another calendar's patterns for, when no calendar is asked for, with
+	// that calendar's patterns: uz-AF's Persian dates in Gregorian ones.
+	PatternCalendar
 )
 
 const (
@@ -119,7 +124,7 @@ const (
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
-		RoundingWindow | RepeatedMidnight
+		RoundingWindow | RepeatedMidnight | PatternCalendar
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -355,6 +360,19 @@ var Divergences = []Divergence{
 			"to the 4th's midnight and up to the 5th's first (test262's same-date-starts-twice)",
 		Node: "temporal_rs 0.2.3 asserted the instant was before the next day's start: a " +
 			"RangeError, \"ZonedDateTime is outside the expected day bounds\"",
+	},
+	{
+		Name: "PatternCalendar", Flag: PatternCalendar,
+		Area: "DateTimeFormat",
+		What: "the patterns of uz-AF and uz-Arab-AF, which reckon in the Persian calendar, " +
+			"when no calendar is asked for",
+		Standard: "CLDR's: a date is written with the patterns of the calendar it is reckoned " +
+			"in, and uz-Arab-AF inherits uz-Arab's Persian ones, so {year, month, day} is " +
+			"\"AP ۱۳۴۸-۱۰-۱۱\"",
+		Node: "ICU's pattern generator and interval formatter look the calendar up with " +
+			"ures_getFunctionalEquivalent, which passes over uz-Arab, where the default is, for " +
+			"the root's Gregorian: Persian dates in Gregorian patterns, \"۱۳۴۸-۱۰-۱۱\", unless " +
+			"-u-ca or the calendar option names one",
 	},
 }
 

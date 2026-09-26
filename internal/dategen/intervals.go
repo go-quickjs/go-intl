@@ -20,6 +20,86 @@ func icuChain(icu *icusrc.Locales, fb icusrc.Fallback, name string) ([]*icutxt.N
 	return icu.Resolve(icuName, fb)
 }
 
+// patternCalendars is the table of locales whose patterns ICU's pattern
+// generator and interval formatter read from another calendar than the one
+// the locale inherits as its default, when no calendar is asked for: a line
+// each, the locale's tag and the calendar's BCP 47 name, "uz-AF gregory".
+//
+// ICU looks the calendar up with ures_getFunctionalEquivalent, which for an
+// empty bundle can skip the parent that names the default (see
+// icusrc.FunctionalDefault). The locales are those V8 can hand ICU: every
+// bundle of the tree, and each one's form without its script, which V8 adds
+// to its available locales (Intl::BuildLocaleSet).
+func patternCalendars(icu *icusrc.Locales, fb icusrc.Fallback) ([]byte, error) {
+	names := map[string]bool{}
+	for _, n := range icu.Names() {
+		if n == "root" {
+			continue
+		}
+		names[n] = true
+		// RemoveLocaleScriptTag: the language and the region.
+		parts := strings.Split(n, "_")
+		if len(parts) >= 2 && len(parts[1]) == 4 {
+			short := parts[0]
+			if len(parts) >= 3 && (len(parts[2]) == 2 || len(parts[2]) == 3) {
+				short += "_" + parts[2]
+			}
+			names[short] = true
+		}
+	}
+	sorted := make([]string, 0, len(names))
+	for n := range names {
+		sorted = append(sorted, n)
+	}
+	sort.Strings(sorted)
+	var b strings.Builder
+	for _, n := range sorted {
+		cal, err := patternCalendar(icu, fb, n)
+		if err != nil {
+			return nil, err
+		}
+		if cal != "" {
+			fmt.Fprintf(&b, "%s %s\n", strings.ReplaceAll(n, "_", "-"), cal)
+		}
+	}
+	return []byte(b.String()), nil
+}
+
+// patternCalendar is the calendar ICU's pattern generator reads a locale's
+// patterns from when none is asked for, by its BCP 47 name, where that is
+// not the one the locale inherits as its default; "" everywhere else. The
+// locale is ICU's name for it, "uz_Arab_AF".
+func patternCalendar(icu *icusrc.Locales, fb icusrc.Fallback, icuName string) (string, error) {
+	functional, err := icu.FunctionalDefault(icuName, "calendar", fb)
+	if err != nil {
+		return "", err
+	}
+	inherited, err := icu.Inherited(icuName, "calendar", fb)
+	if err != nil {
+		return "", err
+	}
+	if functional == "" {
+		// The walk found no default, and the generator keeps the one it
+		// starts with (getCalendarTypeToUse).
+		functional = "gregorian"
+	}
+	if inherited == "" {
+		inherited = "gregorian"
+	}
+	if functional == inherited {
+		return "", nil
+	}
+	if functional == "gregorian" {
+		return "gregory", nil
+	}
+	for _, x := range extras {
+		if x.cldr == functional {
+			return x.bcp47, nil
+		}
+	}
+	return "", fmt.Errorf("ICU's pattern generator reads %s's patterns from %q, which has no BCP 47 name here", icuName, functional)
+}
+
 // intervalsFromICU reads a calendar's interval patterns as ICU's
 // DateIntervalInfo loads them (dtitvinf.cpp). Each bundle up the chain adds
 // the skeletons and fields the ones before it lacked, its keys taken in
