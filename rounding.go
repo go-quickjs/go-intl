@@ -195,20 +195,20 @@ func significantPlace(m mag, maxSignificant int) int {
 	return m.exponent() - maxSignificant + 1
 }
 
-// roundToIncrement rounds to a multiple of an increment at a given number of
-// decimals: an increment of 5 at two decimals rounds to the nearest 0.05.
+// roundToIncrement rounds a number's digits, unrounded, to a multiple of an
+// increment at a given number of decimals: an increment of 5 at two
+// decimals rounds to the nearest 0.05.
 //
 // ECMA-402 only allows an increment when the smallest and largest decimal
-// counts are the same, so the digits are already at a fixed place and the
-// whole thing is integer arithmetic on that place.
+// counts are the same, so the rounding is integer arithmetic on the units of
+// that place, with the digits below it deciding how far past a unit the
+// number falls.
 func roundToIncrement(integer, fraction string, places, inc int,
 	negative bool, mode RoundingMode) (string, string) {
-	if inc <= 1 {
-		return integer, fraction
-	}
 	for len(fraction) < places {
 		fraction += "0"
 	}
+	below := fraction[places:]
 	// The number is counted in units of the last place. Every increment
 	// ECMA-402 allows, doubled, divides a million, so the last six digits
 	// decide the rounding however many come before them.
@@ -218,14 +218,30 @@ func roundToIncrement(integer, fraction string, places, inc int,
 	tail, _ := strconv.ParseInt(units[cut:], 10, 64)
 	step := int64(inc)
 	low := tail - tail%step
+	// How far past low the number is, rest units and a fraction of one,
+	// against half a step: twice the rest, and the fraction's comparison
+	// with a half where that decides it.
+	rest := tail - low
+	belowHalf := compareHalf(below)
 	r := remainderBelowHalf
-	switch rest := tail - low; {
-	case rest == 0:
+	switch twice := 2 * rest; {
+	case rest == 0 && belowHalf == remainderZero:
 		r = remainderZero
-	case 2*rest > step:
+	case twice > step:
 		r = remainderAboveHalf
-	case 2*rest == step:
+	case twice == step:
 		r = remainderHalf
+		if belowHalf != remainderZero {
+			r = remainderAboveHalf
+		}
+	case twice == step-1:
+		// Half a unit short of half a step: the fraction decides.
+		switch belowHalf {
+		case remainderAboveHalf:
+			r = remainderAboveHalf
+		case remainderHalf:
+			r = remainderHalf
+		}
 	}
 	if mode.roundsUp(r, negative, (low%(2*step))/step == 1) {
 		low += step

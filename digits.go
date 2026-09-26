@@ -141,10 +141,13 @@ func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 			integer, fraction = roundAt(magnitude, p.maxFrac, negative, p.mode)
 		}
 	default:
-		integer, fraction = roundAt(magnitude, p.maxFrac, negative, p.mode)
 		if p.increment > 1 {
-			integer, fraction = roundToIncrement(integer, fraction, p.maxFrac,
+			// Once, to the increment: rounding to the decimals first would
+			// round twice, and 1.25 to the nearest 0.2 would be 1.4.
+			integer, fraction = roundToIncrement(magnitude.integer, magnitude.fraction, p.maxFrac,
 				p.increment, negative, p.mode)
+		} else {
+			integer, fraction = roundAt(magnitude, p.maxFrac, negative, p.mode)
 		}
 	}
 	return p.pad(integer, fraction)

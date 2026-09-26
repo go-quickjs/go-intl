@@ -19,9 +19,9 @@ type mag struct {
 // magOf is the digits of a float's magnitude: the shortest that read back as
 // the same float, which is what ICU works from; see decimal.go.
 func magOf(v float64) mag {
-	if v < 0 {
-		v = -v
-	}
+	// Abs rather than a comparison with zero, which negative zero passes
+	// with its minus sign still on it.
+	v = math.Abs(v)
 	integer, fraction := splitFloat(v)
 	return makeMag(integer, fraction)
 }
