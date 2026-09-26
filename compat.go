@@ -20,7 +20,9 @@ import "strings"
 // the zone a plain Temporal value is read in, the time zone names a
 // DateTimeFormat takes and reports, a coptic year before the era, the days
 // of the Chinese and Korean calendars, the region of a locale's hour
-// cycles, and the time zones Intl.supportedValuesOf lists. Standard and NodeICU are the two ends.
+// cycles, the time zones Intl.supportedValuesOf lists, and two roundings
+// that Temporal's normative fixes of May 2026 changed after the
+// temporal_rs Node has. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -28,7 +30,9 @@ import "strings"
 //
 // If the list ever passes about twenty entries, that is a sign the standard
 // behavior is wrong somewhere and this is hiding it, rather than a sign that
-// Node has drifted further.
+// Node has drifted further. The Temporal entries are the exception to read
+// past: each is a fix the standard made that Node's temporal_rs predates,
+// and each goes when Node takes it.
 
 // Compat is the divergences in which to answer as Node does rather than as
 // the standard: a set of the flags below. The zero value is the standard in
@@ -95,6 +99,15 @@ const (
 	// RegionZones lists only the time zones in a region, where the
 	// standard lists UTC and Etc/GMT's as well.
 	RegionZones
+	// RoundingWindow starts the window a duration is rounded in at its
+	// origin wherever none of the smallest unit is in it, as temporal_rs
+	// 0.2.3 does, rather than only where the duration it starts with is
+	// zero.
+	RoundingWindow
+	// RepeatedMidnight refuses to round a ZonedDateTime to the day where
+	// its day ended before it, when the clock went back past midnight, as
+	// temporal_rs 0.2.3 does.
+	RepeatedMidnight
 )
 
 const (
@@ -105,7 +118,8 @@ const (
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
-		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones
+		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
+		RoundingWindow | RepeatedMidnight
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -317,6 +331,30 @@ var Divergences = []Divergence{
 		Standard: "Intl.supportedValuesOf(\"timeZone\") lists UTC and Etc/GMT+1 to Etc/GMT-14 " +
 			"among the rest (test262's timeZones-include-non-continental)",
 		Node: "V8 lists only ICU's canonical zones that are in a region, 418 without them",
+	},
+	{
+		Name: "RoundingWindow", Flag: RoundingWindow,
+		Area: "Temporal",
+		What: "rounding a difference up to a calendar unit smaller than its largest, where it has " +
+			"none of that unit",
+		Standard: "ECMA-262's ComputeNudgeWindow starts the window at the origin only where the " +
+			"duration it starts with is zero (the Stage 4 text's \"Fix condition for bounding window " +
+			"with zero start\"): 2012-01-01 until 2012-02-01 in weeks, largest months, ceil, is " +
+			"P1M (test262's exact-multiple-of-larger-unit)",
+		Node: "temporal_rs 0.2.3 starts it at the origin wherever none of the smallest unit is in " +
+			"it, so the month counts as progress into a week: P1M1W",
+	},
+	{
+		Name: "RepeatedMidnight", Flag: RepeatedMidnight,
+		Area: "Temporal",
+		What: "ZonedDateTime's round to a day, of an instant after the next day began, where the " +
+			"clock went back past midnight",
+		Standard: "ECMA-262's Temporal takes the instant as the day's last nanosecond (the Stage 4 " +
+			"text's \"Fix assertion in ZonedDateTime.round\"): 2010-03-04T23:10+08:00 in " +
+			"Antarctica/Casey, after 02:00 on the 5th went back to 23:00 on the 4th, rounds down " +
+			"to the 4th's midnight and up to the 5th's first (test262's same-date-starts-twice)",
+		Node: "temporal_rs 0.2.3 asserted the instant was before the next day's start: a " +
+			"RangeError, \"ZonedDateTime is outside the expected day bounds\"",
 	},
 }
 

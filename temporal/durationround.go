@@ -1,5 +1,7 @@
 package temporal
 
+import intl "github.com/go-quickjs/go-intl"
+
 // Rounding and totalling durations relative to a date, as temporal_rs
 // 0.2.3's normalized duration module does it.
 
@@ -145,7 +147,15 @@ func (d internalDuration) computeNudgeWindow(sign int, origin int128, dt PlainDa
 		}
 		return edt.epochNanoseconds(), nil
 	}
-	if w.r1.isZero() {
+	// The window starts at the origin where the duration it starts with is
+	// zero: ECMA-262's Temporal asks DateDurationSign of it. temporal_rs
+	// 0.2.3 asks whether none of the smallest unit is in it, which starts
+	// P1M's window for weeks a month early (intl.RoundingWindow).
+	zeroStart := w.startDur.sign() == 0
+	if o.compat.Has(intl.RoundingWindow) {
+		zeroStart = w.r1.isZero()
+	}
+	if zeroStart {
 		w.startNs = origin
 	} else if w.startNs, err = epochOf(w.startDur); err != nil {
 		return w, err
@@ -520,7 +530,7 @@ func (d Duration) Round(o RoundingOptions, rel RelativeTo) (Duration, error) {
 	if o.Increment.get() > 1 && largest != smallest && smallest.isDateUnit() {
 		return Duration{}, rangeError("roundingIncrement > 1 and largest_unit is not smallest_unit and smallest_unit is date")
 	}
-	r := resolvedRounding{largest: largest, smallest: smallest, increment: o.Increment, mode: mode}
+	r := resolvedRounding{largest: largest, smallest: smallest, increment: o.Increment, mode: mode, compat: o.Compat}
 	switch {
 	case rel.Zoned != nil:
 		z := *rel.Zoned

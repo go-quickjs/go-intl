@@ -923,7 +923,7 @@ func (h *harness) durationOps(m map[string]opFunc) {
 		if err := validateUnit(smallest, groupDateTime, NoUnit); err != nil {
 			return nil, err
 		}
-		d, err := this.(Duration).Round(RoundingOptions{LargestUnit: largest, SmallestUnit: smallest, RoundingMode: mode, Increment: inc}, rel)
+		d, err := this.(Duration).Round(RoundingOptions{LargestUnit: largest, SmallestUnit: smallest, RoundingMode: mode, Increment: inc, Compat: intl.NodeICU}, rel)
 		return d, rustErr(err)
 	}
 	m["method:Duration.total"] = func(this any, arg func(int) any) (any, error) {

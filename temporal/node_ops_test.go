@@ -3,6 +3,8 @@ package temporal
 import (
 	"math"
 	"math/big"
+
+	intl "github.com/go-quickjs/go-intl"
 )
 
 // The methods of Temporal's types other than Duration, as V8's
@@ -48,7 +50,7 @@ func roundingOptions(o *jsObject, method string, extra Unit) (RoundingOptions, e
 	if err := validateUnit(smallest, groupTime, extra); err != nil {
 		return RoundingOptions{}, err
 	}
-	return RoundingOptions{LargestUnit: NoUnit, SmallestUnit: smallest, RoundingMode: mode, Increment: inc}, nil
+	return RoundingOptions{LargestUnit: NoUnit, SmallestUnit: smallest, RoundingMode: mode, Increment: inc, Compat: intl.NodeICU}, nil
 }
 
 // differenceSettings is GetDifferenceSettingsWithoutChecks.
@@ -73,7 +75,7 @@ func differenceSettings(opts any, method string) (DifferenceSettings, error) {
 	if err != nil {
 		return DifferenceSettings{}, err
 	}
-	return DifferenceSettings{LargestUnit: largest, SmallestUnit: smallest, RoundingMode: mode, Increment: inc}, nil
+	return DifferenceSettings{LargestUnit: largest, SmallestUnit: smallest, RoundingMode: mode, Increment: inc, Compat: intl.NodeICU}, nil
 }
 
 func sameCalendar(a, b *Calendar) error {

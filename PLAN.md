@@ -931,6 +931,16 @@ three spellings and twelve transitions each way. All match. ICU4X's
 Temporal's range are recorded for ISO only: in the Chinese calendar one
 takes Node minutes.
 
+The standard has moved past temporal_rs 0.2.3 in two places, both normative
+fixes to ECMA-262's Temporal of May 2026, and the replay asks for Node's
+side of each through `RoundingOptions.Compat` and
+`DifferenceSettings.Compat`: a nudge window starts at its origin only where
+the duration it starts with is zero (`RoundingWindow`: P1M until weeks,
+rounded up, is P1M, where Node adds a week), and ZonedDateTime's `round` to a
+day takes an instant after the next day began, where the clock went back
+past midnight, as the day's last nanosecond (`RepeatedMidnight`: Node
+throws).
+
 ### 9. Retire internal/icu
 
 Remove it from go-quickjs, delete `extract.mjs`, keep `golden.mjs`. Update the
@@ -958,9 +968,9 @@ README's Intl section.
 | **Time zones** | **done** - ICU's zoneinfo64 (tz 2026c): 1,889 names and every zone's transitions 1800-2100 match Node; Dublin's gap closed; `TimeZone`, and the host's zone as ICU detects it |
 | 8. Segmenter | **done** - 140/140, and 9,555 cases against node |
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
-| 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
+| 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match; the two roundings ECMA-262 fixed since temporal_rs 0.2.3 are named divergences |
 | **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB; packed into one embedded file read in place, 18.7 MB with the tables that are looked up |
-| **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; nineteen named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator, the fields a date pattern's literals seem to write, the deprecated Islamic calendars, when a resolved locale keeps its hour cycle, the zone a plain Temporal value is read in, the time zone names a DateTimeFormat takes and reports, a coptic year before the era, the days of the Chinese and Korean calendars, the region of a locale's hour cycles, and the time zones in no region, each tested on both sides |
+| **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; twenty-one named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator, the fields a date pattern's literals seem to write, the deprecated Islamic calendars, when a resolved locale keeps its hour cycle, the zone a plain Temporal value is read in, the time zone names a DateTimeFormat takes and reports, a coptic year before the era, the days of the Chinese and Korean calendars, the region of a locale's hour cycles, the time zones in no region, and Temporal's rounding window and repeated midnight, each tested on both sides |
 | **Load time** | data read in place from one embedded pack; tables looked up by binary search rather than decoded, strings not copied; every constructor in English under 0.11 ms, most under 25 µs (see Loading time) |
 | 9. Retire internal/icu | not started |
 

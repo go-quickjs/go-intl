@@ -1,5 +1,7 @@
 package temporal
 
+import intl "github.com/go-quickjs/go-intl"
+
 // A ZonedDateTime is Temporal.ZonedDateTime's value: an instant, a zone and
 // a calendar, and the zone's offset at the instant as temporal_rs caches
 // it.
@@ -399,8 +401,18 @@ func (z ZonedDateTime) Round(o RoundingOptions) (ZonedDateTime, error) {
 		if err != nil {
 			return ZonedDateTime{}, err
 		}
-		if !(this.cmp(s.ns) >= 0 && this.cmp(e.ns) < 0) {
-			return ZonedDateTime{}, rangeError("ZonedDateTime is outside the expected day bounds")
+		if this.cmp(s.ns) < 0 {
+			return ZonedDateTime{}, assertError()
+		}
+		// Where the clock goes back past midnight, the day's last hours come
+		// after the next day's start: ECMA-262's Temporal takes them as the
+		// last nanosecond of the day, where temporal_rs 0.2.3 asserted it
+		// could not happen (intl.RepeatedMidnight).
+		if this.cmp(e.ns) >= 0 {
+			if o.Compat.Has(intl.RepeatedMidnight) {
+				return ZonedDateTime{}, rangeError("ZonedDateTime is outside the expected day bounds")
+			}
+			this = e.ns.sub(i128(1))
 		}
 		dayLen, err := timeDurationFromDifference(e.ns, s.ns)
 		if err != nil {

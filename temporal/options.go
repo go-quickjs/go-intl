@@ -1,6 +1,10 @@
 package temporal
 
-import "math"
+import (
+	"math"
+
+	intl "github.com/go-quickjs/go-intl"
+)
 
 // Temporal's options, as temporal_rs 0.2.3 takes them once the engine has
 // read them: each is its zero value where the option was not given.
@@ -508,6 +512,8 @@ type DifferenceSettings struct {
 	LargestUnit, SmallestUnit Unit // NoUnit where not given
 	RoundingMode              RoundingMode
 	Increment                 RoundingIncrement
+	// Compat chooses Node's side of intl.RoundingWindow.
+	Compat intl.Compat
 }
 
 // DefaultDifferenceSettings are until's and since's options where none are
@@ -519,6 +525,9 @@ type RoundingOptions struct {
 	LargestUnit, SmallestUnit Unit // NoUnit where not given
 	RoundingMode              RoundingMode
 	Increment                 RoundingIncrement
+	// Compat chooses Node's side of intl.RoundingWindow, for a duration,
+	// and of intl.RepeatedMidnight, for a ZonedDateTime.
+	Compat intl.Compat
 }
 
 type differenceOp int
@@ -533,6 +542,7 @@ type resolvedRounding struct {
 	largest, smallest Unit
 	increment         RoundingIncrement
 	mode              RoundingMode
+	compat            intl.Compat
 }
 
 func fromToStringOptions(o resolvedToString) resolvedRounding {
@@ -568,7 +578,7 @@ func fromDiffSettings(o DifferenceSettings, op differenceOp, group unitGroup, fa
 			return resolvedRounding{}, err
 		}
 	}
-	return resolvedRounding{largest: largest, smallest: smallest, increment: o.Increment, mode: mode}, nil
+	return resolvedRounding{largest: largest, smallest: smallest, increment: o.Increment, mode: mode, compat: o.Compat}, nil
 }
 
 // fromDateTimeOptions is the resolution of PlainDateTime's and
