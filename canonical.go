@@ -87,7 +87,9 @@ func (c *Canonicalizer) Canonicalize(tag string) (Locale, error) {
 		l, err := ParseLocale(tag)
 		return l, err
 	}
-	tag = c.rewriteLegacy(strings.ToLower(tag))
+	// Lowercased as ASCII, so that a letter outside it stays and is
+	// refused: Unicode's lowercase of "İ" is an ASCII "i".
+	tag = c.rewriteLegacy(lowerASCII(tag))
 	if err := checkStructure(tag); err != nil {
 		return Locale{}, err
 	}
@@ -99,6 +101,16 @@ func (c *Canonicalizer) Canonicalize(tag string) (Locale, error) {
 		return Locale{}, err
 	}
 	return c.CanonicalizeLocale(l), nil
+}
+
+// lowerASCII is a string with its ASCII letters in lowercase, and nothing
+// else changed.
+func lowerASCII(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		b[i] = toLower(c)
+	}
+	return string(b)
 }
 
 // isTwoLetterFastPath is V8's shortcut: a tag of two lowercase letters,

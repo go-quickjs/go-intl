@@ -68,3 +68,19 @@ func TestCanonicalizeShapes(t *testing.T) {
 		}
 	}
 }
+
+// A tag with a letter outside ASCII is not well formed, however it folds:
+// Unicode's lowercase of "İ" is an ASCII "i", and the Kelvin sign's a "k",
+// but neither makes a subtag of one. test262's Temporal calendar-case-
+// insensitive tests refuse "İSO8601" as a calendar.
+func TestCanonicalizeRefusesNonASCII(t *testing.T) {
+	canon, err := intl.NewCanonicalizer(intl.Embedded, intl.CanonicalizeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tag := range []string{"und-u-ca-İso8601", "İt", "en-Kelvin", "en-u-ca-ıso8601", "dİe"} {
+		if l, err := canon.Canonicalize(tag); err == nil {
+			t.Errorf("%q is %q, want an error", tag, l.String())
+		}
+	}
+}
