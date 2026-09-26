@@ -268,3 +268,72 @@ func TestLiteralFields(t *testing.T) {
 		}
 	}
 }
+
+// The calendars ECMA-402 deprecates: the standard settles them on one
+// AvailableCalendars lists, as test262's
+// constructor-options-calendar-islamic-fallback requires, and writes in it;
+// Node keeps them.
+func TestIslamicFallback(t *testing.T) {
+	for _, c := range []struct {
+		tag, calendar string
+		compat        intl.Compat
+		want          string
+	}{
+		{"en", "islamic", intl.Standard, "islamic-civil"},
+		{"en", "islamic-rgsa", intl.Standard, "islamic-civil"},
+		{"en-u-ca-islamic", "", intl.Standard, "islamic-civil"},
+		{"en", "islamic", intl.IslamicFallback, "islamic"},
+		{"en", "islamic-rgsa", intl.IslamicFallback, "islamic-rgsa"},
+		{"en-u-ca-islamic", "", intl.IslamicFallback, "islamic"},
+	} {
+		loc, _ := intl.ParseLocale(c.tag)
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{Calendar: c.calendar, Compat: c.compat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.ResolvedOptions().Calendar; got != c.want {
+			t.Errorf("%s %q %v: %s, want %s", c.tag, c.calendar, c.compat, got, c.want)
+		}
+		// The formatter writes in the calendar it reports.
+		loc, _ = intl.ParseLocale("en-u-ca-" + c.want)
+		want, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{Compat: c.compat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		at := time.Date(2024, 3, 15, 12, 0, 0, 0, time.UTC)
+		if got, w := f.Format(at), want.Format(at); got != w {
+			t.Errorf("%s %q %v: wrote %q, want %q", c.tag, c.calendar, c.compat, got, w)
+		}
+	}
+}
+
+// A resolved locale's -u-hc keyword where hour12 or hourCycle was given:
+// ResolveLocale drops it for any hour12 and for another hourCycle; V8
+// drops it where the formatter's own hour cycle, none without an hour, is
+// another.
+func TestHourCycleKeyword(t *testing.T) {
+	loc, _ := intl.ParseLocale("en-u-hc-h23")
+	for _, c := range []struct {
+		opts intl.DateTimeFormatOptions
+		want [2]string // Standard, HourCycleKeyword
+	}{
+		{intl.DateTimeFormatOptions{Hour: intl.WidthNumeric, Hour12: intl.Bool(false)}, [2]string{"en", "en-u-hc-h23"}},
+		{intl.DateTimeFormatOptions{Hour12: intl.Bool(false)}, [2]string{"en", "en"}},
+		{intl.DateTimeFormatOptions{HourCycle: intl.H23}, [2]string{"en-u-hc-h23", "en"}},
+		{intl.DateTimeFormatOptions{Hour: intl.WidthNumeric, HourCycle: intl.H23}, [2]string{"en-u-hc-h23", "en-u-hc-h23"}},
+		{intl.DateTimeFormatOptions{Hour: intl.WidthNumeric, HourCycle: intl.H11}, [2]string{"en", "en"}},
+		{intl.DateTimeFormatOptions{Hour: intl.WidthNumeric}, [2]string{"en-u-hc-h23", "en-u-hc-h23"}},
+	} {
+		for i, compat := range []intl.Compat{intl.Standard, intl.HourCycleKeyword} {
+			opts := c.opts
+			opts.Compat = compat
+			f, err := intl.NewDateTimeFormat(loc, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := f.ResolvedOptions().Locale; got != c.want[i] {
+				t.Errorf("%+v %v: %s, want %s", c.opts, compat, got, c.want[i])
+			}
+		}
+	}
+}

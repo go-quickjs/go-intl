@@ -15,7 +15,9 @@ import "strings"
 // but for the Japanese twelve-hour clock, the Islamic eras, Temporal's
 // formats, the keyword value "yes", the currencies DisplayNames names, a
 // duration's fraction of a second, the separator a digital duration's
-// minutes take and the fields a date pattern's literals seem to write. Standard and NodeICU are the two ends.
+// minutes take, the fields a date pattern's literals seem to write, the
+// deprecated Islamic calendars and when a resolved locale keeps its hour
+// cycle. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -62,6 +64,13 @@ const (
 	// LiteralFields reads the fields DateTimeFormat's resolvedOptions
 	// reports from its pattern's quoted literals as well as its fields.
 	LiteralFields
+	// IslamicFallback keeps the calendars islamic and islamic-rgsa for a
+	// DateTimeFormat, where the standard settles them on islamic-civil.
+	IslamicFallback
+	// HourCycleKeyword keeps a DateTimeFormat's -u-hc keyword where
+	// hour12 or hourCycle was given only if the hour cycle it settled on is
+	// the keyword's.
+	HourCycleKeyword
 )
 
 const (
@@ -71,7 +80,7 @@ const (
 	// divergence.
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
-		DurationSeparator | LiteralFields
+		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -202,6 +211,26 @@ var Divergences = []Divergence{
 			"\"MMMM 'de' y\", reports a month and a year",
 		Node: "V8 looks for each field's letters anywhere in the pattern's text, and finds the d " +
 			"of 'de': it reports day: \"numeric\" too",
+	},
+	{
+		Name: "IslamicFallback", Flag: IslamicFallback,
+		Area: "DateTimeFormat",
+		What: "the calendars islamic and islamic-rgsa",
+		Standard: "CreateDateTimeFormat settles either on a calendar AvailableCalendars lists, " +
+			"implementation-defined; go-intl takes islamic-civil, and writes in it " +
+			"(test262's constructor-options-calendar-islamic-fallback)",
+		Node: "V8 keeps them, and ICU writes in its astronomical Islamic calendar: " +
+			"resolvedOptions().calendar is \"islamic\"",
+	},
+	{
+		Name: "HourCycleKeyword", Flag: HourCycleKeyword,
+		Area: "DateTimeFormat",
+		What: "the -u-hc keyword of a resolved locale where hour12 or hourCycle was given",
+		Standard: "ResolveLocale drops it for any hour12, which makes the option null, and for an " +
+			"hourCycle that is another: \"en-u-hc-h23\" with {hour: \"numeric\", hour12: false} " +
+			"is \"en\", and with {hourCycle: \"h23\"} alone \"en-u-hc-h23\"",
+		Node: "V8 drops it where the hour cycle the formatter settled on, none where it writes " +
+			"no hour, is another: the first is \"en-u-hc-h23\" and the second \"en\"",
 	},
 }
 

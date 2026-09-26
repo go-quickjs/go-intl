@@ -40,7 +40,26 @@ const configs = [
   { calendar: "islamic-civil", dateStyle: "long" },
 ];
 
+// Tags whose Unicode extension the options may override, and calendars
+// ECMA-402 deprecates, each under the options that bear on them.
+const tagged = ["en-u-hc-h23", "en-u-hc-h11", "ja-u-hc-h11", "de-u-hc-h12", "en-u-hc-h25",
+  "en-u-ca-islamic", "ar-SA-u-ca-islamic-rgsa", "en-u-ca-japanese-hc-h24"];
+const taggedConfigs = [
+  {}, { hour: "numeric" }, { hour12: false }, { hour12: true }, { hour: "numeric", hour12: false },
+  { hour: "numeric", hour12: true }, { hourCycle: "h23" }, { hour: "numeric", hourCycle: "h23" },
+  { hour: "numeric", hourCycle: "h11" }, { timeStyle: "short", hour12: false },
+  { dateStyle: "short", hourCycle: "h23" }, { calendar: "islamic" }, { calendar: "islamic-rgsa", year: "numeric" },
+];
+
 const lines = [];
+for (const loc of tagged) {
+  for (const c of taggedConfigs) {
+    const opts = { ...c, timeZone: "UTC" };
+    const r = new Intl.DateTimeFormat(loc, opts).resolvedOptions();
+    delete r.timeZone;
+    lines.push(JSON.stringify([loc, opts, r]));
+  }
+}
 for (const loc of locales) {
   for (const c of configs) {
     const opts = { ...c, timeZone: "UTC" };

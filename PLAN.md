@@ -947,7 +947,7 @@ README's Intl section.
 | 3b. Compact notation | **done** - NumberFormat now 2,970/2,970 |
 | 3c. Rest of the surface | **done** - exact decimal input and `formatRange`, 6,970 and 4,320 cases against node |
 | 4. PluralRules, ListFormat | **done** - 300/300 and 120/120; `selectRange` and notations against node, 176,300 cases |
-| 5. DateTimeFormat | 1,230/1,230, and 286,519 cases against node, all match; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars; Temporal values, 74,580 cases; resolvedOptions' fields, read from the pattern, 17,480 cases |
+| 5. DateTimeFormat | 1,230/1,230, and 286,519 cases against node, all match; `dayPeriod`, `fractionalSecondDigits`, every `timeZoneName`, offset zones and `formatRange` done; all 18 calendars; Temporal values, 74,580 cases; resolvedOptions, its fields read from the pattern, 17,584 cases |
 | 6. RelativeTimeFormat | **done** - 1,260/1,260 |
 | 6b. DisplayNames | **done** - 34/34 |
 | 6c. DurationFormat | **done** - not in the corpus; 21,202 cases against node, all match; V8's int64 overflow is a named NodeICU divergence |
@@ -960,7 +960,7 @@ README's Intl section.
 | 8b. `date` package | **done** - 134,418 cases against node, every zone Node knows, all match |
 | 8c. `temporal` package | **done** - all 16 calendars, 96,659 years; fields, adding and differencing, 311,526 cases; every type's methods, parsing and all 750 zone names, 368,399 calls; against node, all match |
 | **Data size** | files written once, 105 MB to 57.1 MB; every set kept per locale shared through a pool, 18.3 MB; packed into one embedded file read in place, 18.7 MB with the tables that are looked up |
-| **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; eleven named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator and the fields a date pattern's literals seem to write, each tested on both sides |
+| **Compatibility profile** | chosen divergence by divergence, `Standard` and `NodeICU` its two ends; thirteen named: the narrow space, two-letter tags, the collation keyword, the duration overflow, and, for go-quickjs's standards mode, the twelve-hour cycle, the Islamic eras, Temporal's formats, the keyword value "yes", the currencies DisplayNames names, a digital duration's separator, the fields a date pattern's literals seem to write, the deprecated Islamic calendars and when a resolved locale keeps its hour cycle, each tested on both sides |
 | **Load time** | data read in place from one embedded pack; tables looked up by binary search rather than decoded, strings not copied; every constructor in English under 0.11 ms, most under 25 µs (see Loading time) |
 | 9. Retire internal/icu | not started |
 

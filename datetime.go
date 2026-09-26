@@ -169,7 +169,10 @@ type DateTimeFormat struct {
 	src    Source
 	asked  Locale
 	locale Locale
-	opts   DateTimeFormatOptions
+	// reported is the locale resolvedOptions reports: locale, less an hour
+	// cycle an option overrode.
+	reported Locale
+	opts     DateTimeFormatOptions
 	// explicit are the fields the options named, before any defaults, as
 	// the skeleton letters that write them.
 	explicit string
@@ -263,6 +266,15 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		}
 		system, keep = Gregory, ""
 	}
+	if (system == Islamic || system == IslamicRGSA) && !opts.Compat.Has(IslamicFallback) {
+		// CreateDateTimeFormat settles a calendar ECMA-402 has deprecated
+		// on one AvailableCalendars lists, the tabular civil one; the
+		// locale keeps the keyword it was asked with.
+		system = IslamicCivil
+		if cal, ok, err = data.Calendar(string(system)); err != nil || !ok {
+			return nil, fmt.Errorf("intl: the dates for %s: no %s calendar: %w", loc, system, ErrNotFound)
+		}
+	}
 
 	// Of the Unicode extension, DateTimeFormat uses the calendar, the hour
 	// cycle and the numbering system.
@@ -297,6 +309,7 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		return nil, err
 	}
 	f.hourCycle = cycle
+	f.reported = f.reportedLocale()
 	f.patternText = pattern
 	f.pattern = compileDatePattern(pattern, f.overrides)
 	if f.ranges, err = f.newRangeFormat(src, g, staticSkeleton(pattern)); err != nil {
@@ -306,6 +319,28 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		return nil, err
 	}
 	return f, nil
+}
+
+// reportedLocale is the locale resolvedOptions reports. Its hour cycle
+// keyword stays where it is one and no option overrode it, as ResolveLocale
+// leaves it: hour12 overrides any, and hourCycle any other. V8 drops it
+// where either option was given and the formatter's hour cycle, none where
+// it writes no hour, is another (HourCycleKeyword).
+func (f *DateTimeFormat) reportedLocale() Locale {
+	kw, ok := f.locale.keywordValue("hc")
+	if !ok {
+		return f.locale
+	}
+	hc, valid := parseHourCycle(kw)
+	o := &f.opts
+	overridden := o.Hour12 != nil || o.HourCycle != HourCycleAuto && o.HourCycle != hc
+	if o.Compat.Has(HourCycleKeyword) {
+		overridden = (o.Hour12 != nil || o.HourCycle != HourCycleAuto) && f.hourCycle != hc
+	}
+	if !valid || overridden {
+		return f.locale.withKeyword("hc", "")
+	}
+	return f.locale
 }
 
 // loadPatternData reads what the pattern's fields need beyond the calendar:
@@ -667,7 +702,7 @@ func (f *DateTimeFormat) ResolvedOptions() ResolvedDateTimeFormat {
 	}
 	cycle := f.hourCycle
 	r := ResolvedDateTimeFormat{
-		Locale:          f.locale.String(),
+		Locale:          f.reported.String(),
 		Calendar:        string(f.system),
 		NumberingSystem: system,
 		TimeZone:        f.zoneName,

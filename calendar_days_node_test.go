@@ -52,6 +52,9 @@ func TestCalendarDaysMatchNode(t *testing.T) {
 			f, err = intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
 				Calendar: run.calendar, TimeZone: "UTC", Era: intl.WidthShort,
 				Year: intl.WidthNumeric, Month: intl.WidthNumeric, Day: intl.WidthNumeric,
+				// The days of Node's islamic and islamic-rgsa, which the
+				// standard would settle on islamic-civil.
+				Compat: intl.IslamicFallback,
 			})
 			if err != nil {
 				if _, gap := calendarDayGaps[run.calendar]; !gap {
