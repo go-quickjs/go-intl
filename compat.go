@@ -18,7 +18,8 @@ import "strings"
 // minutes take, the fields a date pattern's literals seem to write, the
 // deprecated Islamic calendars, when a resolved locale keeps its hour cycle,
 // the zone a plain Temporal value is read in, the time zone names a
-// DateTimeFormat takes and reports, and a coptic year before the era. Standard and NodeICU are the two ends.
+// DateTimeFormat takes and reports, a coptic year before the era, and the
+// days of the Chinese and Korean calendars. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -81,6 +82,9 @@ const (
 	// CopticEra writes a coptic year before the era as ICU4C does, in an
 	// era no data names.
 	CopticEra
+	// ChineseAstronomy reckons a DateTimeFormat's Chinese calendar and
+	// Dangi by ICU4C's astronomy, rather than as Temporal does.
+	ChineseAstronomy
 )
 
 const (
@@ -91,7 +95,7 @@ const (
 	NodeICU = NarrowSpace | TwoLetterTags | CollationKeyword | DurationOverflow |
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
-		ZoneIdentifiers | CopticEra
+		ZoneIdentifiers | CopticEra | ChineseAstronomy
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -272,6 +276,16 @@ var Divergences = []Divergence{
 			"(test262's formatToParts/era)",
 		Node: "ICU4C writes an era before it, which neither ICU nor CLDR names: \"35\" and " +
 			"no era",
+	},
+	{
+		Name: "ChineseAstronomy", Flag: ChineseAstronomy,
+		Area: "DateTimeFormat",
+		What: "the days of the Chinese calendar and Dangi",
+		Standard: "a formatter's days are Temporal's, which are ICU4X's: its tables from 1912 to " +
+			"2102 and its mean-motion approximation outside them: ISO 2030-03-03 is the 29th " +
+			"of the first month (test262's compare-to-temporal-lunisolar)",
+		Node: "V8 formats with ICU4C, whose calendar computes the astronomy, and whose day is " +
+			"not Temporal's there: the 30th",
 	},
 }
 

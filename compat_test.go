@@ -497,3 +497,28 @@ func TestTemporalStyleKept(t *testing.T) {
 		}
 	}
 }
+
+// The days of the Chinese calendar: Temporal's on the standard side, as
+// test262's compare-to-temporal-lunisolar requires, where ICU4C's astronomy
+// makes ISO 2030-03-03 the 30th of the first month.
+func TestChineseAstronomy(t *testing.T) {
+	loc, _ := intl.ParseLocale("en-u-ca-chinese")
+	at := time.Date(2030, 3, 3, 0, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "1/29"},
+		{intl.ChineseAstronomy, "1/30"},
+	} {
+		f, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+			Month: intl.WidthNumeric, Day: intl.WidthNumeric, TimeZone: "UTC", Compat: c.compat,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.Format(at); got != c.want {
+			t.Errorf("%v: %q, want %q", c.compat, got, c.want)
+		}
+	}
+}

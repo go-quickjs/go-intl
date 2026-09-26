@@ -6,14 +6,16 @@
 // ICU4X's tables for 1900 to 2102 and a mean-motion model outside them, where
 // Intl.DateTimeFormat's, which ICU4C writes, compute the astronomy. This
 // package ports icu_calendar 2.2.1 and temporal_rs 0.2.3, the versions Node
-// 26.10.0 pins; the intl package keeps ICU4C's calendars for formatting.
+// 26.10.0 pins. The intl package keeps ICU4C's calendars for formatting as
+// Node does, but for the Chinese and Korean ones where it answers as the
+// standard, which it reckons as this package does (internal/eastasian).
 package temporal
 
 import (
 	"fmt"
-	"strings"
 
 	intl "github.com/go-quickjs/go-intl"
+	"github.com/go-quickjs/go-intl/internal/eastasian"
 )
 
 // An ISODate is a date in the proleptic Gregorian calendar, as Temporal's
@@ -96,11 +98,11 @@ func NewCalendarFrom(src intl.Source, id string) (*Calendar, error) {
 		}
 		switch id {
 		case "islamic-umalqura":
-			c.r = hijriRules{epoch: islamicEpochFriday, table: tables["ummalqura"], reference: umalquraReference}
+			c.r = hijriRules{epoch: islamicEpochFriday, table: tableYearsOf(tables["ummalqura"]), reference: umalquraReference}
 		case "chinese":
-			c.r = eastAsianRules{table: tables["china"], qing: tables["qing"], offset: utcPlus8}
+			c.r = eastAsianRules{rules: eastasian.China(tables)}
 		default:
-			c.r = eastAsianRules{table: tables["korea"], qing: tables["qing"], offset: utcPlus9, korean: true}
+			c.r = eastAsianRules{rules: eastasian.Korea(tables), korean: true}
 		}
 	default:
 		return nil, fmt.Errorf("temporal: %q is not a calendar", id)
@@ -296,46 +298,25 @@ func (solarMonths) monthFromOrdinal(y calYear, ordinal int) month { return month
 func (solarMonths) minMonthsFrom(y calYear, years int) int { return 12 * years }
 
 // loadTables reads the tables temporalgen writes, by table.
-func loadTables(src intl.Source) (map[string][]tableYear, error) {
+func loadTables(src intl.Source) (map[string][]eastasian.TableYear, error) {
 	b, err := src.Open(intl.MarkerTemporalCalendars, intl.DataLocale{})
 	if err != nil {
 		return nil, fmt.Errorf("temporal: the calendar tables: %w", err)
 	}
-	out := map[string][]tableYear{}
-	for _, line := range strings.Split(string(b), "\n") {
-		if line == "" || line[0] == '#' {
-			continue
-		}
-		var name, lengths, start string
-		var year, leap int
-		if n, _ := fmt.Sscan(line, &name, &year, &lengths, &leap, &start); n != 5 {
-			return nil, fmt.Errorf("temporal: the calendar tables: %q", line)
-		}
-		var sy, sm, sd int
-		if n, _ := fmt.Sscanf(start, "%d-%d-%d", &sy, &sm, &sd); n != 3 || len(lengths) > 13 {
-			return nil, fmt.Errorf("temporal: the calendar tables: %q", line)
-		}
-		t := tableYear{year: year, leap: leap, start: gregorianFixed(sy, sm, sd), count: len(lengths)}
-		if prev := out[name]; len(prev) > 0 && prev[len(prev)-1].year != year-1 {
-			return nil, fmt.Errorf("temporal: the calendar tables: %s %d out of order", name, year)
-		}
-		for i, c := range lengths {
-			switch c {
-			case 'l':
-				t.long |= 1 << i
-			case 's':
-			default:
-				return nil, fmt.Errorf("temporal: the calendar tables: %q", line)
-			}
-		}
-		out[name] = append(out[name], t)
+	tables, err := eastasian.ParseTables(b, "china", "korea", "qing", "ummalqura")
+	if err != nil {
+		return nil, fmt.Errorf("temporal: %w", err)
 	}
-	for _, name := range []string{"china", "korea", "qing", "ummalqura"} {
-		if len(out[name]) == 0 {
-			return nil, fmt.Errorf("temporal: the calendar tables have no %s", name)
-		}
+	return tables, nil
+}
+
+// tableYearsOf is a table as the solar calendars read it.
+func tableYearsOf(table []eastasian.TableYear) []tableYear {
+	out := make([]tableYear, len(table))
+	for i, t := range table {
+		out[i] = tableYear{year: t.Year, leap: t.Leap, count: t.Count, long: t.Long, start: t.Start}
 	}
-	return out, nil
+	return out
 }
 
 // A tableYear is a year of ICU4X's tables: which months are long, the

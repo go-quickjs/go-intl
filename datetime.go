@@ -290,6 +290,13 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 			return nil, err
 		}
 	}
+	if (system == Chinese || system == Dangi) && !opts.Compat.Has(ChineseAstronomy) {
+		// The days Temporal reckons, which the standard asks a formatter
+		// to agree with (ChineseAstronomy).
+		if f.rules.eastAsian, err = loadEastAsian(src, system); err != nil {
+			return nil, err
+		}
+	}
 	if f.tz, f.zoneName, f.zoneID, err = loadZone(src, opts.TimeZone, opts.Compat); err != nil {
 		return nil, err
 	}

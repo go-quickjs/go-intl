@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/go-quickjs/go-intl/internal/eastasian"
 )
 
 // The calendars a date may be reckoned in.
@@ -269,6 +271,10 @@ func reckon(t time.Time, system CalendarSystem, rules calendarRules) dateParts {
 		p.yearLength = rules.ummAlQura.yearLength
 		return p
 	case Chinese, Dangi:
+		if rules.eastAsian != nil {
+			eastAsianDate(&p, t, rules.eastAsian)
+			return p
+		}
 		// ChineseCalendar::handleComputeFields: the era is the sixty-year
 		// cycle, the year the year within it, and the related year the
 		// extended one.
@@ -339,6 +345,58 @@ type calendarRules struct {
 	eras []eraStart
 	// ummAlQura is the Umm al-Qura calendar's month lengths.
 	ummAlQura *ummAlQura
+	// eastAsian are ICU4X's rules for the Chinese calendar or Dangi, which
+	// Temporal reckons with; nil where ICU4C's astronomy reckons them
+	// (ChineseAstronomy).
+	eastAsian *eastasian.Rules
+}
+
+// loadEastAsian reads ICU4X's rules for the Chinese calendar or Dangi.
+func loadEastAsian(src Source, system CalendarSystem) (*eastasian.Rules, error) {
+	b, err := src.Open(MarkerTemporalCalendars, DataLocale{})
+	if err != nil {
+		return nil, fmt.Errorf("intl: the calendar tables: %w", err)
+	}
+	country := "china"
+	if system == Dangi {
+		country = "korea"
+	}
+	tables, err := eastasian.ParseTables(b, country, "qing")
+	if err != nil {
+		return nil, fmt.Errorf("intl: %w", err)
+	}
+	rules := eastasian.China(tables)
+	if system == Dangi {
+		rules = eastasian.Korea(tables)
+	}
+	return &rules, nil
+}
+
+// eastAsianDate reckons a local date as ICU4X does, in the fields ICU4C's
+// ChineseCalendar gives it: the sixty-year cycle as the era, the year of
+// it as the year, and the Gregorian year the year starts in as the related
+// and extended year.
+func eastAsianDate(p *dateParts, t time.Time, rules *eastasian.Rules) {
+	rd := eastasian.GregorianFixed(t.Year(), int(t.Month()), t.Day())
+	y := rules.YearOfRD(rd)
+	p.dayOfYear = int(rd-y.Start) + 1
+	ordinal, day := 1, p.dayOfYear
+	for ordinal < y.Count && day > int(y.Lengths[ordinal-1]) {
+		day -= int(y.Lengths[ordinal-1])
+		ordinal++
+	}
+	// A leap month has the number of the month before it.
+	p.month, p.leapMonth, p.day = ordinal, false, day
+	if y.Leap != 0 && ordinal >= y.Leap {
+		p.month, p.leapMonth = ordinal-1, ordinal == y.Leap
+	}
+	cycleYear := y.Related + 2637
+	cycle := floorDiv(cycleYear-1, 60)
+	p.era, p.year = cycle+1, cycleYear-cycle*60
+	p.extYear, p.relatedYear = y.Related, y.Related
+	p.yearLength = func(extended int) int {
+		return int(rules.Year(extended+1).Start - rules.Year(extended).Start)
+	}
 }
 
 // eraStart is the first day of one of the Japanese calendar's eras.

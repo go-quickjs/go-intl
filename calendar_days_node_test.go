@@ -53,8 +53,9 @@ func TestCalendarDaysMatchNode(t *testing.T) {
 				Calendar: run.calendar, TimeZone: "UTC", Era: intl.WidthShort,
 				Year: intl.WidthNumeric, Month: intl.WidthNumeric, Day: intl.WidthNumeric,
 				// The days of Node's islamic and islamic-rgsa, which the
-				// standard would settle on islamic-civil.
-				Compat: intl.IslamicFallback,
+				// standard would settle on islamic-civil, and of ICU4C's
+				// Chinese astronomy, where the standard's are Temporal's.
+				Compat: intl.IslamicFallback | intl.ChineseAstronomy,
 			})
 			if err != nil {
 				if _, gap := calendarDayGaps[run.calendar]; !gap {
