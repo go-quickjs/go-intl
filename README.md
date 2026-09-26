@@ -138,10 +138,18 @@ nf, err := intl.NewNumberFormatFrom(src, loc, opts)
 go test ./...
 ```
 
-Go 1.24 or later. Regenerating the data needs the pinned upstream archives
-named in [SOURCES.md](SOURCES.md); each generator's doc comment gives its
-command, and `go run ./internal/packgen` repacks the embedded data after any
-of them.
+Go 1.24 or later. The data is regenerated in one step, from nothing but the
+pinned upstream sources:
+
+```sh
+go run ./internal/regen
+```
+
+It downloads each source [SOURCES.md](SOURCES.md) pins into a cache, checks
+its sha256, runs every generator and repacks the embedded data; on a clean
+checkout it reproduces `data/` and `data.pack` byte for byte, and says so.
+The first run fetches about 85 MB, which the cache keeps unpacked in about
+670 MB, and takes about a minute; later runs reuse the cache and take seconds.
 
 ## License
 

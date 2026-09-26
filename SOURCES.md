@@ -3,6 +3,10 @@
 Every input go-intl generates from, pinned. Changing any pin is its own commit
 with the gates re-measured, never folded into a behavior change.
 
+`go run ./internal/regen` fetches every source below, checks it against the
+sha256 given here, and regenerates the data from them; its source list and
+this file change together.
+
 ## The anchor: ICU 78.3
 
 go-intl targets **ICU 78.3**, because that is the ICU that produced the golden
@@ -10,7 +14,7 @@ corpus go-intl is held against. Reported by the oracle itself:
 
 ```console
 $ node -e "console.log(process.versions.icu, process.versions.unicode, process.versions.cldr, process.versions.tz)"
-78.3 17.0 48.0 2026b
+78.3 17.0 48.0 2026c
 ```
 
 Generating from a CLDR the oracle was not built with turns upstream drift into
@@ -61,15 +65,11 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 | `cldr-cal-roc-full` | 48.2.0 | `c90f6e4b718d1384f11a1b005101f26e6b6573e08274584ce84a51f3e4530983` | `dategen` |
 | `cldr-cal-hebrew-full` | 48.2.0 | `b06b8f2834564e843a3bda0410b9cc6152b010a54e08fda34d3530892a0d3e7f` | `dategen` |
 | `cldr-cal-japanese-full` | 48.2.0 | `05d2e6709e87349ee8dfbe733b93b2e8a8da375164d838b9aa01fc5d759ec49b` | `dategen`; the eras' start dates come from ICU's `misc/supplementalData.txt` |
-| `cldr-cal-chinese-full` | 48.2.0 | `cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2` | to come |
-| `cldr-cal-dangi-full` | 48.2.0 | `67171aaa6fe075c0ba3c86c67788a26c8b6f5f595d5fb76276a0fbaddc722e73` | to come |
+| `cldr-cal-chinese-full` | 48.2.0 | `cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2` | `dategen` |
+| `cldr-cal-dangi-full` | 48.2.0 | `67171aaa6fe075c0ba3c86c67788a26c8b6f5f595d5fb76276a0fbaddc722e73` | `dategen` |
 
 `dategen` finds each package by its directory's name, `cldr-cal-<name>-full`,
 so the packages are unpacked under those names and given in any order.
-
-Each calendar beyond the Gregorian one is its own CLDR package, so the
-remaining fourteen arrive as fourteen more rows here rather than as a change
-to anything.
 
 **What is vendored and what is not.** A supplemental file of a few tens of
 kilobytes is vendored beside the generator that reads it, so that generator
@@ -263,13 +263,8 @@ Two choices it seemed to force, both settled:
   tree: CLDR's `parentLocales` has a `collations` section of its own, and ICU
   folds that into these files.
 
-**tzdb is 2026b in ICU 78.3, but go-quickjs bundles 2026c.** Its
-`internal/icu/timezones.go` calls the bundle "the same version used by the
-Node/ICU release", which is no longer accurate; `TestBundledTimeZoneMatchesICURelease`
-does not actually check the version, only that every zone loads and one
-Vancouver rule holds. Nothing currently fails because of it. go-intl pins
-deliberately rather than inheriting the drift: ICU's own 2026c update, which
-is what Node 26 runs.
+**tzdb is 2026a in ICU 78.3's data archive, but Node 26 runs 2026c**, ICU's
+own time zone update. go-intl pins that update, not the archive's copy.
 
 The zone data format matters as well as the version. The tz database gives
 Ireland a negative daylight saving in winter; ICU builds `zoneinfo64` from
@@ -277,28 +272,15 @@ the rearguard form, where Irish summer is daylight time. go-intl reads
 ICU's `zoneinfo64` from the 2026c update Node runs, not Go's zone data or
 go-quickjs's bundle, and so agrees with Node about Dublin.
 
-## Known defects in the data go-intl inherits
+## Normalization
 
-**Normalization is Unicode 13.0.0 while everything else is 17.0.** go-quickjs's
-`internal/normalize/tables.go` says it was generated "from the Unicode 13.0.0
-database, as shipped with the system's Perl" — an accidental input, four
-versions behind the `\p{...}` property tables in the same binary, which are at
-17.0.0.
-
-**go-intl does not inherit it.** It carries its own normalizer, generated from
-the Unicode Character Database at 17.0.0 by `internal/normgen`, which is the
-primary source those tables are themselves built from. ICU exports its
-normalizer in `icuexportdata` too, but in ICU4X's trie encoding, which would
-have to be implemented to read; the database is line-based text and says the
-same thing.
-
-Every character up to U+2FFFF was put through all four forms and compared with
-node: 779,392 normalizations, no differences.
-
-**Vendored `windowsZones.json` was taken from `cldr-json` `main`, not a tagged
-release.** Its content self-reports CLDR 48, which is correct for the anchor,
-but the provenance is unpinned. Re-fetch it from the CLDR 48.0 tag when that
-generator is brought over.
+The normalizer is generated from the Unicode Character Database at 17.0.0 by
+`internal/normgen`, from its vendored `UnicodeData.txt` and
+`CompositionExclusions.txt`. ICU exports its normalizer in `icuexportdata`
+too, but in ICU4X's trie encoding, which would have to be implemented to
+read; the database is line-based text and says the same thing. Every
+character up to U+2FFFF was put through all four forms and compared with
+Node: 779,392 normalizations, no differences.
 
 ## Where cldr-json is not all of CLDR
 

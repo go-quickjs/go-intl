@@ -35,29 +35,30 @@ go-quickjs, so consuming it never forces a toolchain upgrade.
 
 ## Generated files
 
-Do not edit generated files by hand. Each has a generator under
-`internal/<name>gen/`, and each generated file's header names the upstream
-release it came from.
+Do not edit generated files by hand. Everything under `data/`, and
+`data.pack`, is written by a generator under `internal/<name>gen/`.
 
-Run generators from the repository root, writing to a temporary file first so a
-failed run cannot truncate the tracked one:
+Regenerate all of it in one step, from the repository root:
 
 ```sh
-generated=$(mktemp /tmp/go-intl.XXXXXX.go)
-go run ./internal/<name>gen > "$generated" && mv "$generated" <target>.go
-gofmt -w <target>.go
+go run ./internal/regen
 ```
 
-A generator that writes binary tables does its own replacing, and builds every
-table before writing any of them, so a failure partway leaves a matched set on
-disk rather than one new file beside one old one:
+`regen` downloads the pinned sources into a cache (`-cache`), checks their
+checksums, runs every generator in parallel (`-j`), zonegen after dategen,
+repacks, and reports whether the result is byte for byte what git holds. A
+change to a generator is done when `regen` reproduces the committed data, or
+the difference is the change. A new upstream input goes into its source
+list as well as SOURCES.md.
 
-```sh
-go run ./internal/localegen     # writes data/likelysubtags.bin, data/parentlocales.bin
-```
+To run one generator on its own, its doc comment gives its arguments; run it
+from the repository root. A generator does its own replacing, and builds
+every table before writing any of them, so a failure partway leaves a matched
+set on disk rather than one new file beside one old one.
 
 The package embeds `data.pack`, the data directory packed into one file so
-it is read in place. After any generator, repack; a test fails until you do:
+it is read in place. After running a generator on its own, repack; a test
+fails until you do:
 
 ```sh
 go run ./internal/packgen
