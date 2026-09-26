@@ -32,11 +32,6 @@ func TestOptionNames(t *testing.T) {
 		{intl.ZoneShortGeneric, "shortGeneric"}, {intl.ZoneLongGeneric, "longGeneric"},
 		{intl.HourCycleAuto, "undefined"}, {intl.H11, "h11"}, {intl.H12, "h12"}, {intl.H23, "h23"},
 		{intl.H24, "h24"},
-		{intl.ComponentsUnset, "undefined"}, {intl.ComponentsDate, "date"}, {intl.ComponentsTime, "time"},
-		{intl.ComponentsAny, "any"}, {intl.ComponentsAll, "all"},
-		{intl.TemporalPlainDate, "PlainDate"}, {intl.TemporalPlainDateTime, "PlainDateTime"},
-		{intl.TemporalPlainTime, "PlainTime"}, {intl.TemporalPlainYearMonth, "PlainYearMonth"},
-		{intl.TemporalPlainMonthDay, "PlainMonthDay"}, {intl.TemporalInstant, "Instant"},
 		{intl.SourceShared, "shared"}, {intl.SourceStartRange, "startRange"},
 		{intl.SourceEndRange, "endRange"},
 
@@ -88,12 +83,10 @@ func TestOptionNames(t *testing.T) {
 		{intl.RelativeLong, "long"}, {intl.RelativeShort, "short"}, {intl.RelativeNarrow, "narrow"},
 		{intl.GranularityGrapheme, "grapheme"}, {intl.GranularityWord, "word"},
 		{intl.GranularitySentence, "sentence"},
-		{intl.Former, "former"}, {intl.Latter, "latter"},
 
 		// No constant names these.
 		{intl.Style(9), "Style(9)"}, {intl.HourCycle(-1), "HourCycle(-1)"},
-		{intl.RelativeTimeUnit(8), "RelativeTimeUnit(8)"}, {intl.LocalRule(7), "LocalRule(7)"},
-		{intl.TemporalKind(0), "TemporalKind(0)"}, {intl.TemporalKind(7), "TemporalKind(7)"},
+		{intl.RelativeTimeUnit(8), "RelativeTimeUnit(8)"},
 	} {
 		if got := c.v.String(); got != c.want {
 			t.Errorf("%T %d: %q, want %q", c.v, c.v, got, c.want)

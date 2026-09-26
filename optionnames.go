@@ -10,7 +10,8 @@ import (
 // returns for each, which is the string the option takes in ECMA-402 and
 // what resolvedOptions reports. A value that stands for an option not given
 // is "undefined", as the option is in JavaScript; a value no constant names
-// is its type and number, "Style(9)".
+// is its type and number, "Style(9)". Only the types whose values
+// JavaScript sees have one.
 
 // optionName is the name at v's place in names, or the type and number.
 func optionName(typ string, v int, names ...string) string {
@@ -49,22 +50,6 @@ func (z ZoneStyle) String() string {
 
 func (h HourCycle) String() string {
 	return optionName("HourCycle", int(h), "undefined", "h11", "h12", "h23", "h24")
-}
-
-// String is ToDateTimeOptions' name for the group, its required and
-// defaults arguments.
-func (c DateTimeComponents) String() string {
-	return optionName("DateTimeComponents", int(c), "undefined", "date", "time", "any", "all")
-}
-
-// String is the name of the Temporal class, "PlainDate". The kinds count
-// from one, so zero is no kind.
-func (k TemporalKind) String() string {
-	if k >= TemporalPlainDate && k <= TemporalInstant {
-		return [...]string{"PlainDate", "PlainDateTime", "PlainTime", "PlainYearMonth",
-			"PlainMonthDay", "Instant"}[k-TemporalPlainDate]
-	}
-	return "TemporalKind(" + strconv.Itoa(int(k)) + ")"
 }
 
 // String is the type of a formatToRange part's source.
@@ -195,17 +180,4 @@ func (s RelativeTimeStyle) String() string {
 
 func (g Granularity) String() string {
 	return optionName("Granularity", int(g), "grapheme", "word", "sentence")
-}
-
-// String is ICU's name for the rule, UCAL_TZ_LOCAL_FORMER or _LATTER in
-// lower case: JavaScript has none, since only an engine's own Date asks for
-// one.
-func (r LocalRule) String() string {
-	switch r {
-	case Former:
-		return "former"
-	case Latter:
-		return "latter"
-	}
-	return "LocalRule(" + strconv.Itoa(int(r)) + ")"
 }
