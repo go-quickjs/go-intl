@@ -118,7 +118,23 @@ func (m RoundingMode) roundsUp(r remainder, negative, lastOdd bool) bool {
 // nearest thousand, which is what a rounding increment and the wider
 // significant-digit counts need.
 func roundAt(m mag, places int, negative bool, mode RoundingMode) (integer, fraction string) {
-	integer, fraction = m.integer, m.fraction
+	if m.zeros > 0 && m.zeros > places && !m.isZero() {
+		// Every digit kept is a zero, and so is the first one dropped: what
+		// is dropped is below half, and not nothing.
+		if places < 0 {
+			if mode.roundsUp(remainderBelowHalf, negative, false) {
+				return "1" + strings.Repeat("0", -places), ""
+			}
+			return "0", ""
+		}
+		kept := strings.Repeat("0", places)
+		if mode.roundsUp(remainderBelowHalf, negative, false) {
+			return increment("0", kept)
+		}
+		return "0", kept
+	}
+	// The zeros kept are written out, as many as the format keeps.
+	integer, fraction = m.integer, m.written(m.zeros)
 
 	if places >= 0 {
 		if len(fraction) <= places {

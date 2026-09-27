@@ -2,6 +2,7 @@ package intl
 
 import (
 	"math"
+	"strconv"
 	"strings"
 )
 
@@ -112,18 +113,6 @@ func (f *NumberFormat) pluralOperands(v float64) operands {
 	return operandsFor(padInteger(integer, f.minInt), fraction, 0)
 }
 
-// itoa writes a non-negative number without pulling in strconv's formatting
-// rules, since an exponent is small and always ASCII here.
-func itoa(v int) string {
-	if v == 0 {
-		return "0"
-	}
-	var buf [8]byte
-	i := len(buf)
-	for v > 0 && i > 0 {
-		i--
-		buf[i] = byte('0' + v%10)
-		v /= 10
-	}
-	return string(buf[i:])
-}
+// itoa writes a non-negative number in ASCII digits: an exponent, which a
+// number given as a string can make as long as nine of them.
+func itoa(v int) string { return strconv.Itoa(v) }

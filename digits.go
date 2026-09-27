@@ -216,7 +216,7 @@ func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 		if p.increment > 1 {
 			// Once, to the increment: rounding to the decimals first would
 			// round twice, and 1.25 to the nearest 0.2 would be 1.4.
-			integer, fraction = roundToIncrement(magnitude.integer, magnitude.fraction, p.maxFrac,
+			integer, fraction = roundToIncrement(magnitude.integer, magnitude.written(p.maxFrac+1), p.maxFrac,
 				p.increment, negative, p.mode)
 		} else {
 			integer, fraction = roundAt(magnitude, p.maxFrac, negative, p.mode)

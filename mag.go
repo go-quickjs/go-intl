@@ -12,9 +12,27 @@ import (
 // dividing it into a compact or scientific form, making it a percent -- is
 // done on the digits, so that a number given exactly, as a string or a
 // BigInt, is written exactly, however many digits it has.
+//
+// A number far below one -- "1e-999999999", given as a string -- has more
+// zeros after its point than are worth writing out, and most formats round
+// them all away. Those zeros are counted rather than written: the fraction
+// is zeros of them followed by fraction's digits, and they are written out
+// only as far as a format keeps them.
 type mag struct {
 	integer, fraction string
+	// zeros is the zeros between the point and fraction, which only a
+	// number below one has.
+	zeros int
 }
+
+// longZeros is how many zeros after the point are held as a count rather
+// than written: more than any number given as a float has.
+const longZeros = 400
+
+// maxDecimalExponent bounds the power of ten a Decimal is held to. A number
+// beyond it is an infinity or zero, as far as any formatter could write it:
+// more digits than there is memory to write them.
+const maxDecimalExponent = 1 << 30
 
 // magOf is the digits of a float's magnitude: the shortest that read back as
 // the same float, which is what ICU works from; see decimal.go.
@@ -42,14 +60,14 @@ func (m mag) isZero() bool { return (m.integer == "0" || m.integer == "") && m.f
 // exponent is the power of ten of the first significant digit: the floor of
 // the base-ten logarithm. Zero has none, and answers zero.
 func (m mag) exponent() int {
-	if m.integer != "0" {
+	if m.integer != "0" && m.integer != "" {
 		return len(m.integer) - 1
 	}
 	lead := len(m.fraction) - len(strings.TrimLeft(m.fraction, "0"))
 	if lead == len(m.fraction) {
 		return 0
 	}
-	return -lead - 1
+	return -m.zeros - lead - 1
 }
 
 // shift multiplies the magnitude by a power of ten.
@@ -57,16 +75,46 @@ func (m mag) shift(by int) mag {
 	if by == 0 || m.isZero() {
 		return m
 	}
+	if m.zeros > 0 {
+		if by <= m.zeros {
+			// Only the counted zeros move.
+			return mag{integer: "0", fraction: m.fraction, zeros: m.zeros - by}
+		}
+		return mag{integer: "0", fraction: m.fraction}.shift(by - m.zeros)
+	}
+	if point := len(m.integer) + by; point < -longZeros {
+		// Every digit goes below the point, and further than is worth
+		// writing: the zeros before them are counted.
+		digits := m.integer + m.fraction
+		trimmed := strings.TrimLeft(digits, "0")
+		return mag{integer: "0", fraction: strings.TrimRight(trimmed, "0"),
+			zeros: -point + len(digits) - len(trimmed)}
+	}
 	integer, fraction := shiftDigits(m.integer, m.fraction, by)
 	return makeMag(integer, fraction)
+}
+
+// written is the fraction with its counted zeros written out, as far as
+// limit of them: rounding at a place no further than limit decimals comes
+// out the same with the rest left off, since what is dropped is below half
+// of that place and not zero either way.
+func (m mag) written(limit int) string {
+	if m.zeros == 0 {
+		return m.fraction
+	}
+	return strings.Repeat("0", min(m.zeros, limit)) + m.fraction
 }
 
 // float is the magnitude as a float, for the few decisions that only need
 // its size.
 func (m mag) float() float64 {
+	if m.zeros > longZeros {
+		// Far below the smallest float.
+		return 0
+	}
 	s := m.integer
 	if m.fraction != "" {
-		s += "." + m.fraction
+		s += "." + m.written(m.zeros)
 	}
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
@@ -168,6 +216,14 @@ func ParseDecimal(s string) Decimal {
 			return Decimal{kind: decimalInfinite, neg: neg}
 		}
 		exp = n
+	}
+	// And one too large to write out, likewise; which also keeps the
+	// arithmetic on it from overflowing.
+	switch {
+	case exp < -maxDecimalExponent:
+		return Decimal{neg: neg, m: zeroMag}
+	case exp > maxDecimalExponent:
+		return Decimal{kind: decimalInfinite, neg: neg}
 	}
 	integer, fraction, _ := strings.Cut(mantissa, ".")
 	if integer == "" && fraction == "" || !allDigits(integer) || !allDigits(fraction) ||
@@ -285,7 +341,7 @@ func (d Decimal) String() string {
 	}
 	s := d.m.integer
 	if d.m.fraction != "" {
-		s += "." + d.m.fraction
+		s += "." + d.m.written(d.m.zeros)
 	}
 	if d.neg {
 		s = "-" + s
