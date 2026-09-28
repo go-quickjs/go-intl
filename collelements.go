@@ -76,8 +76,11 @@ type elementWriter struct {
 	out      []uint64
 }
 
-func (c *Collator) elements(s string) []uint64 {
-	w := elementWriter{c: c, text: []rune(s)}
+func (c *Collator) elements(s string) []uint64 { return c.elementsOf([]rune(s)) }
+
+// elementsOf is elements, of the characters themselves.
+func (c *Collator) elementsOf(text []rune) []uint64 {
+	w := elementWriter{c: c, text: text}
 	w.out = make([]uint64, 0, len(w.text)+1)
 	for i := 0; i < len(w.text); {
 		if w.consumed != nil && w.consumed[i] {
@@ -97,6 +100,13 @@ func (c *Collator) elements(s string) []uint64 {
 					continue
 				}
 			}
+		}
+		// A lone surrogate weighs as a character no table names does, by
+		// its code point, as ICU weighs one.
+		if r >= 0xd800 && r <= 0xdfff {
+			w.out = append(w.out, primaryCE(unassignedPrimary(r)))
+			i = w.next(i)
+			continue
 		}
 		// The combining diacritics weigh as an accent alone, from their own
 		// table.

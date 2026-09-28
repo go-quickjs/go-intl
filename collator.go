@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/colldata"
 )
@@ -506,10 +507,34 @@ func (c *Collator) Compare(a, b string) int {
 	return c.compareElements(c.sortElements(a), c.sortElements(b))
 }
 
+// normalizedText is a string in NFD, as the characters the collator reads.
+// A lone surrogate, which a JavaScript string may hold and which comes here
+// in WTF-8, stays itself -- the normalizer would make each of its bytes a
+// U+FFFD -- so that it weighs as ICU weighs it, by its code point.
+func (c *Collator) normalizedText(s string) []rune {
+	if strings.IndexByte(s, 0xed) < 0 {
+		return []rune(c.normalizer.Normalize(s, NFD))
+	}
+	var out []rune
+	start := 0
+	for i := 0; i+2 < len(s); i++ {
+		if s[i] != 0xed || s[i+1] < 0xa0 || s[i+1] > 0xbf || s[i+2] < 0x80 || s[i+2] > 0xbf {
+			continue
+		}
+		// A surrogate is a starter, so the text either side of it
+		// normalizes on its own.
+		out = append(out, []rune(c.normalizer.Normalize(s[start:i], NFD))...)
+		out = append(out, 0xd000|rune(s[i+1]&0x3f)<<6|rune(s[i+2]&0x3f))
+		i += 2
+		start = i + 1
+	}
+	return append(out, []rune(c.normalizer.Normalize(s[start:], NFD))...)
+}
+
 // sortElements returns what a string is compared by: its collation elements,
 // with the variable ones shifted when punctuation is ignored.
 func (c *Collator) sortElements(s string) []uint64 {
-	ces := c.elements(c.normalizer.Normalize(s, NFD))
+	ces := c.elementsOf(c.normalizedText(s))
 	if c.shifted {
 		c.shiftVariables(ces)
 	}
