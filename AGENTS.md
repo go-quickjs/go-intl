@@ -107,6 +107,32 @@ QUICKJS_COMPARE_NODE_TEMPORAL=1 go test . \
 Re-measure before changing anything, and on both Linux and Windows - the
 platforms disagree, and a bug has already hidden on one of them.
 
+## Releases
+
+Every release is named the same way, as go-quickjs's are:
+
+| | Form | Example |
+|---|---|---|
+| Tag | `vX.Y.Z`, annotated | `v0.3.1` |
+| Tag message | `go-intl vX.Y.Z` | `go-intl v0.3.1` |
+| GitHub release title | `go-intl vX.Y.Z` | `go-intl v0.3.1` |
+
+Nothing else goes in a title, such as a date, a codename or a summary; what a
+release contains belongs in its notes.
+
+```sh
+git tag -a v0.3.1 -m "go-intl v0.3.1"
+git push origin v0.3.1
+gh release create v0.3.1 --repo go-quickjs/go-intl --verify-tag \
+  --title "go-intl v0.3.1" --notes-file notes.md
+```
+
+Versions follow semantic versioning. Before 1.0, a new exported identifier or
+a change in behavior bumps the minor version, and a release with only fixes
+bumps the patch. A new divergence is both. A go-quickjs release
+never requires a pseudo-version, so go-intl is tagged before go-quickjs takes
+it. After publishing, confirm that `proxy.golang.org` serves the new version.
+
 ## Commits
 
 - Explain the behavior and why it changed, not the diff.
