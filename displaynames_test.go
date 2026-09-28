@@ -25,6 +25,11 @@ func TestDisplayNamesBeyondTheCorpus(t *testing.T) {
 		{"en", "language", "zh-Hans", intl.DisplayLong, intl.LanguageDialect, "Simplified Chinese"},
 		{"en", "region", "GB", intl.DisplayShort, intl.LanguageDialect, "UK"},
 		{"en", "dateTimeField", "weekday", intl.DisplayShort, intl.LanguageDialect, "day of wk."},
+		// Three of ECMA-402's fields are CLDR's under other names.
+		{"en", "dateTimeField", "weekOfYear", intl.DisplayShort, intl.LanguageDialect, "wk."},
+		{"de", "dateTimeField", "weekOfYear", intl.DisplayNarrow, intl.LanguageDialect, "W"},
+		{"de", "dateTimeField", "dayPeriod", intl.DisplayLong, intl.LanguageDialect, "Tageshälfte"},
+		{"ja", "dateTimeField", "timeZoneName", intl.DisplayLong, intl.LanguageDialect, "タイムゾーン"},
 		// ECMA-402 spells this calendar "roc" and CLDR files it as "roc" too,
 		// but "gregory" and "gregorian" differ, so both spellings are stored.
 		{"en", "calendar", "roc", intl.DisplayLong, intl.LanguageDialect, "Minguo Calendar"},

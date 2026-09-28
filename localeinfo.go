@@ -59,9 +59,15 @@ func withBase(l Locale, d DataLocale) Locale {
 }
 
 // Maximize is Intl.Locale.prototype.maximize: the locale with the likely
-// script and region filled in, "en" as "en-Latn-US".
+// script and region filled in, "en" as "en-Latn-US". The unknown script
+// "Zzzz" and region "ZZ" count as left out, as UTS #35 has it; under
+// UnknownSubtags a locale that names all three is kept as it is.
 func (i *LocaleInfo) Maximize(l Locale) Locale {
-	full, ok := i.likely.Maximize(l.Data())
+	d := l.Data()
+	if i.opts.Compat.Has(UnknownSubtags) && d.Language != Und && !d.Script.IsZero() && !d.Region.IsZero() {
+		return l
+	}
+	full, ok := i.likely.Maximize(withoutUnknown(d))
 	if !ok {
 		return l
 	}
@@ -69,13 +75,27 @@ func (i *LocaleInfo) Maximize(l Locale) Locale {
 }
 
 // Minimize is Intl.Locale.prototype.minimize: the shortest form that
-// maximizes to the same locale, "zh-Hant-TW" as "zh-TW".
+// maximizes to the same locale, "zh-Hant-TW" as "zh-TW". "Zzzz" and "ZZ"
+// count as left out, as they do in ICU as well.
 func (i *LocaleInfo) Minimize(l Locale) Locale {
-	short, ok := i.likely.Minimize(l.Data())
+	short, ok := i.likely.Minimize(withoutUnknown(l.Data()))
 	if !ok {
 		return l
 	}
 	return withBase(l, short)
+}
+
+// withoutUnknown is a locale without the unknown script, "Zzzz", and the
+// unknown region, "ZZ", which UTS #35's Add Likely Subtags removes before
+// it looks anything up.
+func withoutUnknown(d DataLocale) DataLocale {
+	if d.Script == (Script{'Z', 'z', 'z', 'z'}) {
+		d.Script = Script{}
+	}
+	if d.Region == (Region{'Z', 'Z'}) {
+		d.Region = Region{}
+	}
+	return d
 }
 
 // supplementalRegion is ulocimp_getRegionForSupplementalData: the region of

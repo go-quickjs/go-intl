@@ -34,3 +34,47 @@ func TestMaximizeUnknownLanguage(t *testing.T) {
 		t.Errorf("gss's week starts on %d, %v, want 1", first, err)
 	}
 }
+
+// The unknown script "Zzzz" and region "ZZ" count as left out, as UTS #35's
+// Add Likely Subtags removes them first; under UnknownSubtags, as ICU has
+// it, a locale that names all three is kept. Minimizing removes them either
+// way, as ICU does too.
+func TestLikelyUnknownSubtags(t *testing.T) {
+	for _, c := range []struct {
+		tag, standard, node, min string
+	}{
+		{"und-Zzzz-ZZ", "en-Latn-US", "en-Latn-US", "en"},
+		{"en-Zzzz-US", "en-Latn-US", "en-Zzzz-US", "en"},
+		{"en-Latn-ZZ", "en-Latn-US", "en-Latn-ZZ", "en"},
+		{"sr-Zzzz-ME", "sr-Latn-ME", "sr-Zzzz-ME", "sr-ME"},
+		{"zh-Zzzz-TW", "zh-Hant-TW", "zh-Zzzz-TW", "zh-TW"},
+		{"en-Zzzz-001", "en-Latn-001", "en-Zzzz-001", "en-001"},
+		{"und-Zzzz-ME", "sr-Latn-ME", "sr-Latn-ME", "sr-ME"},
+		{"zh-Zzzz", "zh-Hans-CN", "zh-Hans-CN", "zh"},
+		{"und-ZZ", "en-Latn-US", "en-Latn-US", "en"},
+		{"und-Cyrl-ZZ", "ru-Cyrl-RU", "ru-Cyrl-RU", "ru"},
+		{"xyz-Zzzz-DE", "xyz-Zzzz-DE", "xyz-Zzzz-DE", "xyz-Zzzz-DE"},
+		{"en-Zzzz-ZZ-u-ca-gregory", "en-Latn-US-u-ca-gregory", "en-Zzzz-ZZ-u-ca-gregory", "en-u-ca-gregory"},
+	} {
+		l, err := intl.ParseLocale(c.tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, compat := range []intl.Compat{intl.Standard, intl.UnknownSubtags} {
+			info, err := intl.NewLocaleInfo(intl.Embedded, intl.LocaleInfoOptions{Compat: compat})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := c.standard
+			if compat != intl.Standard {
+				want = c.node
+			}
+			if got := info.Maximize(l).String(); got != want {
+				t.Errorf("%s maximizes to %s under %v, want %s", c.tag, got, compat, want)
+			}
+			if got := info.Minimize(l).String(); got != c.min {
+				t.Errorf("%s minimizes to %s under %v, want %s", c.tag, got, compat, c.min)
+			}
+		}
+	}
+}

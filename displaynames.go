@@ -219,9 +219,18 @@ func (d *DisplayNames) lookup(code string) (string, bool) {
 	case DisplayCalendar:
 		return d.data.Lookup(namedata.Calendar, d.width, code)
 	case DisplayDateTimeField:
+		if key, ok := dateTimeFieldKeys[code]; ok {
+			code = key
+		}
 		return d.data.Lookup(namedata.DateTimeField, d.width, code)
 	}
 	return "", false
+}
+
+// dateTimeFieldKeys is CLDR's key for each of ECMA-402's date-time fields
+// that CLDR calls something else; the rest are CLDR's own.
+var dateTimeFieldKeys = map[string]string{
+	"weekOfYear": "week", "dayPeriod": "dayperiod", "timeZoneName": "zone",
 }
 
 // language names a language, which is the only kind with a shape of its own: a

@@ -22,8 +22,9 @@ import "strings"
 // of the Chinese and Korean calendars, the region of a locale's hour
 // cycles, the time zones Intl.supportedValuesOf lists, and two roundings
 // that Temporal's normative fixes of May 2026 changed after the
-// temporal_rs Node has, the patterns of Uzbek in Afghanistan, and the digit
-// options PluralRules reports. Standard and NodeICU are the two ends.
+// temporal_rs Node has, the patterns of Uzbek in Afghanistan, the digit
+// options PluralRules reports, and the unknown subtags a locale maximizes
+// past. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -117,6 +118,10 @@ const (
 	// PluralRules' resolved options where both they and the decimals were
 	// settled on, as V8 does.
 	PluralRulesDigits
+	// UnknownSubtags keeps a locale that names a language, a script and a
+	// region as it is when it maximizes, though the script is "Zzzz" or the
+	// region "ZZ", as ICU does.
+	UnknownSubtags
 )
 
 const (
@@ -128,7 +133,8 @@ const (
 		TwelveHourCycle | IslamicEras | TemporalFormats | YesValues | CurrencyNames |
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
-		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits
+		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
+		UnknownSubtags
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -388,6 +394,16 @@ var Divergences = []Divergence{
 			"\"morePrecision\"} reports 0 to 3 decimals and 1 to 21 significant digits",
 		Node: "V8 reads them back from ICU's number skeleton, which holds the significant " +
 			"digits, and reports only those (js-plural-rules.cc)",
+	},
+	{
+		Name: "UnknownSubtags", Flag: UnknownSubtags,
+		Area: "Locale",
+		What: "maximize() of a locale that names a language, a script and a region where the " +
+			"script is the unknown \"Zzzz\" or the region the unknown \"ZZ\"",
+		Standard: "UTS #35's Add Likely Subtags removes \"Zzzz\" and \"ZZ\" before it looks " +
+			"the rest up: \"en-Zzzz-US\" maximizes to \"en-Latn-US\"",
+		Node: "ICU's addLikelySubtags keeps a locale with all three subtags as it is: " +
+			"\"en-Zzzz-US\" is itself",
 	},
 }
 
