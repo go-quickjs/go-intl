@@ -4,6 +4,8 @@ package intl
 // (handleNext), and the break cache that hands runs of dictionary
 // characters to a language's break engine (rbbi_cache.cpp).
 
+import "sort"
+
 // A utext is a UText over UTF-16: a position that stays on code point
 // boundaries, and the text read a code point at a time, a lone surrogate
 // being a code point of its own.
@@ -116,15 +118,15 @@ func (d *dictionaryCache) reset() {
 }
 
 // following is DictionaryCache::following: the dictionary boundary after a
-// position within the cached range.
+// position within the cached range. The breaks ascend, and are searched
+// rather than walked: a run of Thai or Chinese is one range, asked once for
+// each of its breaks.
 func (d *dictionaryCache) following(from int) (boundary, bool) {
 	if from >= d.limit || from < d.start {
 		return boundary{}, false
 	}
-	for _, r := range d.breaks {
-		if r > from {
-			return boundary{r, d.otherStatus}, true
-		}
+	if i := sort.SearchInts(d.breaks, from+1); i < len(d.breaks) {
+		return boundary{d.breaks[i], d.otherStatus}, true
 	}
 	return boundary{}, false
 }

@@ -2,6 +2,7 @@ package intl
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf16"
 )
@@ -173,13 +174,9 @@ func (s *Segments) Containing(n int) (Segment, bool) {
 	if n > 0 && isTrail(s.text[n]) && isLead(s.text[n-1]) {
 		n--
 	}
-	var start, end boundary
-	for _, b := range s.bounds {
-		if b.pos > n {
-			end = b
-			break
-		}
-		start = b
-	}
+	// The first boundary past n ends the segment, and the one before it
+	// begins it.
+	i := sort.Search(len(s.bounds), func(i int) bool { return s.bounds[i].pos > n })
+	start, end := s.bounds[i-1], s.bounds[i]
 	return Segment{start.pos, end.pos, s.wordLike(end)}, true
 }

@@ -145,6 +145,15 @@ func (f *ListFormat) FormatToParts(items []string) []ListPart {
 			[]ListPart{{ListElement, items[1]}})
 	}
 
+	if parts, ok := f.formatInOrder(items); ok {
+		return parts
+	}
+	return f.formatFolding(items)
+}
+
+// formatFolding is FormatToParts as the patterns say it, each item folded in
+// with the parts so far, which serves for any pattern.
+func (f *ListFormat) formatFolding(items []string) []ListPart {
 	parts := []ListPart{{ListElement, items[len(items)-1]}}
 	for i := len(items) - 2; i >= 1; i-- {
 		p := f.patterns.Middle
@@ -155,6 +164,57 @@ func (f *ListFormat) FormatToParts(items []string) []ListPart {
 	}
 	return applyListPattern(f.patterns.Start,
 		[]ListPart{{ListElement, items[0]}}, parts)
+}
+
+// formatInOrder is FormatToParts written from the front, for patterns that
+// each put {0} before {1}, as every locale's do: what each pattern puts
+// before, between and after them is written as the list is walked, and what
+// they put after goes at the end, innermost first. Folding each item into
+// the parts so far copied them for every item.
+func (f *ListFormat) formatInOrder(items []string) ([]ListPart, bool) {
+	start, ok1 := splitListPattern(f.patterns.Start)
+	middle, ok2 := splitListPattern(f.patterns.Middle)
+	end, ok3 := splitListPattern(f.patterns.End)
+	if !ok1 || !ok2 || !ok3 {
+		return nil, false
+	}
+	out := make([]ListPart, 0, 3*len(items))
+	literal := func(s string) {
+		if s != "" {
+			out = append(out, ListPart{ListLiteral, s})
+		}
+	}
+	var after []string
+	for i, item := range items[:len(items)-1] {
+		p := middle
+		switch i {
+		case 0:
+			p = start
+		case len(items) - 2:
+			p = end
+		}
+		literal(p[0])
+		out = append(out, ListPart{ListElement, item})
+		literal(p[1])
+		after = append(after, p[2])
+	}
+	out = append(out, ListPart{ListElement, items[len(items)-1]})
+	for i := len(after) - 1; i >= 0; i-- {
+		literal(after[i])
+	}
+	return out, true
+}
+
+// splitListPattern is what a pattern puts before {0}, between {0} and {1},
+// and after {1}; false for one that is not so simple.
+func splitListPattern(pattern string) ([3]string, bool) {
+	zero := strings.Index(pattern, "{0}")
+	one := strings.Index(pattern, "{1}")
+	if zero < 0 || one < zero+3 || strings.Contains(pattern[one+3:], "{") ||
+		strings.Contains(pattern[:zero], "{") || strings.Contains(pattern[zero+3:one], "{") {
+		return [3]string{}, false
+	}
+	return [3]string{pattern[:zero], pattern[zero+3 : one], pattern[one+3:]}, true
 }
 
 // applyListPattern fills a pattern's {0} and {1}, keeping what came from the
