@@ -159,7 +159,17 @@ func DecimalFromFloat(v float64) Decimal {
 // negative zero. A number too large for a float is an infinity, as ECMA-402
 // has it; one too small for a float is kept exactly, as V8 keeps it, where
 // ECMA-402 would make it zero.
-func ParseDecimal(s string) Decimal {
+func ParseDecimal(s string) Decimal { return parseDecimal(s, true) }
+
+// ParseExactDecimal reads a string as ParseDecimal does, but keeps a number
+// too large for a float as it is written: ToIntlMathematicalValue takes a
+// BigInt as the integer it is, where it rounds a string to a float's range
+// first. A formatter writes a BigInt past 1.8e308 in full, as V8 does.
+func ParseExactDecimal(s string) Decimal { return parseDecimal(s, false) }
+
+// parseDecimal is ParseDecimal, rounding a number too large for a float to
+// an infinity when round is set.
+func parseDecimal(s string, round bool) Decimal {
 	s = strings.TrimFunc(s, isJSWhitespace)
 	if s == "" {
 		return Decimal{m: zeroMag}
@@ -231,7 +241,7 @@ func ParseDecimal(s string) Decimal {
 		return Decimal{kind: decimalNaN}
 	}
 	m := makeMag(integer, fraction)
-	if !m.isZero() {
+	if round && !m.isZero() {
 		// RoundMVResult: what the number would be as a float decides
 		// whether it is an infinity.
 		v, _ := strconv.ParseFloat(integer+"."+fraction+"e"+strconv.Itoa(exp), 64)
