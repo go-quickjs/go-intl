@@ -1,24 +1,78 @@
 package date
 
 import (
-	"fmt"
 	"math"
+	"strconv"
 )
 
 // The strings Date writes, as V8's ToDateString writes them.
+//
+// Each is written into one buffer on the stack and made a string once: a
+// program that formats dates in a loop formats a great many, and printf's
+// way made a string for each piece and parsed its format each time.
 
 var (
 	shortWeekdays = [7]string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 	shortMonths   = [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 )
 
-// yearText is V8's "%04d", or "%05d" for a year before 1: a sign and at
-// least four digits.
-func yearText(year int64) string {
-	if year < 0 {
-		return fmt.Sprintf("%05d", year)
+// appendPadded appends a non-negative n in at least width digits, with
+// leading zeros: printf's "%0*d".
+func appendPadded(b []byte, n int64, width int) []byte {
+	var digits [20]byte
+	d := strconv.AppendInt(digits[:0], n, 10)
+	for i := len(d); i < width; i++ {
+		b = append(b, '0')
 	}
-	return fmt.Sprintf("%04d", year)
+	return append(b, d...)
+}
+
+// append2 appends n, from 0 to 99, as two digits.
+func append2(b []byte, n int) []byte {
+	return append(b, byte('0'+n/10), byte('0'+n%10))
+}
+
+// appendYear is V8's "%04d", or "%05d" for a year before 1: a sign and at
+// least four digits.
+func appendYear(b []byte, year int64) []byte {
+	if year < 0 {
+		return appendPadded(append(b, '-'), -year, 4)
+	}
+	return appendPadded(b, year, 4)
+}
+
+// appendClock appends hh:mm:ss.
+func appendClock(b []byte, f Fields) []byte {
+	b = append2(b, f.Hour)
+	b = append2(append(b, ':'), f.Minute)
+	return append2(append(b, ':'), f.Second)
+}
+
+// appendOffset appends a distance from UTC in minutes as GMT+hhmm.
+func appendOffset(b []byte, minutes int64) []byte {
+	sign := byte('+')
+	if minutes < 0 {
+		sign = '-'
+		minutes = -minutes
+	}
+	b = append(b, 'G', 'M', 'T', sign)
+	b = appendPadded(b, minutes/60, 2)
+	return appendPadded(b, minutes%60, 2)
+}
+
+// appendDate appends "Fri Sep 25 2026".
+func appendDate(b []byte, f Fields) []byte {
+	b = append(b, shortWeekdays[f.Weekday]...)
+	b = append(append(b, ' '), shortMonths[f.Month]...)
+	b = append2(append(b, ' '), f.Day)
+	return appendYear(append(b, ' '), f.Year)
+}
+
+// appendTime appends "08:00:00 GMT-0400 (Eastern Daylight Time)".
+func appendTime(b []byte, f Fields, offset int64, name string) []byte {
+	b = appendOffset(append(appendClock(b, f), ' '), offset)
+	b = append(append(b, " ("...), name...)
+	return append(b, ')')
 }
 
 // local is a time value's local fields, its offset from UTC in minutes,
@@ -30,15 +84,6 @@ func (e *Environment) local(t float64) (Fields, int64, string) {
 	return BreakDown(float64(local)), offset, e.zoneName(ms)
 }
 
-func offsetText(minutes int64) string {
-	sign := byte('+')
-	if minutes < 0 {
-		sign = '-'
-		minutes = -minutes
-	}
-	return fmt.Sprintf("GMT%c%02d%02d", sign, minutes/60, minutes%60)
-}
-
 // String is Date.prototype.toString: "Fri Sep 25 2026 08:00:00 GMT-0400
 // (Eastern Daylight Time)", or "Invalid Date".
 func (e *Environment) String(t float64) string {
@@ -46,8 +91,9 @@ func (e *Environment) String(t float64) string {
 		return "Invalid Date"
 	}
 	f, offset, name := e.local(t)
-	return fmt.Sprintf("%s %s %02d %s %02d:%02d:%02d %s (%s)", shortWeekdays[f.Weekday], shortMonths[f.Month],
-		f.Day, yearText(f.Year), f.Hour, f.Minute, f.Second, offsetText(offset), name)
+	var buf [96]byte
+	b := appendDate(buf[:0], f)
+	return string(appendTime(append(b, ' '), f, offset, name))
 }
 
 // DateString is Date.prototype.toDateString: "Fri Sep 25 2026".
@@ -56,7 +102,8 @@ func (e *Environment) DateString(t float64) string {
 		return "Invalid Date"
 	}
 	f, _, _ := e.local(t)
-	return fmt.Sprintf("%s %s %02d %s", shortWeekdays[f.Weekday], shortMonths[f.Month], f.Day, yearText(f.Year))
+	var buf [32]byte
+	return string(appendDate(buf[:0], f))
 }
 
 // TimeString is Date.prototype.toTimeString: "08:00:00 GMT-0400 (Eastern
@@ -66,7 +113,8 @@ func (e *Environment) TimeString(t float64) string {
 		return "Invalid Date"
 	}
 	f, offset, name := e.local(t)
-	return fmt.Sprintf("%02d:%02d:%02d %s (%s)", f.Hour, f.Minute, f.Second, offsetText(offset), name)
+	var buf [80]byte
+	return string(appendTime(buf[:0], f, offset, name))
 }
 
 // UTCString is Date.prototype.toUTCString: "Fri, 25 Sep 2026 12:00:00 GMT".
@@ -75,8 +123,13 @@ func UTCString(t float64) string {
 		return "Invalid Date"
 	}
 	f := BreakDown(t)
-	return fmt.Sprintf("%s, %02d %s %s %02d:%02d:%02d GMT", shortWeekdays[f.Weekday], f.Day, shortMonths[f.Month],
-		yearText(f.Year), f.Hour, f.Minute, f.Second)
+	var buf [40]byte
+	b := append(buf[:0], shortWeekdays[f.Weekday]...)
+	b = append2(append(b, ", "...), f.Day)
+	b = append(append(b, ' '), shortMonths[f.Month]...)
+	b = appendYear(append(b, ' '), f.Year)
+	b = appendClock(append(b, ' '), f)
+	return string(append(b, " GMT"...))
 }
 
 // ISOString is Date.prototype.toISOString: "2026-09-25T12:00:00.000Z",
@@ -87,15 +140,19 @@ func ISOString(t float64) (string, bool) {
 		return "", false
 	}
 	f := BreakDown(t)
-	var year string
+	var buf [32]byte
+	b := buf[:0]
 	switch {
 	case f.Year >= 0 && f.Year <= 9999:
-		year = fmt.Sprintf("%04d", f.Year)
+		b = appendPadded(b, f.Year, 4)
 	case f.Year < 0:
-		year = fmt.Sprintf("-%06d", -f.Year)
+		b = appendPadded(append(b, '-'), -f.Year, 6)
 	default:
-		year = fmt.Sprintf("+%06d", f.Year)
+		b = appendPadded(append(b, '+'), f.Year, 6)
 	}
-	return fmt.Sprintf("%s-%02d-%02dT%02d:%02d:%02d.%03dZ", year, f.Month+1, f.Day, f.Hour, f.Minute, f.Second,
-		f.Millisecond), true
+	b = append2(append(b, '-'), f.Month+1)
+	b = append2(append(b, '-'), f.Day)
+	b = appendClock(append(b, 'T'), f)
+	b = appendPadded(append(b, '.'), int64(f.Millisecond), 3)
+	return string(append(b, 'Z')), true
 }
