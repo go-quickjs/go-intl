@@ -135,8 +135,18 @@ type CalendarDate struct {
 	InLeapYear   bool
 }
 
-// Date is the day d as the calendar reckons it.
-func (c *Calendar) Date(d ISODate) CalendarDate {
+// Date is the day d as the calendar reckons it. A date outside ISO's
+// date-time limits is an error: the calendars' arithmetic is not made for
+// it, and the Hebrew calendar's had looped for ever on the year 2^40.
+func (c *Calendar) Date(d ISODate) (CalendarDate, error) {
+	if !d.withinLimits() {
+		return CalendarDate{}, rangeError("Date is not within ISO date time limits.")
+	}
+	return c.date(d), nil
+}
+
+// date is Date for a date known to be within the limits.
+func (c *Calendar) date(d ISODate) CalendarDate {
 	rd := d.rataDie()
 	y := c.r.yearOfRD(rd)
 	month, day := y.monthDay(rd)

@@ -165,14 +165,14 @@ func (ym PlainYearMonth) MonthCode() string    { return ym.cal.monthCode(ym.iso)
 func (ym PlainYearMonth) ReferenceDay() int    { return ym.cal.day(ym.iso) }
 func (ym PlainYearMonth) Era() (string, bool)  { return ym.cal.era(ym.iso) }
 func (ym PlainYearMonth) EraYear() (int, bool) { return ym.cal.eraYear(ym.iso) }
-func (ym PlainYearMonth) DaysInMonth() int     { return ym.cal.Date(ym.iso).DaysInMonth }
-func (ym PlainYearMonth) DaysInYear() int      { return ym.cal.Date(ym.iso).DaysInYear }
-func (ym PlainYearMonth) InLeapYear() bool     { return ym.cal.Date(ym.iso).InLeapYear }
+func (ym PlainYearMonth) DaysInMonth() int     { return ym.cal.date(ym.iso).DaysInMonth }
+func (ym PlainYearMonth) DaysInYear() int      { return ym.cal.date(ym.iso).DaysInYear }
+func (ym PlainYearMonth) InLeapYear() bool     { return ym.cal.date(ym.iso).InLeapYear }
 func (ym PlainYearMonth) MonthsInYear() int {
 	if ym.cal.isISO() {
 		return 12
 	}
-	return ym.cal.Date(ym.iso).MonthsInYear
+	return ym.cal.date(ym.iso).MonthsInYear
 }
 
 // ToPlainDate is Temporal.PlainYearMonth.prototype.toPlainDate, with the

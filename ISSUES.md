@@ -275,7 +275,7 @@ Status: fixed (TestDateAddMinInt64). A full validity check in front of DateAdd w
 
 **API-5. A Hebrew date far out of range hangs.** `temporal/lunisolar.go`.
 `heb.Date(ISODate{1<<40, 6, 15})` overflows and loops; the solar calendars
-return garbage years. Status: open.
+return garbage years. Status: fixed (TestCalendarDateOutOfRange): Calendar.Date now returns an error, for a date outside ISO's limits, which no Temporal value holds.
 
 **API-6. Duration.Round and Total with an unnamed unit panic or answer
 infinity.** `temporal/durationround.go`, `temporal/duration.go`.

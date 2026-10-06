@@ -23,29 +23,29 @@ func (c *Calendar) Equal(o *Calendar) bool { return c.id == o.id }
 // The calendar's reading of an ISO date, as temporal_rs's Calendar gives
 // each field.
 
-func (c *Calendar) fieldsOf(d ISODate) CalendarDate { return c.Date(d) }
+func (c *Calendar) fieldsOf(d ISODate) CalendarDate { return c.date(d) }
 
 func (c *Calendar) year(d ISODate) int {
 	if c.isISO() {
 		return d.Year
 	}
-	return c.Date(d).Year
+	return c.date(d).Year
 }
 
 func (c *Calendar) month(d ISODate) int {
 	if c.isISO() {
 		return d.Month
 	}
-	return c.Date(d).Month
+	return c.date(d).Month
 }
 
-func (c *Calendar) monthCode(d ISODate) string { return c.Date(d).MonthCode }
+func (c *Calendar) monthCode(d ISODate) string { return c.date(d).MonthCode }
 
 func (c *Calendar) day(d ISODate) int {
 	if c.isISO() {
 		return d.Day
 	}
-	return c.Date(d).Day
+	return c.date(d).Day
 }
 
 // era is the era's code, false for a calendar without eras.
@@ -53,7 +53,7 @@ func (c *Calendar) era(d ISODate) (string, bool) {
 	if c.isISO() {
 		return "", false
 	}
-	e := c.Date(d).Era
+	e := c.date(d).Era
 	return e, e != ""
 }
 
@@ -61,7 +61,7 @@ func (c *Calendar) eraYear(d ISODate) (int, bool) {
 	if c.isISO() {
 		return 0, false
 	}
-	f := c.Date(d)
+	f := c.date(d)
 	return f.EraYear, f.Era != ""
 }
 
@@ -333,17 +333,17 @@ func (d PlainDate) Month() int        { return d.cal.month(d.iso) }
 func (d PlainDate) MonthCode() string { return d.cal.monthCode(d.iso) }
 func (d PlainDate) Day() int          { return d.cal.day(d.iso) }
 func (d PlainDate) DayOfWeek() int    { return isoWeekday(d.iso) }
-func (d PlainDate) DayOfYear() int    { return d.cal.Date(d.iso).DayOfYear }
+func (d PlainDate) DayOfYear() int    { return d.cal.date(d.iso).DayOfYear }
 func (d PlainDate) DaysInWeek() int   { return 7 }
-func (d PlainDate) DaysInMonth() int  { return d.cal.Date(d.iso).DaysInMonth }
-func (d PlainDate) DaysInYear() int   { return d.cal.Date(d.iso).DaysInYear }
+func (d PlainDate) DaysInMonth() int  { return d.cal.date(d.iso).DaysInMonth }
+func (d PlainDate) DaysInYear() int   { return d.cal.date(d.iso).DaysInYear }
 func (d PlainDate) MonthsInYear() int {
 	if d.cal.isISO() {
 		return 12
 	}
-	return d.cal.Date(d.iso).MonthsInYear
+	return d.cal.date(d.iso).MonthsInYear
 }
-func (d PlainDate) InLeapYear() bool { return d.cal.Date(d.iso).InLeapYear }
+func (d PlainDate) InLeapYear() bool { return d.cal.date(d.iso).InLeapYear }
 
 // WeekOfYear is the ISO week number, false outside the ISO calendar.
 func (d PlainDate) WeekOfYear() (int, bool) {

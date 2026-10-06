@@ -55,7 +55,7 @@ func TestCalendarsMatchNode(t *testing.T) {
 			cal, _ := NewCalendar("japanese")
 			for i := 0; i+1 < len(eras); i += 2 {
 				d := ISODateFromEpochDays(start + int64(i/2))
-				got := cal.Date(d)
+				got := cal.date(d)
 				if got.Era != eras[i] || float64(got.EraYear) != eras[i+1] {
 					fail("japanese %v: %s %d, want %v %v", d, got.Era, got.EraYear, eras[i], eras[i+1])
 				}
@@ -88,7 +88,7 @@ func TestCalendarsMatchNode(t *testing.T) {
 		json.Unmarshal(c[8], &codes)
 		json.Unmarshal(c[9], &lengths)
 		years++
-		first := cal.Date(ISODateFromEpochDays(start))
+		first := cal.date(ISODateFromEpochDays(start))
 		wantEra, wantEraYear := "", 0
 		if era != nil {
 			wantEra, wantEraYear = *era, *eraYear
@@ -116,8 +116,8 @@ func TestCalendarsMatchNode(t *testing.T) {
 			} else {
 				want = month{number: m + 1}.code()
 			}
-			d := cal.Date(ISODateFromEpochDays(day))
-			last := cal.Date(ISODateFromEpochDays(day + int64(n) - 1))
+			d := cal.date(ISODateFromEpochDays(day))
+			last := cal.date(ISODateFromEpochDays(day + int64(n) - 1))
 			if d.Year != *year || d.Month != m+1 || d.Day != 1 || d.MonthCode != want || d.DaysInMonth != n ||
 				last.Month != m+1 || last.Day != n {
 				fail("%s %d month %d from %v: %+v to %d/%d; want %s of %d days", id, *year, m+1,
