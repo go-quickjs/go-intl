@@ -52,7 +52,7 @@ currency:"USD", notation:"compact", compactDisplay:"long"}` 1234 is
 compact one as a CLDR unit (number_formatimpl.cpp isCldrUnit). `ar` compact
 −12.5% is "‎-1.3 ألف‎%‎", Node "‎-1.3 ألف٪"; `tr` "-%1,3 B", Node "%-1,3 B";
 and formatToParts types the sign "percentSign" where Node says "unit".
-Status: open.
+Status: fixed (TestCompactPercent).
 
 **NF-6. A unit's or currency's plural is chosen as if the number were
 positive.** `number.go` (`f.round(magnitude, false)`). `en {style:"unit",

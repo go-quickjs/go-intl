@@ -178,6 +178,11 @@ type NumberFormat struct {
 	// and the sign as the unit, rather than with the unit's own pattern
 	// (number_formatimpl.cpp: isPercent, isCldrUnit).
 	percentUnit bool
+	// unit is the unit written after the number, by the unit's own pattern:
+	// the unit style's, but for percentUnit, and the unit percent for a
+	// percentage in compact notation, which V8 asks of ICU as that unit and
+	// ICU writes with the unit's pattern (number_formatimpl.cpp isCldrUnit).
+	unit string
 }
 
 // NewNumberFormat builds a formatter from the data built into the package.
@@ -263,6 +268,14 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 	f.percentUnit = opts.Style == StyleUnit && opts.Unit == "percent" && opts.UnitDisplay != UnitLong &&
 		opts.Notation != NotationCompact
 	switch {
+	case opts.Style == StyleUnit && !f.percentUnit:
+		f.unit = opts.Unit
+	case opts.Style == StylePercent && opts.Notation == NotationCompact:
+		f.unit = "percent"
+	}
+	switch {
+	case f.unit != "":
+		f.pattern, err = parsePattern(data.DecimalPattern)
 	case opts.Style == StylePercent || f.percentUnit:
 		f.pattern, err = parsePattern(data.PercentPattern)
 	case opts.Style == StyleCurrency:
@@ -301,7 +314,7 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 		}
 	}
 
-	if opts.Style == StyleUnit && !f.percentUnit {
+	if f.unit != "" {
 		if s.units == nil {
 			if s.units, err = loadUnits(src, loc); err != nil {
 				return nil, err
@@ -667,7 +680,7 @@ func (f *NumberFormat) layers(d Decimal, approximately bool) numberLayers {
 	// NaN and the infinities are "other" in every language, as ICU's plural
 	// rules answer for them.
 	finite := d.kind == decimalFinite
-	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName || f.opts.Style == StyleUnit && !f.percentUnit {
+	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName || f.unit != "" {
 		l.outer = true
 		l.count = f.outerCount(magnitude, finite)
 	}
@@ -721,7 +734,7 @@ func (f *NumberFormat) outerCount(magnitude mag, finite bool) string {
 
 // wrapOuter wraps a number in its unit or currency name.
 func (f *NumberFormat) wrapOuter(parts []Part, count string) []Part {
-	if f.opts.Style == StyleUnit {
+	if f.unit != "" {
 		return f.applyUnit(parts, count)
 	}
 	return f.joinCurrencyName(parts, count)

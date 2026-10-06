@@ -116,13 +116,13 @@ func (f *NumberFormat) unitPattern(count string) (string, bool) {
 	// A pair the locale has a wording of its own for is used as it stands.
 	// Composing the parts would give "987公里/小时" in Chinese where ICU says
 	// "987 km/h".
-	if direct, ok := width.Unit(f.opts.Unit); ok {
+	if direct, ok := width.Unit(f.unit); ok {
 		if pattern := direct.Pattern(count); pattern != "" {
 			return pattern, true
 		}
 	}
 
-	numerator, denominator, compound := strings.Cut(f.opts.Unit, "-per-")
+	numerator, denominator, compound := strings.Cut(f.unit, "-per-")
 	top, ok := width.Unit(numerator)
 	if !ok {
 		return "", false
