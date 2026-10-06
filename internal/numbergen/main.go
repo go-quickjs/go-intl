@@ -147,6 +147,15 @@ func run(root, icuData string) error {
 		if l.UnitPatterns, err = currencyUnitPatterns(curr, fb, e.Name()); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		systems := []*numdata.System{&l.System}
+		for i := range l.Others {
+			systems = append(systems, &l.Others[i])
+		}
+		for _, s := range systems {
+			if s.CompactLong, err = compactLong(icu, fb, e.Name(), s); err != nil {
+				return fmt.Errorf("%s: %w", e.Name(), err)
+			}
+		}
 		built[e.Name()] = numdata.Encode(l, pool)
 		locales[e.Name()] = l
 	}
@@ -345,7 +354,6 @@ func readSystem(numbers map[string]json.RawMessage, system string, digits map[st
 	var decimal struct {
 		Standard string                       `json:"standard"`
 		Short    map[string]map[string]string `json:"short"`
-		Long     map[string]map[string]string `json:"long"`
 	}
 	var percent struct {
 		Standard string `json:"standard"`
@@ -381,7 +389,6 @@ func readSystem(numbers map[string]json.RawMessage, system string, digits map[st
 		return nil, fmt.Errorf("no decimal pattern or separator")
 	}
 	out.CompactShort = compactPatterns(decimal.Short["decimalFormat"])
-	out.CompactLong = compactPatterns(decimal.Long["decimalFormat"])
 	out.CurrencyCompact = compactPatterns(currency.Short["standard"])
 	// A system with no range pattern of its own takes the Latin one; the
 	// caller fills that in.
@@ -726,6 +733,55 @@ func compactPatterns(in map[string]string) []numdata.CompactPattern {
 		return out[i].Count < out[j].Count
 	})
 	return out
+}
+
+// compactLong is a system's long compact patterns as ICU's
+// CompactData::populate reads them: the system's patternsLong, each
+// magnitude and plural category from the first bundle along the chain that
+// has it; where there are none, the Latin system's; and where there are
+// none of those, the short ones. cldr-json fills a locale's long patterns
+// out from the root's, which are its short ones, where ICU's root has no
+// long patterns: Pashto writes 1234 in full, "۱۲۳۴", where it has a long
+// pattern only for billions.
+func compactLong(c *icusrc.Locales, fb icusrc.Fallback, name string, s *numdata.System) ([]numdata.CompactPattern, error) {
+	chain, err := c.Resolve(strings.ReplaceAll(name, "-", "_"), fb)
+	if err != nil {
+		return nil, err
+	}
+	read := func(system string) (map[string]string, error) {
+		merged := map[string]string{}
+		for _, n := range chain {
+			table := n.Get("NumberElements", system, "patternsLong", "decimalFormat")
+			if table == nil {
+				continue
+			}
+			if table.Alias {
+				return nil, fmt.Errorf("%s's long patterns alias %s", system, table.Value)
+			}
+			for _, magnitude := range table.Children {
+				for _, p := range magnitude.Children {
+					key := magnitude.Key + "-count-" + p.Key
+					if _, ok := merged[key]; !ok {
+						merged[key] = p.Value
+					}
+				}
+			}
+		}
+		return merged, nil
+	}
+	merged, err := read(s.NumberingSystem)
+	if err != nil {
+		return nil, err
+	}
+	if len(merged) == 0 && s.NumberingSystem != "latn" {
+		if merged, err = read("latn"); err != nil {
+			return nil, err
+		}
+	}
+	if len(merged) == 0 {
+		return s.CompactShort, nil
+	}
+	return compactPatterns(merged), nil
 }
 
 // timeSeparators finds the mark each numbering system puts between hours

@@ -87,7 +87,7 @@ Status: fixed (TestCurrencyFormats). The data now carries the formats ICU's curr
 some long patterns.** Data (`numbergen`). `ps` compact long 1234 is "۱٫۲K",
 Node "۱۲۳۴"; `ast` long 12345678901 "12G", Node "12.346 millones"; `ps-PK`,
 `wo` too. ICU uses only the locale's own long patterns; cldr-json hands
-datagen inherited short ones. Status: open.
+datagen inherited short ones. Status: fixed (TestCompactLongOwnPatterns). Over 22,464 compact numbers in every locale Node supports, short and long, with and without -u-nu-latn, ast, ps, ps-PK and wo now match, and only the locales of NF-20 differ.
 
 **NF-12. Burmese writes a currency name on the wrong side.** Data. `my` GBP
 currencyDisplay name −700.3 is "ဗြိတိသျှ ပေါင် -၇၀၀.၃၀", Node
