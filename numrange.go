@@ -143,7 +143,7 @@ func (f *NumberFormat) FormatDecimalRangeToParts(start, end Decimal) ([]RangePar
 		out = wrapped
 	}
 	spans := [2][2]int{{start1, start1 + len1}, {start2, start2 + len2}}
-	return sourced(mergeParts(trimParts(out)), spans), nil
+	return sourced(mergeParts(trimParts(f.props, out)), spans), nil
 }
 
 // sourced marks each part with the span that holds it, as V8 does: a part
@@ -203,7 +203,7 @@ func (f *NumberFormat) rangeEnd(l numberLayers, collapseMiddle, collapseOuter bo
 
 // rangeParts marks every part of a single number as shared.
 func (f *NumberFormat) rangeParts(parts []Part) []RangePart {
-	return tag(mergeParts(trimParts(parts)), SourceShared)
+	return tag(mergeParts(trimParts(f.props, parts)), SourceShared)
 }
 
 // trimParts is FormattedValueStringBuilderImpl's trimming: a field's
@@ -211,15 +211,15 @@ func (f *NumberFormat) rangeParts(parts []Part) []RangePart {
 // part of it, and V8 writes them as literals. Arabic's minus sign is a
 // left-to-right mark and a hyphen, of which only the hyphen is the sign. The
 // grouping separator is left whole.
-func trimParts(parts []Part) []Part {
+func trimParts(props *unicodeProps, parts []Part) []Part {
 	var out []Part
 	for _, p := range parts {
 		if p.Kind == PartLiteral || p.Kind == PartGroup {
 			out = append(out, p)
 			continue
 		}
-		core := strings.TrimLeftFunc(p.Value, isIgnorable)
-		trimmed := strings.TrimRightFunc(core, isIgnorable)
+		core := strings.TrimLeftFunc(p.Value, props.ignorable)
+		trimmed := strings.TrimRightFunc(core, props.ignorable)
 		if trimmed == "" {
 			out = append(out, Part{PartLiteral, p.Value})
 			continue

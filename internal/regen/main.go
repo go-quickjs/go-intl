@@ -110,6 +110,7 @@ func sources() []source {
 		{ucdDir + "/Scripts.txt", ucd + "Scripts.txt", "9f5e50d3abaee7d6ce09480f325c706f485ae3240912527e651954d2d6b035bf"},
 		{ucdDir + "/LineBreak.txt", ucd + "LineBreak.txt", "e6a18fa91f8f6a6f8e534b1d3f128c21ada45bfe152eb6b1bcc5e15fd8ac92e6"},
 		{ucdDir + "/DerivedGeneralCategory.txt", ucd + "extracted/DerivedGeneralCategory.txt", "d62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e"},
+		{ucdDir + "/PropList.txt", ucd + "PropList.txt", "130dcddcaadaf071008bdfce1e7743e04fdfbc910886f017d9f9ac931d8c64dd"},
 		{calendar, crates + "icu_calendar/" + calendar, "a2b2acc6263f494f1df50685b53ff8e57869e47d5c6fe39c23d518ae9a4f3e45"},
 		{tzProvider, crates + "timezone_provider/" + tzProvider, "c48f9b04628a2b813051e4dfe97c65281e49625eabd09ec343190e31e399a8c2"},
 	}
@@ -153,6 +154,7 @@ func jobs(cache string) []job {
 		{name: "rbnfgen", args: []string{at(dataZip)}},
 		{name: "collgen", args: []string{at(exportZip), at(dataZip), at(sourcesTgz)}},
 		{name: "segmentgen", args: []string{at(sourcesTgz), at(dataZip), at(ucdDir)}},
+		{name: "propgen", args: []string{at(ucdDir)}},
 	}
 }
 

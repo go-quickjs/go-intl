@@ -170,9 +170,12 @@ type NumberFormat struct {
 	minGrouping    int
 	beforeCurrency *spacingRule
 	afterCurrency  *spacingRule
-	plurals        *PluralRules
-	units          *unitdata.Locale
-	unitWidth      int
+	// props are the Unicode properties the currency spacing and the parts'
+	// trimming read.
+	props     *unicodeProps
+	plurals   *PluralRules
+	units     *unitdata.Locale
+	unitWidth int
 	// percentUnit is the unit "percent" at a short or narrow width and not
 	// compact, which ICU writes with the locale's percent pattern, unscaled,
 	// and the sign as the unit, rather than with the unit's own pattern
@@ -327,12 +330,15 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 	if err := f.resolveCurrency(); err != nil {
 		return nil, err
 	}
+	if f.props, err = loadUnicodeProps(src); err != nil {
+		return nil, err
+	}
 	if opts.Style == StyleCurrency {
-		if f.beforeCurrency, err = compileSpacing(data.BeforeCurrency.CurrencyMatch,
+		if f.beforeCurrency, err = compileSpacing(f.props, data.BeforeCurrency.CurrencyMatch,
 			data.BeforeCurrency.SurroundingMatch, data.BeforeCurrency.InsertBetween); err != nil {
 			return nil, fmt.Errorf("intl: %s: the currency spacing: %w", loc, err)
 		}
-		if f.afterCurrency, err = compileSpacing(data.AfterCurrency.CurrencyMatch,
+		if f.afterCurrency, err = compileSpacing(f.props, data.AfterCurrency.CurrencyMatch,
 			data.AfterCurrency.SurroundingMatch, data.AfterCurrency.InsertBetween); err != nil {
 			return nil, fmt.Errorf("intl: %s: the currency spacing: %w", loc, err)
 		}
@@ -601,7 +607,7 @@ func (f *NumberFormat) FormatDecimal(d Decimal) string {
 // FormatDecimalToParts writes a number given exactly as the pieces it is
 // made of.
 func (f *NumberFormat) FormatDecimalToParts(d Decimal) []Part {
-	return mergeParts(trimParts(f.assemble(f.layers(d, false))))
+	return mergeParts(trimParts(f.props, f.assemble(f.layers(d, false))))
 }
 
 // numberLayers is a number written, in the layers ICU's number formatter
@@ -813,9 +819,9 @@ func (f *NumberFormat) joinCurrencyName(parts []Part, count string) []Part {
 	if !ok {
 		before, after = "", " "+text
 	}
-	out := affixAs(nil, before, PartCurrency)
+	out := affixAs(f.props, nil, before, PartCurrency)
 	out = append(out, parts...)
-	return affixAs(out, after, PartCurrency)
+	return affixAs(f.props, out, after, PartCurrency)
 }
 
 // spaceCurrency puts CLDR's space between the currency and the number where

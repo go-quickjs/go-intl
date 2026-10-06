@@ -380,7 +380,12 @@ left behind (internal/writeset/writeset_test.go).
 **RU-3. Currency spacing depends on the Go toolchain's Unicode.**
 `unicodeset.go`, `compact.go`. The sets come from Go's unicode tables, which
 are Unicode 15 up to Go 1.26: built with it, `en-u-nu-gara` CHF loses its
-space. Status: open.
+space. Status: fixed. A new generator, propgen, writes the general
+categories, the default ignorables and the Hebrew script from UCD 17.0.0,
+ICU 78.3's, to data/properties.bin, and currency spacing, the parts'
+trimming and Hebrew lists read that; nothing at run time reads Go's
+unicode tables. The test fails on the old code under Go 1.24 and passes
+under 1.24 and 1.27 (uprops_test.go).
 
 **RU-4. Exported package variables can be reassigned.** `subtag.go` (Und),
 `compat.go` (Divergences), `source.go` (Embedded), `temporal` (Calendars,

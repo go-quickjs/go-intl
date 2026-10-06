@@ -36,7 +36,7 @@ authority.
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
 | ICU data sources | `icu4c-78.3-data.zip` | the collation tree and defaults (`collgen`); numbering-system entries and en_US_POSIX's number patterns (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`); each service's available locales, from the locale and collation trees, their `LOCALE_DEPS.json` and `misc/plurals.txt`, and the collations, currencies and time zones `supportedValuesOf` lists, from the collation and currency trees, `keyTypeData.txt`, `zoneinfo64.txt` and `timezoneTypes.txt` (`availgen`) | yes |
 | ICU's compiled data | `icudt78l.dat` in `icu4c-78.3-sources.tgz` | the break rules and dictionaries (`segmentgen`); the collation types that tailor conjoining jamo, which the export leaves incomplete (`collgen`) | yes: Node carries this data |
-| Unicode (UCD) properties | 17.0.0 `Scripts.txt`, `LineBreak.txt`, `extracted/DerivedGeneralCategory.txt` | the break engines' sets and the Script property (`segmentgen`) | yes, from node |
+| Unicode (UCD) properties | 17.0.0 `Scripts.txt`, `LineBreak.txt`, `extracted/DerivedGeneralCategory.txt`, `PropList.txt` | the break engines' sets and the Script property (`segmentgen`); the general categories, default ignorables and Hebrew script that currency spacing, number parts and Hebrew lists read (`propgen`) | yes, from node |
 | Temporal's crates | `temporal_rs` 0.2.3, `temporal_capi` 0.2.3, `ixdtf` 0.6.4, `timezone_provider` 0.2.3, `zoneinfo64` 0.3.0, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0, `icu_locale_core` 2.2.0 | the `temporal` package: Temporal's calendars, arithmetic, parsing and zones; Temporal's zone names (`tzidgen`) | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
 | V8 | as Node v26.10.0 vendors it, `deps/v8` | the `date` package: Date's offset cache, parser and strings, ported; no data | yes, from node |
 
@@ -116,6 +116,11 @@ Other URLs:
   `LineBreak.txt` (`e6a18fa91f8f6a6f8e534b1d3f128c21ada45bfe152eb6b1bcc5e15fd8ac92e6`)
   and `extracted/DerivedGeneralCategory.txt`
   (`d62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e`).
+- `propgen` reads `Scripts.txt` and `extracted/DerivedGeneralCategory.txt`,
+  as above, and `https://www.unicode.org/Public/17.0.0/ucd/PropList.txt`
+  (sha256 `130dcddcaadaf071008bdfce1e7743e04fdfbc910886f017d9f9ac931d8c64dd`),
+  so that what formatting asks of Unicode is Unicode 17, as ICU's, rather
+  than the Go toolchain's.
 - Temporal's crates, as Node 26.10.0 pins them in `deps/crates/Cargo.lock`
   (which carries no checksums; these are crates.io's), from
   `https://static.crates.io/crates/<name>/<name>-<version>.crate`:

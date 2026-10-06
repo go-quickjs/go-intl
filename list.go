@@ -3,7 +3,6 @@ package intl
 import (
 	"fmt"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/go-quickjs/go-intl/internal/listdata"
@@ -71,7 +70,7 @@ type listContext struct {
 // "i" sound and "o" is "u" before an "o" sound, and Hebrew "ו" takes a dash
 // before a word not written in Hebrew. Only a pattern that is exactly the
 // one ICU looks for changes.
-func contextualPatterns(language string, p listdata.Patterns) *listContext {
+func contextualPatterns(src Source, language string, p listdata.Patterns) (*listContext, error) {
 	type rule struct {
 		from, to string
 		test     func(string) bool
@@ -81,7 +80,11 @@ func contextualPatterns(language string, p listdata.Patterns) *listContext {
 	case "es":
 		rules = []rule{{"{0} y {1}", "{0} e {1}", spanishE}, {"{0} o {1}", "{0} u {1}", spanishU}}
 	case "he", "iw":
-		rules = []rule{{"{0} \u05D5{1}", "{0} \u05D5-{1}", hebrewVavDash}}
+		props, err := loadUnicodeProps(src)
+		if err != nil {
+			return nil, err
+		}
+		rules = []rule{{"{0} \u05D5{1}", "{0} \u05D5-{1}", func(next string) bool { return hebrewVavDash(props, next) }}}
 	}
 	for _, r := range rules {
 		if p.Two != r.from && p.End != r.from {
@@ -94,9 +97,9 @@ func contextualPatterns(language string, p listdata.Patterns) *listContext {
 		if p.End == r.from {
 			c.end = r.to
 		}
-		return c
+		return c, nil
 	}
-	return nil
+	return nil, nil
 }
 
 // spanishE is ICU's shouldChangeToE: a word that begins "i" or "hi", but not
@@ -130,12 +133,12 @@ func spanishU(next string) bool {
 
 // hebrewVavDash is ICU's shouldChangeToVavDash: a word whose first letter
 // is not of the Hebrew script.
-func hebrewVavDash(next string) bool {
+func hebrewVavDash(props *unicodeProps, next string) bool {
 	if next == "" {
 		return false
 	}
 	r, _ := utf8.DecodeRuneInString(next)
-	return !unicode.Is(unicode.Hebrew, r)
+	return !props.in("sc Hebrew", r)
 }
 
 // two is the pattern that joins a list of two, before its second item.
@@ -187,9 +190,12 @@ func NewListFormatFrom(src Source, loc Locale, opts ListFormatOptions) (*ListFor
 	if p.Empty() {
 		return nil, fmt.Errorf("intl: %s has no list patterns: %w", loc, ErrNotFound)
 	}
+	context, err := contextualPatterns(src, loc.Language.String(), p)
+	if err != nil {
+		return nil, err
+	}
 	// ListFormat uses nothing of the Unicode extension.
-	return &ListFormat{locale: loc.onlyKeywords(), opts: opts, patterns: p,
-		context: contextualPatterns(loc.Language.String(), p)}, nil
+	return &ListFormat{locale: loc.onlyKeywords(), opts: opts, patterns: p, context: context}, nil
 }
 
 func loadLists(src Source, loc Locale) (*listdata.Locale, error) {

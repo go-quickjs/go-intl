@@ -138,6 +138,10 @@ const (
 	// MarkerCollationTree is how collation locales inherit from one
 	// another, which differs from the ordinary fallback.
 	MarkerCollationTree Marker = "collationtree"
+	// MarkerProperties is the Unicode properties formatting reads -- general
+	// categories, the default ignorables, the Hebrew script -- in the
+	// Unicode ICU carries.
+	MarkerProperties Marker = "properties"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

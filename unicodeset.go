@@ -3,7 +3,6 @@ package intl
 import (
 	"fmt"
 	"strings"
-	"unicode"
 )
 
 // The small part of UnicodeSet that CLDR's currency spacing needs.
@@ -20,8 +19,9 @@ import (
 
 type runeSet func(rune) bool
 
-// parseRuneSet reads one of the set expressions CLDR uses.
-func parseRuneSet(src string) (runeSet, error) {
+// parseRuneSet reads one of the set expressions CLDR uses, in the Unicode
+// properties given.
+func parseRuneSet(props *unicodeProps, src string) (runeSet, error) {
 	s := strings.TrimSpace(src)
 	if s == "" {
 		return func(rune) bool { return false }, nil
@@ -35,7 +35,7 @@ func parseRuneSet(src string) (runeSet, error) {
 		}
 		sets := make([]runeSet, 0, len(parts))
 		for _, p := range parts {
-			set, err := parsePosixClass(strings.TrimSpace(p), src)
+			set, err := parsePosixClass(props, strings.TrimSpace(p), src)
 			if err != nil {
 				return nil, err
 			}
@@ -50,11 +50,11 @@ func parseRuneSet(src string) (runeSet, error) {
 			return true
 		}, nil
 	}
-	return parsePosixClass(s, src)
+	return parsePosixClass(props, s, src)
 }
 
 // parsePosixClass reads [:name:] and [:^name:].
-func parsePosixClass(s, whole string) (runeSet, error) {
+func parsePosixClass(props *unicodeProps, s, whole string) (runeSet, error) {
 	if !strings.HasPrefix(s, "[:") || !strings.HasSuffix(s, ":]") {
 		return nil, fmt.Errorf("the set %q has a part this does not read: %q", whole, s)
 	}
@@ -62,26 +62,20 @@ func parsePosixClass(s, whole string) (runeSet, error) {
 	negated := strings.HasPrefix(name, "^")
 	name = strings.TrimPrefix(name, "^")
 
-	var table *unicode.RangeTable
+	var set string
 	switch name {
-	case "S":
-		table = unicode.S
-	case "Z":
-		table = unicode.Z
-	case "L":
-		table = unicode.L
-	case "N":
-		table = unicode.N
-	case "digit", "Nd":
-		table = unicode.Nd
+	case "S", "Z", "L", "N", "Nd":
+		set = "gc " + name
+	case "digit":
+		set = "gc Nd"
 	default:
 		return nil, fmt.Errorf("the set %q names a class this does not know: %q",
 			whole, name)
 	}
 	if negated {
-		return func(r rune) bool { return !unicode.Is(table, r) }, nil
+		return func(r rune) bool { return !props.in(set, r) }, nil
 	}
-	return func(r rune) bool { return unicode.Is(table, r) }, nil
+	return func(r rune) bool { return props.in(set, r) }, nil
 }
 
 // spacingRule is one of CLDR's currency-spacing rules, compiled.
@@ -91,15 +85,15 @@ type spacingRule struct {
 	insert      string
 }
 
-func compileSpacing(currencyMatch, surroundingMatch, insert string) (*spacingRule, error) {
+func compileSpacing(props *unicodeProps, currencyMatch, surroundingMatch, insert string) (*spacingRule, error) {
 	if insert == "" {
 		return nil, nil
 	}
-	cur, err := parseRuneSet(currencyMatch)
+	cur, err := parseRuneSet(props, currencyMatch)
 	if err != nil {
 		return nil, err
 	}
-	sur, err := parseRuneSet(surroundingMatch)
+	sur, err := parseRuneSet(props, surroundingMatch)
 	if err != nil {
 		return nil, err
 	}

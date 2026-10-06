@@ -2,7 +2,6 @@ package intl
 
 import (
 	"strings"
-	"unicode"
 
 	"github.com/go-quickjs/go-intl/internal/numdata"
 )
@@ -144,18 +143,18 @@ func hasCompactCount(patterns []numdata.CompactPattern, exponent int, count stri
 // compactAffix writes a compact pattern's text as a "compact" part, with
 // the spaces around it as literals, as ICU trims the whitespace off a
 // field's ends.
-func compactAffix(parts []Part, text string) []Part {
-	return affixAs(parts, text, PartCompact)
+func compactAffix(props *unicodeProps, parts []Part, text string) []Part {
+	return affixAs(props, parts, text, PartCompact)
 }
 
 // affixAs writes a pattern's text as one part of a kind, with the spaces
 // around it as literals, as ICU trims the whitespace off a field's ends.
-func affixAs(parts []Part, text string, kind PartKind) []Part {
-	core := strings.TrimLeftFunc(text, isIgnorable)
+func affixAs(props *unicodeProps, parts []Part, text string, kind PartKind) []Part {
+	core := strings.TrimLeftFunc(text, props.ignorable)
 	if lead := text[:len(text)-len(core)]; lead != "" {
 		parts = append(parts, Part{PartLiteral, lead})
 	}
-	trimmed := strings.TrimRightFunc(core, isIgnorable)
+	trimmed := strings.TrimRightFunc(core, props.ignorable)
 	if trimmed != "" {
 		parts = append(parts, Part{kind, trimmed})
 	}
@@ -163,17 +162,6 @@ func affixAs(parts []Part, text string, kind PartKind) []Part {
 		parts = append(parts, Part{PartLiteral, trail})
 	}
 	return parts
-}
-
-// isIgnorable is ICU's DEFAULT_IGNORABLES: the space separators, the tab,
-// the bidirectional controls and the variation selectors.
-func isIgnorable(r rune) bool {
-	switch {
-	case r == '\t', unicode.Is(unicode.Zs, r), unicode.Is(unicode.Bidi_Control, r),
-		unicode.Is(unicode.Variation_Selector, r):
-		return true
-	}
-	return false
 }
 
 // compactPieces writes a number in compact notation: the pattern's text
@@ -223,7 +211,7 @@ func (f *NumberFormat) compactText(parts []Part, text string) []Part {
 		if i > 0 {
 			parts = append(parts, Part{PartCurrency, f.currencyText})
 		}
-		parts = compactAffix(parts, piece)
+		parts = compactAffix(f.props, parts, piece)
 	}
 	return parts
 }
