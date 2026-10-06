@@ -63,8 +63,9 @@ func (t scriptTable) script(c rune) string {
 	if i == n || at(i, 0) > c {
 		return "Unknown"
 	}
+	// A number past 2^31, as a corrupt table may hold, is a negative rune.
 	id := int(at(i, 2))
-	if id >= len(t.names) {
+	if id < 0 || id >= len(t.names) {
 		return "Unknown"
 	}
 	if code, ok := scriptCodes[t.names[id]]; ok {

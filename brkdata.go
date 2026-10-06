@@ -63,7 +63,11 @@ func decodeBreakRules(b []byte) (*breakRules, error) {
 	fTable, fLen := u32(16), u32(20)
 	trie, trieLen := u32(32), u32(36)
 	status, statusLen := u32(48), u32(52)
-	if fTable+fLen > len(b) || trie+trieLen > len(b) || status+statusLen > len(b) || fLen < 20 {
+	// Each section within the data, compared without adding, which an
+	// offset past 2^31, negative on 32 bits, would get round.
+	within := func(at, n int) bool { return at >= 0 && n >= 0 && at <= len(b) && n <= len(b)-at }
+	if !within(fTable, fLen) || !within(trie, trieLen) || !within(status, statusLen) || fLen < 20 ||
+		r.catCount > 0xffff {
 		return nil, fmt.Errorf("RBBI sections out of range")
 	}
 	t := b[fTable : fTable+fLen]
@@ -76,8 +80,8 @@ func decodeBreakRules(b []byte) (*breakRules, error) {
 		data:          t[20:],
 	}
 	r.forward.eight = r.forward.flags&rbbi8BitsRows != 0
-	if r.forward.numStates*r.forward.rowLen > len(r.forward.data) {
-		return nil, fmt.Errorf("RBBI state table truncated")
+	if err := r.check(); err != nil {
+		return nil, err
 	}
 	for i := 0; i+4 <= statusLen; i += 4 {
 		r.statuses = append(r.statuses, int32(binary.LittleEndian.Uint32(b[status+i:])))
@@ -86,7 +90,41 @@ func decodeBreakRules(b []byte) (*breakRules, error) {
 	if r.trie, err = decodeCodePointTrie(b[trie : trie+trieLen]); err != nil {
 		return nil, fmt.Errorf("RBBI trie: %w", err)
 	}
+	if v, ok := r.trie.maxValue(); !ok || v >= r.catCount {
+		return nil, fmt.Errorf("RBBI trie: a category past the %d the rules have", r.catCount)
+	}
 	return r, nil
+}
+
+// check refuses a state table a Source corrupted, which the state machine
+// would read past: rows too short for the categories, or a next state,
+// look-ahead slot or tag outside what there is. Every cell is looked at
+// once, which is states by categories, some hundreds by some tens.
+func (r *breakRules) check() error {
+	t := &r.forward
+	width := 2
+	if t.eight {
+		width = 1
+	}
+	if t.numStates < 2 || t.rowLen < 0 || r.catCount < 3 || t.lookAheadSize < 0 || t.lookAheadSize > 1<<16 ||
+		t.rowLen < (3+r.catCount)*width || t.numStates > len(t.data)/t.rowLen {
+		return fmt.Errorf("RBBI state table of %d states of %d bytes for %d categories in %d bytes",
+			t.numStates, t.rowLen, r.catCount, len(t.data))
+	}
+	for s := 0; s < t.numStates; s++ {
+		if a := t.accepting(s); a > 1 && a >= t.lookAheadSize {
+			return fmt.Errorf("RBBI state %d accepts by look-ahead %d of %d", s, a, t.lookAheadSize)
+		}
+		if l := t.lookAhead(s); l > 1 && l >= t.lookAheadSize {
+			return fmt.Errorf("RBBI state %d records look-ahead %d of %d", s, l, t.lookAheadSize)
+		}
+		for c := 0; c < r.catCount; c++ {
+			if n := t.next(s, c); n >= t.numStates {
+				return fmt.Errorf("RBBI state %d goes to state %d of %d", s, n, t.numStates)
+			}
+		}
+	}
+	return nil
 }
 
 // ruleStatus is getRuleStatus: the largest value of a status group.
@@ -95,7 +133,7 @@ func (r *breakRules) ruleStatus(idx int) int {
 		return 0
 	}
 	n := int(r.statuses[idx])
-	if idx+n >= len(r.statuses) {
+	if n < 0 || idx+n >= len(r.statuses) {
 		return 0
 	}
 	return int(r.statuses[idx+n])
@@ -159,7 +197,7 @@ func (t *codePointTrie) get(c rune) int {
 	case c >= 0 && c <= 0x7f:
 		i = int(c)
 	case c >= 0 && c <= 0xffff:
-		i = int(t.index[c>>6]) + int(c&63)
+		i = t.at(int(c>>6)) + int(c&63)
 	case c >= 0 && c <= 0x10ffff:
 		if int(c) >= t.highStart {
 			i = t.dataLength - 2
@@ -169,25 +207,55 @@ func (t *codePointTrie) get(c rune) int {
 	default:
 		i = t.dataLength - 1
 	}
+	if i < 0 || i >= t.dataLength {
+		// A corrupt index points past the data: the error value.
+		i = t.dataLength - 1
+	}
 	if t.data8 != nil {
 		return int(t.data8[i])
 	}
 	return int(t.data16[i])
 }
 
+// maxValue is the largest value the trie holds, false for a trie with no
+// data.
+func (t *codePointTrie) maxValue() (int, bool) {
+	if t.dataLength < 2 {
+		return 0, false
+	}
+	v := 0
+	for i := 0; i < t.dataLength; i++ {
+		if t.data8 != nil {
+			v = max(v, int(t.data8[i]))
+		} else {
+			v = max(v, int(t.data16[i]))
+		}
+	}
+	return v, true
+}
+
+// at is one entry of the index, or, past its end, as a corrupt trie may
+// point, one past the data.
+func (t *codePointTrie) at(i int) int {
+	if i < 0 || i >= len(t.index) {
+		return t.dataLength
+	}
+	return int(t.index[i])
+}
+
 // smallIndex is ucptrie_internalSmallIndex for a fast trie.
 func (t *codePointTrie) smallIndex(c int) int {
 	i1 := c>>14 + 0x10000>>6 - 0x10000>>14
-	i3Block := int(t.index[int(t.index[i1])+(c>>9)&0x1f])
+	i3Block := t.at(t.at(i1) + (c>>9)&0x1f)
 	i3 := (c >> 4) & 0x1f
 	var dataBlock int
 	if i3Block&0x8000 == 0 {
-		dataBlock = int(t.index[i3Block+i3])
+		dataBlock = t.at(i3Block + i3)
 	} else {
 		i3Block = (i3Block & 0x7fff) + (i3 &^ 7) + (i3 >> 3)
 		i3 &= 7
-		dataBlock = (int(t.index[i3Block]) << (2 + 2*i3)) & 0x30000
-		dataBlock |= int(t.index[i3Block+1+i3])
+		dataBlock = (t.at(i3Block) << (2 + 2*i3)) & 0x30000
+		dataBlock |= t.at(i3Block + 1 + i3)
 	}
 	return dataBlock + c&0xf
 }
@@ -227,7 +295,14 @@ const (
 
 func ucValueResult(node int) trieResult { return trieIntermediateValue - trieResult(node>>15) }
 
-func (t *charsTrie) u(i int) int { return int(binary.LittleEndian.Uint16(t.units[2*i:])) }
+func (t *charsTrie) u(i int) int {
+	// Past the end, as a corrupt dictionary may point: a unit that ends a
+	// match.
+	if i < 0 || 2*i+2 > len(t.units) {
+		return 0
+	}
+	return int(binary.LittleEndian.Uint16(t.units[2*i:]))
+}
 
 func (t *charsTrie) first(c int) trieResult {
 	t.remaining = -1
@@ -452,7 +527,14 @@ func btValueResult(node int) trieResult {
 	return trieIntermediateValue - trieResult(node&btValueIsFinal)
 }
 
-func (t *bytesTrie) b(i int) int { return int(t.bytes[i]) }
+func (t *bytesTrie) b(i int) int {
+	// Past the end, as a corrupt dictionary may point: a byte that ends a
+	// match.
+	if i < 0 || i >= len(t.bytes) {
+		return 0
+	}
+	return int(t.bytes[i])
+}
 
 // first and next take a byte, a negative one being read as a byte, as
 // BytesTrie does: -1 is 0xff.
@@ -677,7 +759,7 @@ func decodeBreakDictionary(b []byte) (*breakDictionary, error) {
 	}
 	idx := func(i int) int { return int(int32(binary.LittleEndian.Uint32(b[4*i:]))) }
 	offset, total, trieType, transform := idx(0), idx(3), idx(4)&7, idx(5)
-	if offset < 32 || offset > len(b) || total > len(b) {
+	if offset < 32 || offset > total || total > len(b) {
 		return nil, fmt.Errorf("dictionary indexes out of range")
 	}
 	d := &breakDictionary{transform: transform}

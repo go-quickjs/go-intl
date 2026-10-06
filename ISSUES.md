@@ -352,7 +352,14 @@ reads as negative is refused; the tests run under GOARCH=386 too
 (internal/blob/blob_test.go, internal/datapack/datapack_test.go).
 
 **DA-4. The segmenter's data readers panic on corrupt data.** `brkdata.go`,
-`dictbe.go`. Status: open.
+`dictbe.go`. Status: fixed. The decoder checks every state-table cell (next
+states, look-ahead slots), the trie's categories, the sections' bounds
+without adding them, and a dictionary's offset against its end; the trie,
+dictionary and status readers bound every read and refuse a negative
+number; and the breaker moves on by a code point where corrupt rules or a
+dictionary engine would not advance or go back. 1,800 corrupted files are
+segmented with, and 60,000 were in a probe on amd64 and 386
+(segmenter_corrupt_test.go).
 
 ## Rules
 

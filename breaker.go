@@ -158,6 +158,16 @@ func (b *breaker) boundaries() []boundary {
 				next = d
 			}
 		}
+		if next.pos <= cur.pos || next.pos > len(b.t.text) {
+			// Rules or a dictionary a Source corrupted, which went back or
+			// past the end: on by a code point, as a match of nothing is.
+			b.t.setIndex(cur.pos)
+			b.t.next32()
+			next = boundary{b.t.index(), 0}
+			if next.pos <= cur.pos {
+				break
+			}
+		}
 		out = append(out, next)
 		cur = next
 	}
@@ -267,6 +277,12 @@ func (b *breaker) populateDictionary(start, end, firstStatus, otherStatus int) {
 		}
 		if e := b.engineFor(c); e != nil {
 			found += e.findBreaks(t, current, end, &b.dict.breaks)
+		}
+		if t.index() <= current {
+			// An engine reading a corrupt dictionary, which did not move:
+			// on by a code point, rather than asking it again for ever.
+			t.setIndex(current)
+			t.next32()
 		}
 		c = t.current32()
 		category = b.rules.trie.get(c)
