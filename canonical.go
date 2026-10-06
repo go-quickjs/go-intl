@@ -168,6 +168,11 @@ func legacyVariants(l Locale) (Locale, error) {
 				if err != nil {
 					return Locale{}, err
 				}
+				// ICU's parser refuses a variant given twice, the ones
+				// from lvariant among them: "en-fonipa-x-lvariant-fonipa".
+				if slices.Contains(l.Variants, parsed) {
+					return Locale{}, fmt.Errorf("%w: gives the variant %s twice", ErrSyntax, v)
+				}
 				l.Variants = append(l.Variants, parsed)
 			}
 			l.Private = strings.Join(subtags[:i], "-")
@@ -257,6 +262,10 @@ func (c *Canonicalizer) replaceAliases(l *Locale) {
 			break
 		}
 	}
+	// An alias can name a variant the locale already has, "heploc" for
+	// "alalc97", and ICU keeps it once: "en-heploc-alalc97" is "en-alalc97".
+	slices.Sort(b.variants)
+	b.variants = slices.Compact(b.variants)
 	l.Language, _ = ParseLanguage(b.language)
 	l.Script, _ = ParseScript(b.script)
 	l.Region, _ = ParseRegion(b.region)

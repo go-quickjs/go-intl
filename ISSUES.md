@@ -203,7 +203,7 @@ canonicalizes with ca-buddhist, Node ca-gregory. Status: fixed (TestDuplicateKey
 **LO-2. Canonicalizing can give the same variant twice.** `canonical.go`.
 `en-heploc-alalc97` is "en-alalc97-alalc97", Node "en-alalc97";
 `en-fonipa-x-lvariant-fonipa` "en-fonipa-fonipa", Node a RangeError. ICU
-drops repeated variants (uloc_tag.cpp). Status: open.
+drops repeated variants (uloc_tag.cpp). Status: fixed (TestVariantGivenTwice).
 
 **LO-3. und with a script and a region is maximized by the region first.**
 `fallbacker.go`. ICU and ICU4X look up und_S_R, then und_S, then und_R.
