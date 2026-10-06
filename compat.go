@@ -26,8 +26,9 @@ import "strings"
 // options PluralRules reports, the unknown subtags a locale maximizes
 // past, the pattern an accounting amount with no sign takes, the offsets a
 // relative time names in words, the digits of a double rounded to an
-// increment, which currencies a currency's own format is used for, and the
-// empty items of a list. Standard and NodeICU are the two ends.
+// increment, which currencies a currency's own format is used for, the
+// empty items of a list, and the hour cycle keyword a time style is made
+// with. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -143,6 +144,10 @@ const (
 	// EmptyListItems leaves an empty item out of a list's parts, as ICU
 	// does.
 	EmptyListItems
+	// HourCycleStyles makes a time style with the pattern generator
+	// wherever the locale has a -u-hc keyword, even one hour12 or
+	// hourCycle overrode, as V8 gives ICU the locale's keyword.
+	HourCycleStyles
 )
 
 const (
@@ -156,7 +161,7 @@ const (
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
-		EmptyListItems
+		EmptyListItems | HourCycleStyles
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -484,6 +489,17 @@ var Divergences = []Divergence{
 		Node: "ICU's FormattedList has no field for an empty span, so the item is left out " +
 			"and the literals either side of it are one: [\"a\", \"\", \"b\"] is \"a\", " +
 			"\", , and \", \"b\", and [\"\"] has no parts",
+	},
+	{
+		Name: "HourCycleStyles", Flag: HourCycleStyles,
+		Area: "DateTimeFormat",
+		What: "a time style for a locale with a -u-hc keyword that hour12 or hourCycle overrode",
+		Standard: "the keyword is not in the locale the formatter resolves, so the locale's own " +
+			"time style is written in the hour cycle asked for: \"en-US-u-hc-h23\" with hour12 " +
+			"is \"2:12:47 PM\", as test262's timedatestyle-en.js asks",
+		Node: "V8 gives ICU the locale with its keyword, and SimpleDateFormat::construct makes " +
+			"the time style afresh in the keyword's cycle, which V8 then turns to twelve hours " +
+			"keeping its two digits: \"02:12:47 PM\"",
 	},
 }
 

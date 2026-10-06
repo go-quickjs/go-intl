@@ -39,13 +39,18 @@ func (f *DateTimeFormat) choosePattern(src Source, decimal string) (string, Hour
 	o := &f.opts
 	if o.DateStyle != LengthNone || o.TimeStyle != LengthNone {
 		// DateTimeStylePattern.
-		pattern := f.stylePattern()
+		timePattern := ""
+		if o.TimeStyle != LengthNone && f.timeStyleAfresh(src) {
+			fresh := newDTPGWithoutStyles(f.patterns, f.calendar, f.data.FieldNames, decimal, hourChar, allowed)
+			timePattern = fresh.bestPattern(timeStyleSkeletons[o.TimeStyle-1], 0)
+		}
+		pattern := f.stylePattern(timePattern)
 		if o.TimeStyle == LengthNone {
-			f.styleOverrides(src)
+			f.styleOverrides(src, false)
 			return pattern, HourCycleAuto, g, nil
 		}
 		if hourCycleFromPattern(pattern) == hc {
-			f.styleOverrides(src)
+			f.styleOverrides(src, timePattern != "")
 			return pattern, hc, g, nil
 		}
 		// A regenerated pattern is a new one, with no overrides.
@@ -210,12 +215,15 @@ func v8Skeleton(o *DateTimeFormatOptions, hc HourCycle) string {
 // stylePattern is what ICU's SimpleDateFormat builds for a date style, a time
 // style or both: the locale's patterns, joined by the "atTime" glue for the
 // date's length where there is one.
-func (f *DateTimeFormat) stylePattern() string {
+func (f *DateTimeFormat) stylePattern(timePattern string) string {
 	cal := f.calendar
 	date, clock := f.opts.DateStyle, f.opts.TimeStyle
+	if clock != LengthNone && timePattern == "" {
+		timePattern = cal.TimeFormats[clock-1]
+	}
 	switch {
 	case date == LengthNone:
-		return cal.TimeFormats[clock-1]
+		return timePattern
 	case clock == LengthNone:
 		return cal.DateFormats[date-1]
 	}
@@ -226,18 +234,65 @@ func (f *DateTimeFormat) stylePattern() string {
 	if glue == "" {
 		glue = "{1}, {0}"
 	}
-	return simpleFormat(glue, cal.TimeFormats[clock-1], cal.DateFormats[date-1])
+	return simpleFormat(glue, timePattern, cal.DateFormats[date-1])
+}
+
+// timeStyleSkeletons are the skeletons SimpleDateFormat::construct makes a
+// time style from, full to short.
+var timeStyleSkeletons = [...]string{"jmmsszzzz", "jmmssz", "jmmss", "jmm"}
+
+// timeStyleAfresh is SimpleDateFormat::construct's test for making a time
+// style with the pattern generator rather than taking the locale's: the
+// locale ICU is given has a -u-hc keyword, or the bundle ICU's ures_open
+// settles on for it, the valid locale of its style patterns, is of another
+// language, or of another region where the locale names one. So British
+// English with -u-hc-h12 writes "7:05:09 am" from its "hms", where the
+// stored "HH:mm:ss" with its hours made twelve would be "07:05:09 am". ICU
+// has a bundle for "en_US", which cldr-json leaves to "en", so American
+// English keeps its own.
+//
+// The keyword is the one the locale resolves with, which hour12 or
+// hourCycle overriding it leaves out; V8 gives ICU the locale's keyword
+// whatever the options say (HourCycleStyles).
+func (f *DateTimeFormat) timeStyleAfresh(src Source) bool {
+	if kw, ok := f.locale.keywordValue("hc"); ok {
+		if f.opts.Compat.Has(HourCycleStyles) {
+			return true
+		}
+		hc, valid := parseHourCycle(kw)
+		o := &f.opts
+		if valid && o.Hour12 == nil && (o.HourCycle == HourCycleAuto || o.HourCycle == hc) {
+			return true
+		}
+	}
+	language := f.locale.Language.String()
+	if language == "" || language == "und" {
+		return false
+	}
+	fb, err := NewFallbacker(src)
+	if err != nil {
+		return false
+	}
+	// The root, where ICU has no bundle for the locale, is a language of
+	// its own.
+	valid := fb.ChainIn(treeLocales, f.locale.Data())[0]
+	if valid.IsRoot() {
+		return true
+	}
+	region := f.locale.Region.String()
+	return valid.Language.String() != language || region != "" && region != valid.Region.String()
 }
 
 // styleOverrides takes the numbering overrides of the style patterns in use,
-// as ICU's date formatter does when it builds one from styles.
-func (f *DateTimeFormat) styleOverrides(src Source) {
+// as ICU's date formatter does when it builds one from styles; a time
+// style made afresh has none.
+func (f *DateTimeFormat) styleOverrides(src Source, freshTime bool) {
 	o := &f.opts
 	overrides := map[byte]string{}
 	if o.DateStyle != LengthNone {
 		parseNumberingOverride(overrides, f.calendar.DateNumbers[o.DateStyle-1], true)
 	}
-	if o.TimeStyle != LengthNone {
+	if o.TimeStyle != LengthNone && !freshTime {
 		parseNumberingOverride(overrides, f.calendar.TimeNumbers[o.TimeStyle-1], false)
 	}
 	if len(overrides) == 0 {

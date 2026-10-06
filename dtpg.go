@@ -550,6 +550,19 @@ type dtpg struct {
 // PatternCalendar.
 func newDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
 	hourChar byte, allowed []string) *dtpg {
+	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, true)
+}
+
+// newDTPGWithoutStyles is ICU's createInstanceNoStdPat: a generator without
+// the locale's style patterns, which SimpleDateFormat::construct makes a
+// time style with.
+func newDTPGWithoutStyles(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string,
+	decimal string, hourChar byte, allowed []string) *dtpg {
+	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, false)
+}
+
+func buildDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
+	hourChar byte, allowed []string, styles bool) *dtpg {
 	cal := patterns
 	g := &dtpg{decimal: decimal, defaultHourChar: hourChar, allowedHours: allowed}
 	// Room for every pattern, so that the elements are allocated once.
@@ -561,7 +574,7 @@ func newDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]stri
 	// The style patterns, the times from full to short and then the dates.
 	for _, set := range [][datedata.Lengths]string{cal.TimeFormats, cal.DateFormats} {
 		for _, p := range set {
-			if p != "" {
+			if p != "" && styles {
 				g.addPattern(p, "", false, false, &fp)
 			}
 		}

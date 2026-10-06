@@ -159,7 +159,7 @@ DateTimePatterns came from a parent of another language or region.
 `ja-u-hc-h23` full "7時05分09秒 協定世界時", Node "7:05:09 協定世界時"; `ar`
 chinese medium "7:05:09 ص", Node "07:05:09 ص". About 960 of 1,520 locale ×
 style cases with -u-hc-h11 or -h12, and 110–535 per non-Gregorian calendar
-with no keyword. Status: open.
+with no keyword. Status: fixed (TestTimeStyleAfresh). The first fix took the valid locale from the data locale, which for en-US is cldr-json's "en", and test262's timedatestyle-en.js caught it in go-quickjs; it is now the bundle ICU opens for the locale itself. Over 948 locales, ICU's default-content ones among them, all 56,880 time styles with each hour cycle keyword, 34,128 with hour12 or hourCycle, 114,708 style sets and 192,444 field sets match Node.
 
 **DT-2. The Japanese first year "元年" is missing outside date styles.**
 `skeleton.go`. ICU writes year 1 of a Japanese era as 元年 in any pattern with
