@@ -262,7 +262,7 @@ accepted. Status: fixed (TestNumberOptionsRefused): the new ErrOption wraps ever
 is clamped; Hour WidthLong writes no hour; Era Width2Digit is dropped;
 unnamed hour cycles and zone styles are ignored; a calendar alias such as
 "islamicc" falls back to Gregorian where ECMA-402 canonicalizes it.
-Status: open.
+Status: fixed (TestDateTimeOptionsRefused).
 
 **API-3. Temporal's DateAdd hangs on math.MinInt64.** `temporal/calendarops.go`.
 `abs64(MinInt64)` stays negative, so the range check passes and the month

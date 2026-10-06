@@ -139,9 +139,11 @@ func isIslamic(c CalendarSystem) bool {
 func chooseCalendar(src Source, loc Locale, asked string) (CalendarSystem, string, error) {
 	if asked != "" {
 		if !isUnicodeType(asked) {
-			return "", "", fmt.Errorf("intl: %q is not a well-formed calendar name", asked)
+			return "", "", fmt.Errorf("%w: %q is not a well-formed calendar name", ErrOption, asked)
 		}
-		asked = strings.ToLower(asked)
+		// ResolveLocale's CanonicalizeUValue, as the -u-ca- keyword is
+		// canonicalized: "islamicc" is islamic-civil.
+		asked = canonicalUValue(src, "ca", strings.ToLower(asked))
 	}
 	keyword, _ := loc.Keyword("ca")
 	switch {

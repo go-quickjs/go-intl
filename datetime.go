@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -249,6 +250,9 @@ func NewDateTimeFormat(loc Locale, opts DateTimeFormatOptions) (*DateTimeFormat,
 
 // NewDateTimeFormatFrom builds a formatter from a source of the caller's own.
 func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (*DateTimeFormat, error) {
+	if err := opts.check(); err != nil {
+		return nil, err
+	}
 	if (opts.DateStyle != LengthNone || opts.TimeStyle != LengthNone) && opts.hasFields() {
 		return nil, fmt.Errorf("intl: a date style cannot be combined with named fields")
 	}
@@ -789,6 +793,41 @@ func (f *DateTimeFormat) digits(s string) string {
 		return s
 	}
 	return mapDigits(s, f.numbers.digits)
+}
+
+// check refuses what InitializeDateTimeFormat refuses: a field written in a
+// width its table does not give it, an hour with "long" or an era with
+// "2-digit"; more than three fractional digits; and a value no option has.
+func (o *DateTimeFormatOptions) check() error {
+	words := []FieldWidth{WidthNone, WidthLong, WidthShort, WidthNarrow}
+	numbers := []FieldWidth{WidthNone, WidthNumeric, Width2Digit}
+	for _, f := range []struct {
+		name   string
+		width  FieldWidth
+		allows []FieldWidth
+	}{
+		{"weekday", o.Weekday, words}, {"era", o.Era, words}, {"dayPeriod", o.DayPeriod, words},
+		{"year", o.Year, numbers}, {"day", o.Day, numbers}, {"hour", o.Hour, numbers},
+		{"minute", o.Minute, numbers}, {"second", o.Second, numbers},
+		{"month", o.Month, append(append([]FieldWidth(nil), numbers...), words[1:]...)},
+	} {
+		if !slices.Contains(f.allows, f.width) {
+			return fmt.Errorf("%w: %s is not a width of %s", ErrOption, f.width, f.name)
+		}
+	}
+	if o.FractionalSecondDigits < 0 || o.FractionalSecondDigits > 3 {
+		return fmt.Errorf("%w: %d fractional second digits, not 1 to 3", ErrOption, o.FractionalSecondDigits)
+	}
+	for _, v := range []fmt.Stringer{o.DateStyle, o.TimeStyle, o.TimeZoneName, o.HourCycle} {
+		if !named(v) {
+			return fmt.Errorf("%w: %s", ErrOption, v)
+		}
+	}
+	if o.Required < ComponentsUnset || o.Required > ComponentsAll ||
+		o.Defaults < ComponentsUnset || o.Defaults > ComponentsAll {
+		return fmt.Errorf("%w: components %d and %d", ErrOption, o.Required, o.Defaults)
+	}
+	return nil
 }
 
 // ErrCalendarRange reports that a formatter's calendar cannot reckon an

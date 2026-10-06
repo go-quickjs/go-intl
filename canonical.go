@@ -142,6 +142,24 @@ func (c *Canonicalizer) rewriteLegacy(tag string) string {
 	return tag
 }
 
+// canonicalUValue is ECMA-402's CanonicalizeUValue: a Unicode extension
+// keyword's value by its alias, "islamic-civil" for the calendar "islamicc",
+// or as it is.
+func canonicalUValue(src Source, key, value string) string {
+	b, err := src.Open(MarkerAliases, DataLocale{})
+	if err != nil {
+		return value
+	}
+	aliases, err := blob.ReadIndex(b)
+	if err != nil {
+		return value
+	}
+	if to, ok := aliases.Find("type " + key + " " + value); ok {
+		return string(to)
+	}
+	return value
+}
+
 // alias looks up an alias in one of the tables: "language", "territory",
 // "script", "variant", "subdivision", or "type" with the key before the
 // value, "ca islamicc".
