@@ -233,7 +233,7 @@ Status: fixed (TestLocaleFromICUID), following ICU's _appendVariantsToLanguageTa
 **LO-8. A -t- extension's fields are ordered by key alone.** `canonical.go`.
 ICU sorts them by key and value. `art-CS-t-m0-names-names-m0-hwidth-names`:
 Node "art-RS-t-m0-hwidth-names-m0-names-names", go-intl keeps the input
-order. Status: open.
+order. Status: fixed (TestTransformedFieldOrder).
 
 ## JavaScript-visible: time zones
 

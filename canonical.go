@@ -492,7 +492,14 @@ func (c *Canonicalizer) canonicalTransformed(value string) string {
 		}
 		fields = append(fields, field{key, v})
 	}
-	sort.SliceStable(fields, func(i, j int) bool { return fields[i].key < fields[j].key })
+	// By key and then by value, as ICU orders them: a key given twice is
+	// written with its values in order, "m0-hwidth-names-m0-names-names".
+	sort.SliceStable(fields, func(i, j int) bool {
+		if fields[i].key != fields[j].key {
+			return fields[i].key < fields[j].key
+		}
+		return fields[i].value < fields[j].value
+	})
 	for _, f := range fields {
 		out = append(out, f.key, f.value)
 	}
