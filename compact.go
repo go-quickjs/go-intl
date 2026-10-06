@@ -145,13 +145,19 @@ func hasCompactCount(patterns []numdata.CompactPattern, exponent int, count stri
 // the spaces around it as literals, as ICU trims the whitespace off a
 // field's ends.
 func compactAffix(parts []Part, text string) []Part {
+	return affixAs(parts, text, PartCompact)
+}
+
+// affixAs writes a pattern's text as one part of a kind, with the spaces
+// around it as literals, as ICU trims the whitespace off a field's ends.
+func affixAs(parts []Part, text string, kind PartKind) []Part {
 	core := strings.TrimLeftFunc(text, isIgnorable)
 	if lead := text[:len(text)-len(core)]; lead != "" {
 		parts = append(parts, Part{PartLiteral, lead})
 	}
 	trimmed := strings.TrimRightFunc(core, isIgnorable)
 	if trimmed != "" {
-		parts = append(parts, Part{PartCompact, trimmed})
+		parts = append(parts, Part{kind, trimmed})
 	}
 	if trail := core[len(trimmed):]; trail != "" {
 		parts = append(parts, Part{PartLiteral, trail})

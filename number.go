@@ -767,28 +767,18 @@ func (f *NumberFormat) joinCurrencyName(parts []Part, count string) []Part {
 		pattern = other
 	}
 
-	var out []Part
-	rest := pattern
-	for {
-		at := strings.IndexByte(rest, '{')
-		if at < 0 || at+2 >= len(rest) || rest[at+2] != '}' {
-			break
-		}
-		if at > 0 {
-			out = append(out, Part{PartLiteral, rest[:at]})
-		}
-		switch rest[at+1] {
-		case '0':
-			out = append(out, parts...)
-		case '1':
-			out = append(out, Part{PartCurrency, name})
-		}
-		rest = rest[at+3:]
+	// LongNameHandler::forCurrencyLongNames: the name goes into the
+	// pattern, and the pattern's text either side of the number is the
+	// currency's, but for the spaces at its ends: Romanian "{0} de {1}"
+	// writes a literal space and then "de franci elvețieni".
+	text := strings.Replace(pattern, "{1}", name, 1)
+	before, after, ok := strings.Cut(text, "{0}")
+	if !ok {
+		before, after = "", " "+text
 	}
-	if rest != "" {
-		out = append(out, Part{PartLiteral, rest})
-	}
-	return out
+	out := affixAs(nil, before, PartCurrency)
+	out = append(out, parts...)
+	return affixAs(out, after, PartCurrency)
 }
 
 // spaceCurrency puts CLDR's space between the currency and the number where

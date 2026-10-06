@@ -102,7 +102,7 @@ is "+0.000E0", Node "0.000E0". Status: fixed (TestScientificSignOfZero).
 **NF-14. formatToParts splits a currency name's pattern text.** `number.go`.
 `ro` CHF name, maximumFractionDigits 0, 100: `[literal " de ", currency
 "franci elvețieni"]`, Node `[literal " ", currency "de franci elvețieni"]`.
-Status: open.
+Status: fixed (TestCurrencyNameParts).
 
 **NF-15. ListFormat lacks ICU's Spanish and Hebrew joins.** `list.go`. `es`
 ["a","b","Isabel"] is "a, b y Isabel", Node "a, b e Isabel"; disjunction
