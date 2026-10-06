@@ -410,8 +410,12 @@ func (d PlainDate) String(show DisplayCalendar) string {
 }
 
 // EpochNanosecondsForUTC is the date's noon read as UTC, as
-// Intl.DateTimeFormat formats a PlainDate.
-func (d PlainDate) EpochNanosecondsForUTC() int128 { return epochNanoseconds(d.iso, noon) }
+// Intl.DateTimeFormat formats a PlainDate, as a high and low word as
+// Instant.EpochNanoseconds gives them.
+func (d PlainDate) EpochNanosecondsForUTC() (hi int64, lo uint64) {
+	ns := epochNanoseconds(d.iso, noon)
+	return ns.hi, ns.lo
+}
 
 func (d PlainDate) GoString() string { return fmt.Sprintf("PlainDate(%s)", d.String(CalendarAlways)) }
 

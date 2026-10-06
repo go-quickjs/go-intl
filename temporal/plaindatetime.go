@@ -220,8 +220,12 @@ func (dt PlainDateTime) String(o ToStringRoundingOptions, show DisplayCalendar) 
 }
 
 // EpochNanosecondsForUTC is the date and time read as UTC, as
-// Intl.DateTimeFormat formats a PlainDateTime.
-func (dt PlainDateTime) EpochNanosecondsForUTC() int128 { return dt.iso.epochNanoseconds() }
+// Intl.DateTimeFormat formats a PlainDateTime, as a high and low word as
+// Instant.EpochNanoseconds gives them.
+func (dt PlainDateTime) EpochNanosecondsForUTC() (hi int64, lo uint64) {
+	ns := dt.iso.epochNanoseconds()
+	return ns.hi, ns.lo
+}
 
 // The date's fields as its calendar reckons them.
 func (dt PlainDateTime) date() PlainDate { return PlainDate{dt.iso.Date, dt.cal} }

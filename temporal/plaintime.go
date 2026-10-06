@@ -117,5 +117,9 @@ func (t PlainTime) String(o ToStringRoundingOptions) (string, error) {
 }
 
 // EpochNanosecondsForUTC is the time on 1970-01-01 read as UTC, as
-// Intl.DateTimeFormat formats a PlainTime.
-func (t PlainTime) EpochNanosecondsForUTC() int128 { return epochNanoseconds(unixEpoch, t.iso) }
+// Intl.DateTimeFormat formats a PlainTime, as a high and low word as
+// Instant.EpochNanoseconds gives them.
+func (t PlainTime) EpochNanosecondsForUTC() (hi int64, lo uint64) {
+	ns := epochNanoseconds(unixEpoch, t.iso)
+	return ns.hi, ns.lo
+}

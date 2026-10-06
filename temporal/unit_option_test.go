@@ -11,7 +11,7 @@ import (
 // Total(UnitAuto) answered +Inf, where temporal_rs refuses "auto" as "Auto
 // unit not allowed here" (ISSUES.md API-6).
 func TestDurationUnitOptions(t *testing.T) {
-	d, err := NewDuration(0, 0, 0, 0, 1, 0, 0, 0, int128{}, int128{})
+	d, err := newDuration(0, 0, 0, 0, 1, 0, 0, 0, int128{}, int128{})
 	if err != nil {
 		t.Fatal(err)
 	}

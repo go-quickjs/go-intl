@@ -308,7 +308,15 @@ types; the transitions were already decoded into a fresh slice
 **API-10. Exported temporal functions take the unexported int128.**
 `temporal`. NewZonedDateTime, TimeZone.OffsetNanosecondsFor and the
 EpochNanosecondsForUTC methods cannot be called from outside; OffsetTimeZone
-accepts an offset of a day or more and writes garbage. Status: open.
+accepts an offset of a day or more and writes garbage. Status: fixed.
+NewZonedDateTime is unexported, NewZonedDateTimeFromInstant being the
+constructor; OffsetNanosecondsFor takes an Instant; EpochNanosecondsForUTC
+returns a high and low word, as Instant.EpochNanoseconds does; NewDuration
+takes int64 microseconds and nanoseconds, larger ones coming from
+DurationFromNumbers or ParseDuration. OffsetTimeZone returns an error for
+an offset that is not whole minutes less than a day, as temporal_rs's
+offset zones are. A change to exported signatures, none of which go-quickjs
+calls (temporal/exported_api_test.go).
 
 **API-11. Exact decimals with huge exponents allocate without bound.**
 `mag.go`. maxDecimalExponent is 2³⁰, so "1e1000000000" can build a

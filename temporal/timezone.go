@@ -98,8 +98,17 @@ func (zs *Zones) UTC() TimeZone {
 	return tz
 }
 
-// OffsetTimeZone is a zone of a fixed offset, in nanoseconds.
-func OffsetTimeZone(ns int64) TimeZone { return TimeZone{offset: ns} }
+// OffsetTimeZone is a zone of a fixed offset, in nanoseconds. Temporal's
+// offset zones are whole minutes less than a day either way, as
+// UtcOffset::from_minutes and the ±HH:MM it parses make them; another
+// offset is an error, where it had written an identifier no parser reads.
+func OffsetTimeZone(ns int64) (TimeZone, error) {
+	const day = 24 * 60 * 60_000_000_000
+	if ns%60_000_000_000 != 0 || ns <= -day || ns >= day {
+		return TimeZone{}, rangeError("Offset time zones are whole minutes less than a day.")
+	}
+	return TimeZone{offset: ns}, nil
+}
 
 func fromMinuteRecord(o offsetRecord) TimeZone {
 	minutes := int64(o.hour)*60 + int64(o.minute)
@@ -262,7 +271,7 @@ func (tz TimeZone) offsetNanosFor(ns int128) (int64, error) {
 }
 
 // OffsetNanosecondsFor is the zone's offset at an instant, in nanoseconds.
-func (tz TimeZone) OffsetNanosecondsFor(ns int128) (int64, error) { return tz.offsetNanosFor(ns) }
+func (tz TimeZone) OffsetNanosecondsFor(i Instant) (int64, error) { return tz.offsetNanosFor(i.ns) }
 
 // isoDateTimeFor is GetISODateTimeFor.
 func (tz TimeZone) isoDateTimeFor(ns int128) (ISODateTime, error) {

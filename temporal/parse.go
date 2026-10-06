@@ -431,7 +431,7 @@ func ParseDuration(s []byte) (Duration, error) {
 	if r.negative {
 		sign = -1
 	}
-	return NewDuration(int64(r.years)*sign, int64(r.months)*sign, int64(r.weeks)*sign, int64(r.days)*sign,
+	return newDuration(int64(r.years)*sign, int64(r.months)*sign, int64(r.weeks)*sign, int64(r.days)*sign,
 		int64(hours)*sign, int64(minutes)*sign, int64(seconds)*sign, int64(millis)*sign,
 		i128(int64(micros)*sign), i128(int64(nanos)*sign))
 }

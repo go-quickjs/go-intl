@@ -12,8 +12,8 @@ type ZonedDateTime struct {
 	offset  int64 // nanoseconds
 }
 
-// NewZonedDateTime is ZonedDateTime::try_new_with_provider.
-func NewZonedDateTime(ns int128, tz TimeZone, cal *Calendar) (ZonedDateTime, error) {
+// newZonedDateTime is ZonedDateTime::try_new_with_provider.
+func newZonedDateTime(ns int128, tz TimeZone, cal *Calendar) (ZonedDateTime, error) {
 	i, err := newInstant(ns)
 	if err != nil {
 		return ZonedDateTime{}, err
@@ -134,7 +134,7 @@ func (z ZonedDateTime) With(p PartialZonedDateTime, d Disambiguation, o OffsetDi
 
 // WithTimeZone is Temporal.ZonedDateTime.prototype.withTimeZone.
 func (z ZonedDateTime) WithTimeZone(tz TimeZone) (ZonedDateTime, error) {
-	return NewZonedDateTime(z.instant.ns, tz, z.cal)
+	return newZonedDateTime(z.instant.ns, tz, z.cal)
 }
 
 // WithCalendar is Temporal.ZonedDateTime.prototype.withCalendar.
@@ -354,7 +354,7 @@ func (z ZonedDateTime) TimeZoneTransition(next bool) (ZonedDateTime, bool, error
 	if !validEpochNanoseconds(ns) {
 		return ZonedDateTime{}, false, nil
 	}
-	out, err := NewZonedDateTime(ns, z.tz, z.cal)
+	out, err := newZonedDateTime(ns, z.tz, z.cal)
 	if err != nil {
 		return ZonedDateTime{}, false, assertError()
 	}

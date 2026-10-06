@@ -130,8 +130,14 @@ type Duration struct {
 }
 
 // NewDuration is Duration::new: the fields, all of one sign and within
-// Temporal's limits.
-func NewDuration(years, months, weeks, days, hours, minutes, seconds, milliseconds int64, microseconds, nanoseconds int128) (Duration, error) {
+// Temporal's limits. Microseconds and nanoseconds past int64 come from
+// DurationFromNumbers or ParseDuration.
+func NewDuration(years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds int64) (Duration, error) {
+	return newDuration(years, months, weeks, days, hours, minutes, seconds, milliseconds, i128(microseconds), i128(nanoseconds))
+}
+
+// newDuration is NewDuration with microseconds and nanoseconds as i128.
+func newDuration(years, months, weeks, days, hours, minutes, seconds, milliseconds int64, microseconds, nanoseconds int128) (Duration, error) {
 	if !validDuration(years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds) {
 		return Duration{}, rangeError("Duration was not valid.")
 	}
@@ -432,7 +438,7 @@ func durationFromInternal(i internalDuration, largest Unit) (Duration, error) {
 		return Duration{}, assertError()
 	}
 	sg := int64(s)
-	return NewDuration(i.date.Years, i.date.Months, i.date.Weeks, i.date.Days+days.int64()*sg,
+	return newDuration(i.date.Years, i.date.Months, i.date.Weeks, i.date.Days+days.int64()*sg,
 		hours.int64()*sg, minutes.int64()*sg, seconds.int64()*sg, milliseconds.int64()*sg,
 		microseconds.mul64(sg), ns.mul64(sg))
 }
@@ -492,7 +498,7 @@ func DurationFromPartial(p PartialDuration) (Duration, error) {
 	if p == (PartialDuration{}) {
 		return Duration{}, typeError("PartialDuration cannot have all empty fields.")
 	}
-	return NewDuration(get(p.Years), get(p.Months), get(p.Weeks), get(p.Days), get(p.Hours), get(p.Minutes),
+	return newDuration(get(p.Years), get(p.Months), get(p.Weeks), get(p.Days), get(p.Hours), get(p.Minutes),
 		get(p.Seconds), get(p.Milliseconds), us, ns)
 }
 
@@ -525,7 +531,7 @@ func DurationFromNumbers(years, months, weeks, days, hours, minutes, seconds, mi
 	if err != nil {
 		return Duration{}, err
 	}
-	return NewDuration(ints[0], ints[1], ints[2], ints[3], ints[4], ints[5], ints[6], ints[7], us, ns)
+	return newDuration(ints[0], ints[1], ints[2], ints[3], ints[4], ints[5], ints[6], ints[7], us, ns)
 }
 
 // IntegerInRange64 is V8's check that an integral double is within int64:

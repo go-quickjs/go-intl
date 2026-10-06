@@ -1318,7 +1318,7 @@ func (h *harness) zonedOps(m map[string]opFunc) {
 		if err != nil {
 			return nil, err
 		}
-		z, err := NewZonedDateTime(ns, tz, cal)
+		z, err := newZonedDateTime(ns, tz, cal)
 		return z, rustErr(err)
 	}
 	m["static:ZonedDateTime.compare"] = func(_ any, arg func(int) any) (any, error) {

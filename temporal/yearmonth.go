@@ -198,8 +198,12 @@ func (ym PlainYearMonth) String(show DisplayCalendar) string {
 	return b.String()
 }
 
-// EpochNanosecondsForUTC is the reference date's noon read as UTC.
-func (ym PlainYearMonth) EpochNanosecondsForUTC() int128 { return epochNanoseconds(ym.iso, noon) }
+// EpochNanosecondsForUTC is the reference date's noon read as UTC, as a
+// high and low word as Instant.EpochNanoseconds gives them.
+func (ym PlainYearMonth) EpochNanosecondsForUTC() (hi int64, lo uint64) {
+	ns := epochNanoseconds(ym.iso, noon)
+	return ns.hi, ns.lo
+}
 
 // A PlainMonthDay is Temporal.PlainMonthDay's value: an ISO date in the
 // reference year, and a calendar.
@@ -293,5 +297,9 @@ func (md PlainMonthDay) String(show DisplayCalendar) string {
 	return b.String()
 }
 
-// EpochNanosecondsForUTC is the reference date's noon read as UTC.
-func (md PlainMonthDay) EpochNanosecondsForUTC() int128 { return epochNanoseconds(md.iso, noon) }
+// EpochNanosecondsForUTC is the reference date's noon read as UTC, as a
+// high and low word as Instant.EpochNanoseconds gives them.
+func (md PlainMonthDay) EpochNanosecondsForUTC() (hi int64, lo uint64) {
+	ns := epochNanoseconds(md.iso, noon)
+	return ns.hi, ns.lo
+}
