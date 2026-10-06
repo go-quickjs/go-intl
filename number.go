@@ -273,6 +273,11 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 	case opts.Style == StylePercent && opts.Notation == NotationCompact:
 		f.unit = "percent"
 	}
+	var format numdata.CurrencyFormat
+	hasFormat := false
+	if opts.Style == StyleCurrency {
+		format, hasFormat = currencyFormat(src, loc, data, opts.Currency, opts.Compat.Has(CurrencyFormats))
+	}
 	switch {
 	case f.unit != "":
 		f.pattern, err = parsePattern(data.DecimalPattern)
@@ -281,6 +286,12 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 	case opts.Style == StyleCurrency:
 		p := data.CurrencyPattern
 		switch {
+		case hasFormat && (opts.Compat.Has(CurrencyFormats) || opts.CurrencyDisplay != CurrencyName &&
+			(opts.CurrencySign != CurrencySignAccounting || data.AccountingPattern == "")):
+			// A currency's own pattern is its standard one, which the name
+			// and the accounting form do not write; ICU takes it for those
+			// too (CurrencyFormats).
+			p = format.Pattern
 		case opts.CurrencyDisplay == CurrencyName:
 			// A spelled-out name is not an affix on the number: the amount is
 			// written plainly and then joined to the name by a pattern of its
@@ -371,6 +382,9 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 		}
 		if data.Symbols.CurrencyGroup != "" {
 			f.groupSep = data.Symbols.CurrencyGroup
+		}
+		if hasFormat {
+			f.decimalSep, f.groupSep = format.Decimal, format.Group
 		}
 	}
 	return f, nil
@@ -720,10 +734,14 @@ func (f *NumberFormat) assemble(l numberLayers) []Part {
 	parts = append(parts, l.body...)
 	parts = append(parts, l.inner...)
 	parts = append(parts, l.post...)
+	// The currency is spaced from the number before a name is wrapped
+	// round them, which only a currency's own pattern, written with its
+	// name (CurrencyFormats), puts both in.
+	parts = f.spaceCurrency(parts)
 	if l.outer {
 		return f.wrapOuter(parts, l.count)
 	}
-	return f.spaceCurrency(parts)
+	return parts
 }
 
 // outerCount is the plural category a unit or currency name is chosen by.
@@ -1028,6 +1046,38 @@ func (f *NumberFormat) ResolvedOptions() ResolvedNumberFormat {
 		SignDisplay:     f.opts.SignDisplay,
 	}
 	return r
+}
+
+// currencyFormat is the pattern and separators a currency is written with
+// where the locale gives it its own, as UTS #35 has a currency's pattern,
+// decimal and group override the locale's for that currency.
+//
+// With inherit, it is what ICU's DecimalFormatSymbols writes a currency in
+// (CurrencyFormats). Its constructor sets the currency of the locale's
+// region, as ucurr_forLocale names it from a region the locale gives and
+// never one it infers, and NumberFormat then sets the one asked for; each
+// takes the currency's own pattern and separators where it has them, and
+// leaves the last ones set where it does not. So German English writes
+// dollars as it writes euros, "-US$1,234.50".
+func currencyFormat(src Source, loc Locale, data *numdata.Locale, code string,
+	inherit bool) (numdata.CurrencyFormat, bool) {
+	if f, ok := data.CurrencyFormat(strings.ToUpper(code)); ok {
+		return f, true
+	}
+	if !inherit || loc.Region.IsZero() {
+		return numdata.CurrencyFormat{}, false
+	}
+	b, err := src.Open(MarkerCurrencyRegions, DataLocale{})
+	if err != nil {
+		return numdata.CurrencyFormat{}, false
+	}
+	region := loc.Region.String()
+	for line := range strings.SplitSeq(strings.TrimRight(string(b), "\n"), "\n") {
+		if name, currency, ok := strings.Cut(line, ":"); ok && name == region {
+			return data.CurrencyFormat(currency)
+		}
+	}
+	return numdata.CurrencyFormat{}, false
 }
 
 // currencyDigits is how many decimals a currency is written with: none for the

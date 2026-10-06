@@ -40,6 +40,9 @@ const (
 	// MarkerCurrencyDigits is how many decimals each currency is written
 	// with, which does not vary by locale.
 	MarkerCurrencyDigits Marker = "currencydigits"
+	// MarkerCurrencyRegions is each region's currency, which does not vary
+	// by locale either.
+	MarkerCurrencyRegions Marker = "currencyregions"
 	// MarkerPlurals is one language's plural rules.
 	MarkerPlurals Marker = "plurals"
 	// MarkerLists is one locale's list-joining patterns.

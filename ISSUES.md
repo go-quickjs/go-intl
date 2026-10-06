@@ -81,7 +81,7 @@ some currencies their own pattern, decimal or group, and ICU applies a
 region's currency pattern to every currency: `en-150` EUR −1234.5 is
 "-1,234.50 €", Node "-€1,234.50"; `kea` CVE "-1 234,50", Node "-1 234$50";
 `en-DE` USD "-1.234,50 US$", Node "-US$1,234.50". About 45 locales differ.
-Status: open.
+Status: fixed (TestCurrencyFormats). The data now carries the formats ICU's curr tree gives, and where ICU goes beyond UTS #35, writing a region's currency's format for every other currency and the pattern for the name and accounting forms, it is the divergence CurrencyFormats. Over 25,740 currency amounts in every locale Node supports, NodeICU now differs from Node only where ICU misplaces a name after a spaced symbol (not reproduced) and in the locales of NF-12 and NF-20.
 
 **NF-11. Compact long data is filled from short where a locale has only
 some long patterns.** Data (`numbergen`). `ps` compact long 1234 is "۱٫۲K",
@@ -138,6 +138,14 @@ comparing every calendar in 29 locales while fixing NF-16. Status: open.
 ["a",""] is [element "a", literal " y ", element ""], Node [element "a",
 literal " y "]: ICU's FormattedList has no field for an empty span. Found
 while fixing NF-15. Status: open.
+
+**NF-20. A locale with a script ICU's number data lacks resolves to it
+anyway.** `number.go`, the available locales. Node resolves `bm-Nkoo`,
+`ha-Arab`, `mn-Mong`, `mni-Mtei`, `ms-Arab`, `zh-Latn` and `az-Arab` for
+NumberFormat to the language alone and formats with its data: `zh-Latn`
+compact CVE is "-CVE 123万", go-intl "-CVE 1.2M"; `mni-Mtei` writes
+Bengali digits. Found comparing currencies in every locale while fixing
+NF-10. Status: open.
 
 ## JavaScript-visible: DateTimeFormat and the calendars
 

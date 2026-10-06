@@ -25,8 +25,9 @@ import "strings"
 // temporal_rs Node has, the patterns of Uzbek in Afghanistan, the digit
 // options PluralRules reports, the unknown subtags a locale maximizes
 // past, the pattern an accounting amount with no sign takes, the offsets a
-// relative time names in words, and the digits of a double rounded to an
-// increment. Standard and NodeICU are the two ends.
+// relative time names in words, the digits of a double rounded to an
+// increment, and which currencies a currency's own format is used for.
+// Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -134,6 +135,11 @@ const (
 	// 5 from the digits ICU's fast conversion gives it, which past about
 	// sixteen are not the double's.
 	ApproximateIncrement
+	// CurrencyFormats writes every currency in the format of the currency
+	// of the locale's region, where that has one of its own and the
+	// currency asked for does not, and takes a currency's own pattern for
+	// its name and accounting forms too, as ICU does.
+	CurrencyFormats
 )
 
 const (
@@ -146,7 +152,7 @@ const (
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
-		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement
+		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -448,6 +454,22 @@ var Divergences = []Divergence{
 			"point, which is right to about sixteen digits, and roundToIncrement divides " +
 			"those digits by the increment as decimals without correcting them, where its " +
 			"other roundings do: \"3,996,762,023,960,248,000,000,000,000.00\"",
+	},
+	{
+		Name: "CurrencyFormats", Flag: CurrencyFormats,
+		Area: "NumberFormat",
+		What: "the currencies a locale gives a pattern and separators of their own",
+		Standard: "UTS #35's currency pattern, decimal and group override the locale's for " +
+			"that currency, and its pattern is the standard currency pattern: Cape Verdean " +
+			"escudos in Kabuverdianu are \"-1\u00a0234$50\u00a0\u200b\", while German " +
+			"English writes dollars as it writes any currency, \"-1.234,50\u00a0US$\"",
+		Node: "ICU's DecimalFormatSymbols sets the currency of the locale's region before the " +
+			"one asked for and keeps its format where the other has none, so German English " +
+			"writes every currency as English does euros in Europe, \"-US$1,234.50\"; and it " +
+			"takes the pattern for the accounting form and the name as well, writing the " +
+			"symbol and then the name, \"-US$1,234.50 US dollars\". Where a space comes " +
+			"between such a symbol and the number, ICU then puts the name one character " +
+			"early, \"-CVE\u00a01,234.5 Cape Verdean escudos0\", which is not reproduced",
 	},
 }
 

@@ -90,6 +90,15 @@ func run(root, icuData string) error {
 		return err
 	}
 	defer icu.Close()
+	curr, err := icusrc.OpenTree(icuData, "curr")
+	if err != nil {
+		return err
+	}
+	defer curr.Close()
+	fb, err := icusrc.ICUFallback()
+	if err != nil {
+		return err
+	}
 	var systems numberingSystems
 	if err := json.Unmarshal(numberingSystemsJSON, &systems); err != nil {
 		return fmt.Errorf("reading numberingSystems.json: %w", err)
@@ -132,6 +141,9 @@ func run(root, icuData string) error {
 		if l.TimeSeparators, err = timeSeparators(icu, e.Name(), digits); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		if l.CurrencyFormats, err = currencyFormats(curr, fb, e.Name()); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		built[e.Name()] = numdata.Encode(l, pool)
 		locales[e.Name()] = l
 	}
@@ -148,6 +160,10 @@ func run(root, icuData string) error {
 	if err != nil {
 		return err
 	}
+	regions, err := currencyRegionsTable()
+	if err != nil {
+		return err
+	}
 	rootSystems, err := readRootSystems(icu, digits)
 	if err != nil {
 		return err
@@ -159,6 +175,9 @@ func run(root, icuData string) error {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join("data", "currencydigits.bin"), fractions, 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join("data", "currencyregions.bin"), regions, 0o644); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join("data", "numberingsystems.bin"), systemsTable, 0o644); err != nil {
@@ -560,6 +579,10 @@ type currencyData struct {
 			Fractions map[string]struct {
 				Digits string `json:"_digits"`
 			} `json:"fractions"`
+			// Region is each region's currencies, the current first.
+			Region map[string][]map[string]struct {
+				Tender string `json:"_tender"`
+			} `json:"region"`
 		} `json:"currencyData"`
 	} `json:"supplemental"`
 }
@@ -586,6 +609,78 @@ func currencyDigitsTable() ([]byte, error) {
 		fmt.Fprintf(&b, "%s:%s\n", code, digits)
 	}
 	return []byte(b.String()), nil
+}
+
+// currencyRegionsTable is each region's currency, as ICU's ucurr_forLocale
+// takes it: the first of the region's currencies that is legal tender, or
+// the first of them where none is. It is a sorted list of "REGION:CODE".
+func currencyRegionsTable() ([]byte, error) {
+	var data currencyData
+	if err := json.Unmarshal(currencyDataJSON, &data); err != nil {
+		return nil, fmt.Errorf("reading currencyData.json: %w", err)
+	}
+	regions := data.Supplemental.CurrencyData.Region
+	names := make([]string, 0, len(regions))
+	for name := range regions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	for _, name := range names {
+		code := ""
+	entries:
+		for _, entry := range regions[name] {
+			for c, attrs := range entry {
+				if code == "" {
+					code = c
+				}
+				if attrs.Tender != "false" {
+					code = c
+					break entries
+				}
+			}
+		}
+		if code != "" {
+			fmt.Fprintf(&b, "%s:%s\n", name, code)
+		}
+	}
+	return []byte(b.String()), nil
+}
+
+// currencyFormats are the currencies a locale writes by a pattern and
+// separators of their own, as ICU's DecimalFormatSymbols::setCurrency reads
+// them: the currency's entry in the first bundle of the curr tree that has
+// one, where that entry has a third element, the pattern, the decimal
+// separator and the group separator.
+func currencyFormats(curr *icusrc.Locales, fb icusrc.Fallback, name string) ([]numdata.CurrencyFormat, error) {
+	chain, err := curr.Resolve(strings.ReplaceAll(name, "-", "_"), fb)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []numdata.CurrencyFormat
+	for _, n := range chain {
+		currencies := n.Get("Currencies")
+		if currencies == nil {
+			continue
+		}
+		for _, e := range currencies.Children {
+			if seen[e.Key] {
+				continue
+			}
+			seen[e.Key] = true
+			if len(e.Children) < 3 {
+				continue
+			}
+			f := e.Children[2].Values
+			if len(f) != 3 {
+				return nil, fmt.Errorf("the format of %s has %d elements", e.Key, len(f))
+			}
+			out = append(out, numdata.CurrencyFormat{Code: e.Key, Pattern: f[0], Decimal: f[1], Group: f[2]})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
+	return out, nil
 }
 
 // compactPatterns reads the compact forms, whose keys carry both the magnitude
