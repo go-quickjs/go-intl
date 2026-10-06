@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Format, vet and tidy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "The following files need gofmt:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Check go.mod is tidy
+        run: go mod tidy -diff
+
+  test:
+    # The Go go.mod names, which consuming go-intl must never need more
+    # than, on every platform: the platforms disagree, and a bug has hidden
+    # on one of them before.
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test -count=1 ./...
+
+  newest:
+    name: Test (Go 1.27)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Run tests
+        run: go test -count=1 ./...
+
+  i386:
+    # 32 bits, where a count or an offset read from the data can overflow
+    # an int that 64 bits holds.
+    name: Test (GOARCH=386)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        env:
+          GOARCH: "386"
+        run: go test -count=1 ./...
+
+  regen:
+    # The data is what the generators write from the pinned sources, byte
+    # for byte: a change to a generator is done when regen reproduces the
+    # committed data, or the difference is the change, committed with it.
+    name: Data reproduces
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The pinned sources, some hundreds of megabytes, fetched once for
+      # each set of pins regen holds.
+      - name: Cache the sources
+        uses: actions/cache@v4
+        with:
+          path: go-intl-sources
+          key: regen-sources-${{ hashFiles('internal/regen/main.go') }}
+
+      - name: Regenerate the data
+        run: go run ./internal/regen -cache go-intl-sources
+
+      - name: Check the data is what the repository holds
+        shell: bash
+        run: |
+          changed=$(git status --porcelain -- data data.pack)
+          if [ -n "$changed" ]; then
+            echo "regen does not reproduce the committed data:"
+            echo "$changed"
+            exit 1
+          fi
