@@ -223,7 +223,7 @@ Status: fixed (TestLonePosixAfterAliases).
 
 **LO-6. Private use before lvariant is kept.** `canonical.go`. ICU's
 ultag_parse drops it. `en-x-foo-lvariant-abcde` is "en-abcde-x-foo", Node
-"en-abcde". Status: open.
+"en-abcde". Status: fixed (TestLvariantDropsPrivateUse).
 
 **LO-7. HostLocale gives up on a POSIX locale with a modifier.**
 `hostlocale.go`. `LANG=de_DE.UTF-8@euro` becomes en-US; ICU's toLanguageTag

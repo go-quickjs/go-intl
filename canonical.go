@@ -174,7 +174,10 @@ func legacyVariants(l Locale) (Locale, error) {
 				}
 				l.Variants = append(l.Variants, parsed)
 			}
-			l.Private = strings.Join(subtags[:i], "-")
+			// What came before "lvariant" goes with it, as ICU's
+			// ultag_parse drops it: "en-x-foo-lvariant-abcde" is
+			// "en-abcde".
+			l.Private = ""
 			break
 		}
 	}
