@@ -286,7 +286,8 @@ func (s *numberSources) numberFormat(opts NumberFormatOptions) (*NumberFormat, e
 			// written plainly and then joined to the name by a pattern of its
 			// own, which is why the currency pattern is not used here.
 			p = data.DecimalPattern
-		case opts.CurrencySign == CurrencySignAccounting && data.AccountingPattern != "":
+		case opts.CurrencySign == CurrencySignAccounting && data.AccountingPattern != "" &&
+			!(opts.SignDisplay == SignNever && opts.Compat.Has(AccountingNever)):
 			p = data.AccountingPattern
 		}
 		f.pattern, err = parsePattern(p)
@@ -600,6 +601,12 @@ type numberLayers struct {
 func (f *NumberFormat) layers(d Decimal, approximately bool) numberLayers {
 	negative := d.neg
 	magnitude := d.m
+	if d.fromFloat && f.opts.Compat.Has(ApproximateIncrement) &&
+		f.opts.RoundingIncrement > 1 && f.opts.RoundingIncrement != 5 {
+		// ICU rounds to these increments by decimal arithmetic on the
+		// digits of its fast reading of the double, uncorrected.
+		magnitude = icuDoubleMag(d.float)
+	}
 	if magnitude.integer == "" {
 		magnitude.integer = "0"
 	}

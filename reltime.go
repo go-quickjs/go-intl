@@ -69,6 +69,9 @@ type RelativeTimeFormatOptions struct {
 	Style   RelativeTimeStyle
 	// NumberingSystem names the digits to write, as for NumberFormat.
 	NumberingSystem string
+
+	// Compat chooses between the standard and Node's observable behavior.
+	Compat Compat
 }
 
 // A RelativeTimeFormat writes relative times in one locale. It never changes
@@ -159,6 +162,27 @@ type RelativePart struct {
 	Value string
 }
 
+// wordOffset is the offset a word may be found for: a whole number, or with
+// RelativeEpsilon, as ICU's formatRelativeImpl rounds it, a hundred times
+// the offset rounded half away from zero, for an offset within 0.005 of a
+// whole one from -2 to 2.
+func (f *RelativeTimeFormat) wordOffset(v float64) (int, bool) {
+	if !f.opts.Compat.Has(RelativeEpsilon) {
+		return int(v), v == math.Trunc(v) && !math.IsInf(v, 0)
+	}
+	if !(v > -2.1 && v < 2.1) {
+		return 0, false
+	}
+	x := float64(v * 100)
+	var hundredths int32
+	if x < 0 {
+		hundredths = int32(float64(x - 0.5))
+	} else {
+		hundredths = int32(float64(x + 0.5))
+	}
+	return int(hundredths / 100), hundredths%100 == 0
+}
+
 // Format writes a relative time.
 func (f *RelativeTimeFormat) Format(v float64, unit RelativeTimeUnit) string {
 	var b strings.Builder
@@ -175,9 +199,11 @@ func (f *RelativeTimeFormat) FormatToParts(v float64, unit RelativeTimeUnit) []R
 
 	// A wording stands in for the count only when one was asked for, the
 	// offset is a whole number, and the language has a word for it.
-	if f.opts.Numeric == RelativeAuto && v == math.Trunc(v) && !math.IsInf(v, 0) {
-		if word, ok := field.Word(int(v)); ok {
-			return []RelativePart{{Kind: PartLiteral, Value: word}}
+	if f.opts.Numeric == RelativeAuto {
+		if offset, ok := f.wordOffset(v); ok {
+			if word, ok := field.Word(offset); ok {
+				return []RelativePart{{Kind: PartLiteral, Value: word}}
+			}
 		}
 	}
 

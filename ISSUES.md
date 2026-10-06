@@ -126,7 +126,7 @@ exact (`en` 0.0001 day: "in 0 days", Node "today": ICU formatRelativeImpl);
 and roundingIncrement on doubles past 16 digits (`{minimumFractionDigits:2,
 maximumFractionDigits:2, roundingIncrement:2}` 3.9967620239602476e27: Node
 "…248000…", go-intl "…247600…": ICU rounds an approximate value).
-Status: open.
+Status: fixed (TestAccountingNever, TestRelativeEpsilon, TestApproximateIncrement): named the divergences AccountingNever, RelativeEpsilon and ApproximateIncrement. The increment one is ICU reading a double by its fast path, whose digits roundToIncrement alone leaves uncorrected, for any increment but 1 and 5, 10 and 100 included. go-quickjs must pass RelativeTimeFormat its Compat, and a Number to NumberFormat as DecimalFromFloat, for its Node side to see them.
 
 **NF-18. DisplayNames names the calendar "islamicc".** `internal/namegen`.
 `ar {type:"calendar", fallback:"none"}` "islamicc" is "التقويم الهجري

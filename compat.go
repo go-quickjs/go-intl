@@ -23,8 +23,10 @@ import "strings"
 // cycles, the time zones Intl.supportedValuesOf lists, and two roundings
 // that Temporal's normative fixes of May 2026 changed after the
 // temporal_rs Node has, the patterns of Uzbek in Afghanistan, the digit
-// options PluralRules reports, and the unknown subtags a locale maximizes
-// past. Standard and NodeICU are the two ends.
+// options PluralRules reports, the unknown subtags a locale maximizes
+// past, the pattern an accounting amount with no sign takes, the offsets a
+// relative time names in words, and the digits of a double rounded to an
+// increment. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -122,6 +124,16 @@ const (
 	// region as it is when it maximizes, though the script is "Zzzz" or the
 	// region "ZZ", as ICU does.
 	UnknownSubtags
+	// AccountingNever writes an accounting amount with signDisplay "never"
+	// by the plain currency pattern, as V8 asks ICU to.
+	AccountingNever
+	// RelativeEpsilon names in words, numeric "auto", any offset within
+	// 0.005 of a whole one from -2 to 2, as ICU does.
+	RelativeEpsilon
+	// ApproximateIncrement rounds a double to an increment other than 1 or
+	// 5 from the digits ICU's fast conversion gives it, which past about
+	// sixteen are not the double's.
+	ApproximateIncrement
 )
 
 const (
@@ -134,7 +146,7 @@ const (
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
-		UnknownSubtags
+		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -404,6 +416,38 @@ var Divergences = []Divergence{
 			"the rest up: \"en-Zzzz-US\" maximizes to \"en-Latn-US\"",
 		Node: "ICU's addLikelySubtags keeps a locale with all three subtags as it is: " +
 			"\"en-Zzzz-US\" is itself",
+	},
+	{
+		Name: "AccountingNever", Flag: AccountingNever,
+		Area: "NumberFormat",
+		What: "an accounting currency amount with signDisplay \"never\"",
+		Standard: "GetNumberFormatPattern takes the accounting patterns whenever currencySign " +
+			"is \"accounting\", and the positive one for any sign: Norwegian -1 euro is " +
+			"\"€ 1,00\"",
+		Node: "V8 asks ICU for UNUM_SIGN_NEVER, which has no accounting form, so the plain " +
+			"currency pattern is used: \"1,00 €\"",
+	},
+	{
+		Name: "RelativeEpsilon", Flag: RelativeEpsilon,
+		Area: "RelativeTimeFormat",
+		What: "which offsets numeric \"auto\" writes in words",
+		Standard: "PartitionRelativeTimePattern uses a word only for the offset ToString " +
+			"writes as its key, a whole number: 0.0001 days are \"in 0 days\"",
+		Node: "ICU's formatRelativeImpl rounds a hundred times the offset to a whole number " +
+			"and takes a word for any offset within 0.005 of -2, -1, 0, 1 or 2: 0.0001 days " +
+			"are \"today\" and 1.004 days \"tomorrow\"",
+	},
+	{
+		Name: "ApproximateIncrement", Flag: ApproximateIncrement,
+		Area: "NumberFormat",
+		What: "a double rounded to an increment other than 1 or 5",
+		Standard: "the number is the double's own decimal, as for any rounding: " +
+			"3.9967620239602476e27 to the nearest 0.02 is " +
+			"\"3,996,762,023,960,247,600,000,000,000.00\"",
+		Node: "ICU's DecimalQuantity reads a double by scaling it to an integer in floating " +
+			"point, which is right to about sixteen digits, and roundToIncrement divides " +
+			"those digits by the increment as decimals without correcting them, where its " +
+			"other roundings do: \"3,996,762,023,960,248,000,000,000,000.00\"",
 	},
 }
 

@@ -136,6 +136,10 @@ type Decimal struct {
 	kind decimalKind
 	neg  bool
 	m    mag
+	// float is the double a Decimal was made from, where it was, which
+	// ApproximateIncrement reads as ICU does.
+	float     float64
+	fromFloat bool
 }
 
 // DecimalFromFloat is a float as a Decimal: the shortest decimal that reads
@@ -148,7 +152,42 @@ func DecimalFromFloat(v float64) Decimal {
 		return Decimal{kind: decimalInfinite, neg: v < 0}
 	}
 	neg := math.Signbit(v)
-	return Decimal{neg: neg, m: magOf(v)}
+	return Decimal{neg: neg, m: magOf(v), float: v, fromFloat: true}
+}
+
+// icuDoubleMag is a double's magnitude as ICU's
+// DecimalQuantity::_setToDoubleFast reads it: an integer that fits is
+// exact, and anything else is scaled by a power of ten in floating point
+// to an integer of about sixteen digits and rounded, which is not always
+// the double's own decimal past them.
+func icuDoubleMag(v float64) mag {
+	v = math.Abs(v)
+	exponent := int((math.Float64bits(v)>>52)&0x7ff) - 0x3ff
+	if v == 0 || exponent <= 52 && float64(int64(v)) == v || exponent == -1023 || exponent == 1024 {
+		// Exact, or ICU's slow path, which is the shortest decimal.
+		return magOf(v)
+	}
+	// 3.3219... is log2(10). Each step is rounded on its own, as ICU's is.
+	places := int(float64(52-exponent) / 3.32192809488736234787031942948939017586)
+	n := v
+	if places >= 0 {
+		i := places
+		for ; i >= 22; i -= 22 {
+			n = float64(n * 1e22)
+		}
+		n = float64(n * math.Pow10(i))
+	} else {
+		i := places
+		for ; i <= -22; i += 22 {
+			n = float64(n / 1e22)
+		}
+		n = float64(n / math.Pow10(-i))
+	}
+	digits := strconv.FormatInt(int64(math.Floor(float64(n+0.5))), 10)
+	if digits == "0" {
+		return zeroMag
+	}
+	return makeMag(digits, "").shift(-places)
 }
 
 // ParseDecimal reads a string as ECMA-402's ToIntlMathematicalValue does: as
