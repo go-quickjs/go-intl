@@ -295,7 +295,9 @@ DefaultToStringOptions (temporal/zero_options_test.go).
 **API-8. ParseTables panics on a malformed month.**
 `internal/eastasian/eastasian.go`. Month 13 or 00 indexes out of range; a
 leap ordinal of 99 is accepted. Reachable through a custom Source.
-Status: open.
+Status: fixed. A year must have twelve or thirteen months, a leap ordinal
+of 0 or, in a year of thirteen, 2 to 13, and a start that is a real
+Gregorian date (internal/eastasian/eastasian_test.go).
 
 **API-9. LoadZoneRecord hands out read-only memory as a writable slice.**
 `zonerecord.go`. TransitionTypes points into the embedded pack; writing to

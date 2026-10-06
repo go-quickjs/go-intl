@@ -68,16 +68,23 @@ func contains(names []string, name string) bool {
 
 var errLine = errors.New("not a year of a table")
 
-// parseYear reads "1912 lslsslssllsls 0 1912-02-18".
+// parseYear reads "1912 lslsslssllsls 0 1912-02-18": twelve or thirteen
+// months, a leap month's ordinal of 0 or, in a year of thirteen, from 2 to
+// 13, as it follows its base month, and a Gregorian date that exists. A
+// Source other than the embedded data can hand it anything, and month 13
+// had indexed past GregorianFixed's table.
 func parseYear(s string) (TableYear, error) {
 	fields := strings.Fields(s)
-	if len(fields) != 4 || len(fields[1]) > 13 {
+	if len(fields) != 4 || len(fields[1]) != 12 && len(fields[1]) != 13 {
 		return TableYear{}, errLine
 	}
 	year, err1 := strconv.Atoi(fields[0])
 	leap, err2 := strconv.Atoi(fields[2])
 	date := strings.Split(fields[3], "-")
 	if err1 != nil || err2 != nil || len(date) != 3 {
+		return TableYear{}, errLine
+	}
+	if leap != 0 && (len(fields[1]) != 13 || leap < 2 || leap > 13) {
 		return TableYear{}, errLine
 	}
 	var ymd [3]int
@@ -87,6 +94,9 @@ func parseYear(s string) (TableYear, error) {
 			return TableYear{}, errLine
 		}
 		ymd[i] = n
+	}
+	if ymd[1] < 1 || ymd[1] > 12 || ymd[2] < 1 || ymd[2] > gregorianMonthDays(ymd[0], ymd[1]) {
+		return TableYear{}, errLine
 	}
 	t := TableYear{Year: year, Leap: leap, Count: len(fields[1]), Start: GregorianFixed(ymd[0], ymd[1], ymd[2])}
 	for i, c := range fields[1] {
@@ -306,6 +316,14 @@ func GregorianFixed(year, month, day int) int64 {
 		days++
 	}
 	return gregorianDayBeforeYear(year) + int64(days) + int64(day)
+}
+
+// gregorianMonthDays is the days in a Gregorian month.
+func gregorianMonthDays(year, month int) int {
+	if month == 2 && year%4 == 0 && (year%100 != 0 || year%400 == 0) {
+		return 29
+	}
+	return [...]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}[month-1]
 }
 
 // gregorianYearFromFixed is year_from_fixed.
