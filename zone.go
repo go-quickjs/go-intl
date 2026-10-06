@@ -41,7 +41,10 @@ func (z *TimeZone) ID() string { return z.id }
 
 // Canonical is the name Intl.DateTimeFormat reports for the zone: ICU's
 // canonical name, "Asia/Calcutta" for "Asia/Kolkata", "UTC" for Etc/UTC and
-// Etc/GMT, or the offset. It is false for a host zone ICU does not know.
+// Etc/GMT, or the offset. For the host's zone it is V8's
+// JSDateTimeFormat::TimeZoneId, which writes the ID "GMT" as "+00:00"
+// (DefaultTimeZone says "UTC"). It is false for a host zone ICU does not
+// know.
 func (z *TimeZone) Canonical() (string, bool) { return z.canonical, z.canonical != "" }
 
 // A ZoneOffset is the offset in force at an instant: the zone's raw offset
@@ -136,7 +139,7 @@ func unknownZone() *TimeZone {
 // Etc/Unknown.
 func createTimeZone(src Source, id string) *TimeZone {
 	if z, err := loadTimeZone(src, id); err == nil && z.name == id {
-		return &TimeZone{z: z, id: z.name, canonical: z.resolvedID()}
+		return &TimeZone{z: z, id: z.name, canonical: hostCanonical(z)}
 	}
 	if seconds, custom, ok := parseCustomID(id); ok {
 		// V8 reports a custom zone as its offset, "+05:30" for
@@ -147,9 +150,27 @@ func createTimeZone(src Source, id string) *TimeZone {
 		}
 		z := fixedZone(seconds)
 		z.name = custom
+		if custom == "GMT" {
+			// ICU names the custom zone of offset zero as the zone whose
+			// ID it shares, which CLDR makes Etc/GMT: "Greenwich Mean
+			// Time", not "GMT+00:00".
+			z.id = "Etc/GMT"
+		}
 		return &TimeZone{z: z, id: custom, canonical: canonical}
 	}
 	return unknownZone()
+}
+
+// hostCanonical is the name V8's JSDateTimeFormat::TimeZoneId reports for
+// the host's zone: ICU's canonical name, but the offset "+00:00" for the ID
+// "GMT", which the zone GMT and the custom zone of offset zero share and V8
+// takes for an offset. A timeZone option of "GMT" is "UTC" all the same,
+// as ECMA-402 canonicalizes it.
+func hostCanonical(z *timeZone) string {
+	if z.name == "GMT" {
+		return "+00:00"
+	}
+	return z.resolvedID()
 }
 
 // parseCustomID is ICU's TimeZone::parseCustomID and formatCustomID: "GMT"
@@ -242,14 +263,21 @@ func detectHostZone(src Source, id string, raw int, now int64) *TimeZone {
 		custom.name = id
 		return &TimeZone{z: custom, id: id}
 	}
-	return &TimeZone{z: z, id: z.name, canonical: z.resolvedID()}
+	return &TimeZone{z: z, id: z.name, canonical: hostCanonical(z)}
 }
 
-// DefaultTimeZone is the zone Intl.DateTimeFormat takes when it is given
-// none, as V8's Intl::DefaultTimeZone names it: the host's canonical name,
-// or "UTC" where ICU has none.
+// DefaultTimeZone is the host's zone as V8's Intl::DefaultTimeZone names
+// it, which Temporal.Now.timeZoneId reports: ICU's canonical name of the
+// host's zone, "UTC" for the ID "GMT", whether the zone GMT or the custom
+// zone of offset zero, and for a host zone ICU has no name for. It differs
+// from what a DateTimeFormat made with no zone reports, the host zone's
+// Canonical, which is "+00:00" for that ID.
 func DefaultTimeZone(src Source) string {
-	if name, ok := HostTimeZone(src).Canonical(); ok {
+	host := HostTimeZone(src)
+	if host.ID() == "GMT" {
+		return "UTC"
+	}
+	if name, ok := host.Canonical(); ok {
 		return name
 	}
 	return "UTC"

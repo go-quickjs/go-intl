@@ -240,13 +240,13 @@ order. Status: fixed (TestTransformedFieldOrder).
 **TZ-1. A custom UTC zone from TZ is named by its offset.** `zone.go`,
 `zonedisplay.go`. ICU names a custom zone of offset zero "GMT", whose CLDR
 canonical zone is Etc/GMT. Windows, `TZ=GMT+00`: `new Date(0).toString()`
-ends "(GMT+00:00)", Node "(Greenwich Mean Time)". Status: open.
+ends "(GMT+00:00)", Node "(Greenwich Mean Time)". Status: fixed (TestHostTimeZoneGMT).
 
 **TZ-2. Canonical and DefaultTimeZone mix V8's two namings.** `zone.go`. With
 `TZ=GMT` Node's DateTimeFormat reports "+00:00" (JSDateTimeFormat::TimeZoneId
 special-cases "GMT") and Temporal.Now.timeZoneId "UTC"
 (Intl::DefaultTimeZone); go-intl's Canonical gives "UTC" for TZ=GMT and
-DefaultTimeZone "+00:00" for TZ=GMT+00. Status: open.
+DefaultTimeZone "+00:00" for TZ=GMT+00. Status: fixed (TestHostTimeZoneGMT): the host zone's Canonical is what a DateTimeFormat reports and DefaultTimeZone what Temporal.Now reports. go-quickjs takes one name for both (localZoneName) and must take each where V8 does.
 
 ## Go API: panics, hangs and silent acceptance
 

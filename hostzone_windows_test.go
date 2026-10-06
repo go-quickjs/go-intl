@@ -4,6 +4,7 @@ package intl_test
 
 import (
 	"testing"
+	"time"
 
 	intl "github.com/go-quickjs/go-intl"
 )
@@ -36,5 +37,39 @@ func TestHostTimeZoneFromTZ(t *testing.T) {
 	t.Setenv("TZ", "GMT+5:30:15")
 	if got := intl.HostTimeZone(intl.Embedded).Offset(0).Total(); got != 5*3600+30*60+15 {
 		t.Errorf("GMT+5:30:15 is %d seconds east", got)
+	}
+}
+
+// The ID "GMT", the zone's or the custom zone of offset zero's, is what V8
+// names "+00:00" in a DateTimeFormat and "UTC" for Temporal.Now, and ICU
+// names it Greenwich Mean Time. go-intl had given "UTC" and "+00:00" the
+// other way round for TZ=GMT, and named TZ=GMT+00 "GMT+00:00". Node 26's
+// answers, run with TZ set (ISSUES.md TZ-1, TZ-2).
+func TestHostTimeZoneGMT(t *testing.T) {
+	en, err := intl.ParseLocale("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ tz, canonical, temporal, name string }{
+		{"GMT", "+00:00", "UTC", "Greenwich Mean Time"},
+		{"GMT+00", "+00:00", "UTC", "Greenwich Mean Time"},
+		{"GMT+0", "UTC", "UTC", "Greenwich Mean Time"},
+		{"GMT0", "UTC", "UTC", "Greenwich Mean Time"},
+		{"UTC", "UTC", "UTC", "Coordinated Universal Time"},
+		{"GMT+01:00", "+01:00", "+01:00", "GMT+01:00"},
+		{"UTC+00", "Etc/Unknown", "Etc/Unknown", "GMT+00:00"},
+	} {
+		t.Setenv("TZ", c.tz)
+		z := intl.HostTimeZone(intl.Embedded)
+		canonical, _ := z.Canonical()
+		temporal := intl.DefaultTimeZone(intl.Embedded)
+		name, err := intl.TimeZoneDisplayName(intl.Embedded, en, z, false, time.Unix(0, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if canonical != c.canonical || temporal != c.temporal || name != c.name {
+			t.Errorf("TZ=%s: %q, %q, %q; want %q, %q, %q", c.tz, canonical, temporal, name,
+				c.canonical, c.temporal, c.name)
+		}
 	}
 }
