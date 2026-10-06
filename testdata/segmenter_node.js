@@ -127,3 +127,28 @@ for (const [locale, texts] of cases) {
   }
 }
 fs.writeFileSync(path.join(__dirname, "segmenter_node.txt.gz"), zlib.gzipSync(lines.join("\n") + "\n", { level: 9 }));
+
+// testdata/segmenter_containing_node.txt.gz: %Segments.prototype%.containing
+// at every offset of a text, one before it and one past it, which V8 answers
+// from ICU after moving an offset inside a surrogate pair to the pair's
+// start. Each line is [locale, granularity, text, answers]: an answer for
+// each offset from -1 to the text's length, [index, end, wordLike] or null
+// for undefined, wordLike 1, 0, or null where the granularity has none.
+const containing = [`# Node ${process.version}, ICU ${process.versions.icu}`];
+for (const [locale, texts] of [["en", sentences.concat(random.slice(0, 300))], ["th", sentences], ["ja", sentences]]) {
+  for (const granularity of ["grapheme", "word", "sentence"]) {
+    const segments = new Intl.Segmenter(locale, { granularity });
+    for (const text of texts) {
+      const s = segments.segment(text);
+      const answers = [];
+      for (let n = -1; n <= text.length; n++) {
+        const x = s.containing(n);
+        answers.push(x === undefined ? null
+          : [x.index, x.index + x.segment.length, x.isWordLike === undefined ? null : (x.isWordLike ? 1 : 0)]);
+      }
+      containing.push(JSON.stringify([locale, granularity, units(text), answers]));
+    }
+  }
+}
+fs.writeFileSync(path.join(__dirname, "segmenter_containing_node.txt.gz"),
+  zlib.gzipSync(containing.join("\n") + "\n", { level: 9 }));
