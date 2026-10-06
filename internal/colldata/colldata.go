@@ -104,6 +104,16 @@ func (a U32s) Len() int { return len(a) / 4 }
 // At is one value.
 func (a U32s) At(i int) uint32 { return binary.LittleEndian.Uint32(a[4*i:]) }
 
+// Has reports whether the values from i hold n more, so that a table a
+// Source corrupted cannot send a read past them.
+func (a U16s) Has(i, n int) bool { return i >= 0 && n >= 0 && i <= a.Len()-n }
+
+// Has reports whether the values from i hold n more.
+func (a U32s) Has(i, n int) bool { return i >= 0 && n >= 0 && i <= a.Len()-n }
+
+// Has reports whether the values from i hold n more.
+func (a U64s) Has(i, n int) bool { return i >= 0 && n >= 0 && i <= a.Len()-n }
+
 // Len is the number of values.
 func (a U64s) Len() int { return len(a) / 8 }
 

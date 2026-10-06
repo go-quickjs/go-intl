@@ -56,7 +56,7 @@ func (t *Trie) dataIndex(c rune) int {
 	case c < 0 || c > 0x10ffff:
 		return t.Data.Len() - errorValueNegative
 	case c <= fastMax:
-		return int(t.Index.At(int(c>>fastShift))) + int(c&fastDataMask)
+		return t.index(int(c>>fastShift)) + int(c&fastDataMask)
 	case c >= t.HighStart:
 		return t.Data.Len() - highValueNegative
 	}
@@ -70,21 +70,31 @@ func (t *Trie) smallIndex(c rune) int {
 	} else {
 		i1 += smallIndexLength
 	}
-	i3Block := int(t.Index.At(int(t.Index.At(i1)) + int((c>>shift2)&index2Mask)))
+	i3Block := t.index(t.index(i1) + int((c>>shift2)&index2Mask))
 	i3 := int((c >> shift3) & index3Mask)
 	var dataBlock int
 	if i3Block&0x8000 == 0 {
 		// Sixteen-bit indexes.
-		dataBlock = int(t.Index.At(i3Block + i3))
+		dataBlock = t.index(i3Block + i3)
 	} else {
 		// Eighteen-bit indexes, stored as groups of nine units for eight
 		// indexes: one unit of high bits, then the eight low halves.
 		i3Block = (i3Block & 0x7fff) + (i3 &^ 7) + (i3 >> 3)
 		i3 &= 7
-		dataBlock = (int(t.Index.At(i3Block)) << (2 + 2*i3)) & 0x30000
-		dataBlock |= int(t.Index.At(i3Block + 1 + i3))
+		dataBlock = (t.index(i3Block) << (2 + 2*i3)) & 0x30000
+		dataBlock |= t.index(i3Block + 1 + i3)
 	}
 	return dataBlock + int(c&smallDataMask)
+}
+
+// index is one entry of the index, or, past its end, as a corrupt table
+// may point, one that points past the data, which Get answers with the
+// error value.
+func (t *Trie) index(i int) int {
+	if i < 0 || i >= t.Index.Len() {
+		return 0xffff << 2
+	}
+	return int(t.Index.At(i))
 }
 
 // BuildTrie lays out a fast trie holding what get gives every code point,

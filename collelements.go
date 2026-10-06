@@ -201,6 +201,10 @@ func (w *elementWriter) appendCE32(d *colldata.Data, ce32 uint32, i int) int {
 			return next
 		case tagExpansion32:
 			index, length := int(ce32>>13), int(ce32>>8&31)
+			if !d.CE32s.Has(index, length) {
+				w.out = append(w.out, primaryCE(0xfffd0000))
+				return next
+			}
 			for k := index; k < index+length; k++ {
 				ce, ok := simpleCE(d.CE32s.At(k))
 				if !ok {
@@ -211,6 +215,10 @@ func (w *elementWriter) appendCE32(d *colldata.Data, ce32 uint32, i int) int {
 			return next
 		case tagExpansion:
 			index, length := int(ce32>>13), int(ce32>>8&31)
+			if !d.CEs.Has(index, length) {
+				w.out = append(w.out, primaryCE(0xfffd0000))
+				return next
+			}
 			for k := index; k < index+length; k++ {
 				w.out = append(w.out, d.CEs.At(k))
 			}
@@ -221,12 +229,24 @@ func (w *elementWriter) appendCE32(d *colldata.Data, ce32 uint32, i int) int {
 			ce32, next = w.contraction(d, ce32, i)
 		case tagDigit:
 			if w.c.numeric {
-				return w.numeric(i)
+				return w.numeric(i, ce32)
+			}
+			if !d.CE32s.Has(int(ce32>>13), 1) {
+				ce32 = fffdCE32
+				continue
 			}
 			ce32 = d.CE32s.At(int(ce32 >> 13))
 		case tagU0000:
+			if !d.CE32s.Has(0, 1) {
+				ce32 = fffdCE32
+				continue
+			}
 			ce32 = d.CE32s.At(0)
 		case tagOffset:
+			if !d.CEs.Has(int(ce32>>13), 1) {
+				w.out = append(w.out, primaryCE(0xfffd0000))
+				return next
+			}
 			w.out = append(w.out, primaryCE(offsetPrimary(d.CEs.At(int(ce32>>13)), r)))
 			return next
 		case tagImplicit:
@@ -244,6 +264,11 @@ func (w *elementWriter) appendCE32(d *colldata.Data, ce32 uint32, i int) int {
 // contextTrie reads a context entry: a default element, then a trie.
 func contextTrie(d *colldata.Data, ce32 uint32) (uint32, colldata.CharTrie) {
 	index := int(ce32 >> 13)
+	if !d.Contexts.Has(index, 2) {
+		// A context past the table, as a corrupt one may point to: U+FFFD's
+		// weight and nothing to match.
+		return fffdCE32, colldata.NewCharTrie(nil)
+	}
 	def := uint32(d.Contexts.At(index))<<16 | uint32(d.Contexts.At(index+1))
 	return def, colldata.NewCharTrie(d.Contexts.From(index + 2))
 }
@@ -354,9 +379,12 @@ func (w *elementWriter) discontiguous(state colldata.CharTrie, result uint32, fi
 
 // numeric weighs a run of digits by its value, as ICU's
 // CollationIterator::appendNumericCEs does, and returns the index after it.
-func (w *elementWriter) numeric(i int) int {
-	var digits []byte
-	j := i
+// The first digit is the element in hand, as ICU's is, rather than looked
+// up again, which a corrupt table could answer otherwise, leaving no digit
+// and the writer where it was for ever.
+func (w *elementWriter) numeric(i int, ce32 uint32) int {
+	digits := []byte{byte(ce32 >> 8 & 0xf)}
+	j := w.next(i)
 	for j < len(w.text) {
 		_, ce32 := w.c.lookup(w.text[j])
 		if !isSpecial(ce32) || tagOf(ce32) != tagDigit {

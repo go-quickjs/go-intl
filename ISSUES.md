@@ -337,7 +337,12 @@ number is compared with the number of parts, not multiplied out
 
 **DA-2. Corrupt collation tables panic.** `internal/colldata`,
 `collelements.go`. The trie and the element arrays are read without bounds
-checks. Status: open.
+checks. Status: fixed. The trie's index reads, and every read of the
+expansions, elements and contexts an element points to, are checked; a
+value past them weighs as U+FFFD. A digit's first value is the element in
+hand, as ICU's appendNumericCEs takes it, where a second lookup a corrupt
+table answered otherwise had looped for ever. 3,000 corrupted tables are
+built and compared with (collator_corrupt_test.go).
 
 **DA-3. Counts overflow on 32-bit.** `internal/blob` ReadShared and
 ReadIndex, `internal/datapack`. A count of 0x40000000 passes the length
