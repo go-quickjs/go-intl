@@ -246,8 +246,10 @@ func ReadShared(b []byte, version byte) (Shared, error) {
 	if b[0] != version {
 		return Shared{}, fmt.Errorf("blob: the pool is version %d, not %d", b[0], version)
 	}
+	// The count is compared with what the bytes can hold, not multiplied
+	// out, which overflows: 0x40000000 parts are 0 bytes on 32 bits.
 	n := int(binary.LittleEndian.Uint32(b[1:]))
-	if n < 0 || 5+4*n > len(b) {
+	if n < 0 || n > (len(b)-5)/4 {
 		return Shared{}, fmt.Errorf("blob: a pool of %d parts in %d bytes", n, len(b))
 	}
 	s := Shared{ends: b[5 : 5+4*n], data: b[5+4*n:]}
@@ -259,7 +261,7 @@ func ReadShared(b []byte, version byte) (Shared, error) {
 
 func (s Shared) part(i int) ([]byte, bool) {
 	// i is compared with the parts there are, not multiplied out, which
-	// overflows past 2^61.
+	// overflows past 2^61; an end past 2^31 is negative on 32 bits.
 	if i < 0 || i >= len(s.ends)/4 {
 		return nil, false
 	}
@@ -268,7 +270,7 @@ func (s Shared) part(i int) ([]byte, bool) {
 		start = int(binary.LittleEndian.Uint32(s.ends[4*(i-1):]))
 	}
 	end := int(binary.LittleEndian.Uint32(s.ends[4*i:]))
-	if start > end || end > len(s.data) {
+	if start < 0 || start > end || end > len(s.data) {
 		return nil, false
 	}
 	return s.data[start:end:end], true

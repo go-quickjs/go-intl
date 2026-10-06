@@ -296,3 +296,51 @@ func TestHugePartNumber(t *testing.T) {
 		t.Errorf("part 0: %q, %v", part, ok)
 	}
 }
+
+// Counts and offsets read from corrupt data are refused on 32 bits as on
+// 64: a count of 0x40000000 had multiplied out to 0 and passed the length
+// check, and an offset past 2^31 had read as negative (ISSUES.md DA-3).
+func TestCorruptCountsAndOffsets(t *testing.T) {
+	le := func(b []byte, v uint32) []byte { return append(b, byte(v), byte(v>>8), byte(v>>16), byte(v>>24)) }
+
+	pool := le([]byte{3}, 0x40000000)
+	pool = append(pool, 0, 0, 0, 0)
+	if _, err := ReadShared(pool, 3); err == nil {
+		t.Error("a pool of 0x40000000 parts in 9 bytes read")
+	}
+	index := le([]byte{3}, 0x40000000)
+	index = append(index, 0, 0, 0, 0)
+	if _, err := ReadIndex(index, 3); err == nil {
+		t.Error("an index of 0x40000000 records in 9 bytes read")
+	}
+
+	// One part whose end is past 2^31: the layout check catches it.
+	pool = le(le([]byte{3}, 1), 0x80000000)
+	if _, err := ReadShared(pool, 3); err == nil {
+		t.Error("a part ending at 2^31 read")
+	}
+	// Two, the first ending past 2^31 and the last at the end: only the
+	// part reads it.
+	pool = le(le(le([]byte{3}, 2), 0x80000000), 1)
+	pool = append(pool, 'x')
+	s, err := ReadShared(pool, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if part, ok := s.part(i); ok {
+			t.Errorf("part %d: %q", i, part)
+		}
+	}
+	index = le(le(le([]byte{3}, 2), 0xffffffff), 1)
+	index = append(index, 0)
+	x, err := ReadIndex(index, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if k, v := x.At(i); k != nil || v != nil {
+			t.Errorf("record %d: %q %q", i, k, v)
+		}
+	}
+}

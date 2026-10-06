@@ -88,8 +88,10 @@ func Find(pack string, name string) (start, end int, ok bool) {
 	if len(pack) < headerSize || pack[:len(magic)] != magic || pack[len(magic)] != Version {
 		return 0, 0, false
 	}
+	// A count past what the pack holds, compared without multiplying it
+	// out, which overflows on 32 bits, as does a count past 2^31.
 	n := int(u32(pack, len(magic)+1))
-	if headerSize+recordSize*n > len(pack) {
+	if n < 0 || n > (len(pack)-headerSize)/recordSize {
 		return 0, 0, false
 	}
 	lo, hi := 0, n
@@ -97,13 +99,13 @@ func Find(pack string, name string) (start, end int, ok bool) {
 		mid := int(uint(lo+hi) >> 1)
 		at := headerSize + recordSize*mid
 		nameStart, nameEnd := int(u32(pack, at)), int(u32(pack, at+4))
-		if nameStart > nameEnd || nameEnd > len(pack) {
+		if nameStart < 0 || nameStart > nameEnd || nameEnd > len(pack) {
 			return 0, 0, false
 		}
 		switch c := compare(pack[nameStart:nameEnd], name); {
 		case c == 0:
 			start, end = int(u32(pack, at+8)), int(u32(pack, at+12))
-			if start > end || end > len(pack) {
+			if start < 0 || start > end || end > len(pack) {
 				return 0, 0, false
 			}
 			return start, end, true

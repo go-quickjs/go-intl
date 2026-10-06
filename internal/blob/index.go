@@ -59,7 +59,7 @@ func ReadIndex(b []byte, version byte) (Index, error) {
 		return Index{}, fmt.Errorf("blob: an index of %d bytes", len(b))
 	}
 	n := int(binary.LittleEndian.Uint32(b))
-	if n < 0 || 4+4*n > len(b) {
+	if n < 0 || n > (len(b)-4)/4 {
 		return Index{}, fmt.Errorf("blob: an index of %d records in %d bytes", n, len(b))
 	}
 	x := Index{ends: b[4 : 4+4*n], records: b[4+4*n:]}
@@ -80,7 +80,7 @@ func (x Index) At(i int) (key, value []byte) {
 		start = int(binary.LittleEndian.Uint32(x.ends[4*(i-1):]))
 	}
 	end := int(binary.LittleEndian.Uint32(x.ends[4*i:]))
-	if start > end || end > len(x.records) {
+	if start < 0 || start > end || end > len(x.records) {
 		return nil, nil
 	}
 	rec := x.records[start:end:end]

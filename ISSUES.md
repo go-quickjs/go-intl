@@ -341,7 +341,10 @@ checks. Status: open.
 
 **DA-3. Counts overflow on 32-bit.** `internal/blob` ReadShared and
 ReadIndex, `internal/datapack`. A count of 0x40000000 passes the length
-check under GOARCH=386 and panics. Status: open.
+check under GOARCH=386 and panics. Status: fixed. Counts are compared with
+what the bytes can hold rather than multiplied out, and an offset that
+reads as negative is refused; the tests run under GOARCH=386 too
+(internal/blob/blob_test.go, internal/datapack/datapack_test.go).
 
 **DA-4. The segmenter's data readers panic on corrupt data.** `brkdata.go`,
 `dictbe.go`. Status: open.
