@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	intl "github.com/go-quickjs/go-intl"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -122,7 +123,7 @@ func AddLocales(s *writeset.Set, dir string, files map[string][]byte) error {
 		}
 	}
 	if len(same) > 0 {
-		out[SameFile] = same
+		out[SameFile] = append([]byte{layout.Pairs}, same...)
 	}
 	s.Tree(dir, out)
 	return nil
@@ -145,6 +146,12 @@ func Tags(dir string) ([]string, error) {
 	b, err := os.ReadFile(filepath.Join(dir, SameFile))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
+	}
+	if len(b) > 0 {
+		if b[0] != layout.Pairs {
+			return nil, fmt.Errorf("%s is not of version %d", SameFile, layout.Pairs)
+		}
+		b = b[1:]
 	}
 	const pair = 2 * intl.DataLocaleSize
 	if len(b)%pair != 0 {

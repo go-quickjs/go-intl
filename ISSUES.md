@@ -408,7 +408,12 @@ list winning; the meaningless empty suffix is gone. The data is unchanged
 (internal/namegen/main_test.go).
 
 **RU-6. Index and pair tables have no version byte.** `internal/blob`.
-Status: open.
+Status: fixed. blob.BuildIndex and ReadIndex take a version, as NewWriter
+and NewReader do, and the pair tables (likelysubtags, parentlocales, each
+same.bin) begin with one; each file's version is in internal/layout, and
+normdata and zonedata's metazones, whose nested indexes gained the byte,
+went up a version. A file written before, or under another version, is
+refused (internal/blob/blob_test.go, pairtable_test.go).
 
 **RU-7. regen trusts an unpacked tree and has no timeout.**
 `internal/regen`. Status: open.

@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // unicodeProps are the Unicode properties formatting reads, in the Unicode
@@ -25,7 +26,7 @@ func loadUnicodeProps(src Source) (*unicodeProps, error) {
 	if err != nil {
 		return nil, fmt.Errorf("intl: the Unicode properties: %w", err)
 	}
-	index, err := blob.ReadIndex(b)
+	index, err := blob.ReadIndex(b, layout.Properties)
 	if err != nil {
 		return nil, fmt.Errorf("intl: the Unicode properties: %w", err)
 	}

@@ -8,7 +8,7 @@ import (
 )
 
 // MetaVersion is the encoding version of the shared zone table.
-const MetaVersion = 3
+const MetaVersion = 4
 
 // BuiltMeta is what every locale shares about zones, as a generator builds
 // it: which name is the canonical one, where each zone is, which metazone it
@@ -179,7 +179,7 @@ func EncodeMeta(m *BuiltMeta) ([]byte, error) {
 			return nil, err
 		}
 	}
-	index, err := blob.BuildIndex(records)
+	index, err := blob.BuildIndex(MetaVersion, records)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func DecodeMeta(data []byte) (*Meta, error) {
 	if err := r.Err(); err != nil {
 		return nil, err
 	}
-	index, err := blob.ReadIndex(b)
+	index, err := blob.ReadIndex(b, MetaVersion)
 	if err != nil {
 		return nil, err
 	}

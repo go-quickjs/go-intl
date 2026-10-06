@@ -57,6 +57,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -292,7 +293,7 @@ func buildSets(dir string) ([]byte, error) {
 	}
 	records["script ranges"] = b
 	records["script names"] = []byte(strings.Join(sorted, "\n"))
-	return blob.BuildIndex(records)
+	return blob.BuildIndex(layout.BreakSets, records)
 }
 
 // ranges is the code points a predicate holds for, as first-last ranges.

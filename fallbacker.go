@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // The fallback chain, once CLDR has a say in it.
@@ -70,7 +71,7 @@ func (x *icuTree) fallbackValue(key string) (string, bool) {
 		if err != nil {
 			return "", false
 		}
-		index, err := blob.ReadIndex(b)
+		index, err := blob.ReadIndex(b, layout.ICUFallback)
 		if err != nil {
 			return "", false
 		}
@@ -111,7 +112,7 @@ func (f *Fallbacker) icuTree(tree string) (*icuTree, bool) {
 	if err != nil {
 		return nil, false
 	}
-	index, err := blob.ReadIndex(b)
+	index, err := blob.ReadIndex(b, layout.ICUTree)
 	if err != nil {
 		return nil, false
 	}

@@ -38,6 +38,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -415,7 +416,7 @@ func timeData() ([]byte, error) {
 		records[strings.ReplaceAll(key, "-", "_")] = []byte(d.Preferred + " " +
 			strings.Join(strings.Fields(d.Allowed), ","))
 	}
-	return blob.BuildIndex(records)
+	return blob.BuildIndex(layout.TimeData, records)
 }
 
 // japaneseEras writes the start dates of the Japanese calendar's eras, from

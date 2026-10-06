@@ -8,6 +8,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // ICU's dictionary break engines (dictbe.cpp): Thai, Lao, Burmese and
@@ -84,7 +85,7 @@ func loadBreakEngines(src Source, norm *Normalizer) (*breakEngines, error) {
 	if err != nil {
 		return nil, fmt.Errorf("intl: the break engines' sets: %w", err)
 	}
-	index, err := blob.ReadIndex(b)
+	index, err := blob.ReadIndex(b, layout.BreakSets)
 	if err != nil {
 		return nil, fmt.Errorf("intl: the break engines' sets: %w", err)
 	}

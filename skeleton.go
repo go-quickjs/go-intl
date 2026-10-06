@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // Choosing a pattern, as V8 asks ICU for one.
@@ -511,7 +512,7 @@ func loadTimeData(src Source) (timeData, error) {
 	if err != nil {
 		return timeData{}, fmt.Errorf("intl: the hour-cycle preferences: %w", err)
 	}
-	index, err := blob.ReadIndex(b)
+	index, err := blob.ReadIndex(b, layout.TimeData)
 	if err != nil {
 		return timeData{}, fmt.Errorf("intl: the hour-cycle preferences: %w", err)
 	}

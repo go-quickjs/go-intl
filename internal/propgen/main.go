@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -105,7 +106,7 @@ func build(dir string) ([]byte, error) {
 		}
 		records[name] = b
 	}
-	return blob.BuildIndex(records)
+	return blob.BuildIndex(layout.Properties, records)
 }
 
 // collect is the ranges of the entries whose value is in, sorted, with

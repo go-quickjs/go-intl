@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // Locale negotiation: ECMA-402's ResolveLocale and SupportedLocales, which
@@ -81,7 +82,7 @@ func NewLocaleMatcher(src Source, service Service) (*LocaleMatcher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("intl: the available locales: %w", err)
 	}
-	index, err := blob.ReadIndex(b)
+	index, err := blob.ReadIndex(b, layout.Available)
 	if err != nil {
 		return nil, fmt.Errorf("intl: the available locales: %w", err)
 	}

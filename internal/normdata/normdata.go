@@ -21,7 +21,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 2
+const Version = 3
 
 // A Decomposition is one character and what it comes apart into.
 type Decomposition struct {
@@ -145,7 +145,7 @@ func Encode(t *Built) ([]byte, error) {
 		for _, d := range set {
 			records[runeKey(d.Rune)] = []byte(d.To)
 		}
-		index, err := blob.BuildIndex(records)
+		index, err := blob.BuildIndex(Version, records)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +188,7 @@ func Decode(data []byte) (*Tables, error) {
 	}
 	var t Tables
 	for _, index := range []*blob.Index{&t.canonical, &t.compatibility} {
-		if *index, err = blob.ReadIndex(r.Bytes()); err != nil {
+		if *index, err = blob.ReadIndex(r.Bytes(), Version); err != nil {
 			return nil, err
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"testing/fstest"
 
 	intl "github.com/go-quickjs/go-intl"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 func mustLocale(t *testing.T, s string) intl.DataLocale {
@@ -138,14 +139,15 @@ func TestMinimize(t *testing.T) {
 func TestSourceCanBeReplaced(t *testing.T) {
 	// Build a table by hand: one parent, pointing somewhere CLDR does not.
 	from, to := mustLocale(t, "xx-YY"), mustLocale(t, "zz")
-	var rec []byte
+	rec := []byte{layout.Pairs}
 	rec, _ = from.AppendBinary(rec)
 	rec, _ = to.AppendBinary(rec)
 
-	// Likely subtags may be empty; a source only has to answer.
+	// Likely subtags may be empty, but for the table's version; a source
+	// only has to answer.
 	fsys := fstest.MapFS{
 		"parentlocales.bin": {Data: rec},
-		"likelysubtags.bin": {Data: nil},
+		"likelysubtags.bin": {Data: []byte{layout.Pairs}},
 	}
 	f, err := intl.NewFallbacker(intl.NewFS(fsys))
 	if err != nil {
@@ -178,16 +180,17 @@ func TestMissingDataIsReported(t *testing.T) {
 // read as though the last record were complete.
 func TestTruncatedTableIsRefused(t *testing.T) {
 	fsys := fstest.MapFS{
-		"parentlocales.bin": {Data: make([]byte, 2*intl.DataLocaleSize-1)},
-		"likelysubtags.bin": {Data: nil},
+		"parentlocales.bin": {Data: append([]byte{layout.Pairs}, make([]byte, 2*intl.DataLocaleSize-1)...)},
+		"likelysubtags.bin": {Data: []byte{layout.Pairs}},
 	}
 	if _, err := intl.NewFallbacker(intl.NewFS(fsys)); err == nil {
 		t.Fatal("a table cut short was accepted")
 	}
 }
 
-// The tables on disk are what the generator last wrote. A record count that
-// does not divide evenly means the file was edited or truncated.
+// The tables on disk are what the generator last wrote: the version, then
+// records. A record count that does not divide evenly means the file was
+// edited or truncated.
 func TestGeneratedTablesAreWellFormed(t *testing.T) {
 	for _, name := range []string{"likelysubtags.bin", "parentlocales.bin"} {
 		b, err := os.ReadFile(filepath.Join("data", name))
@@ -195,13 +198,17 @@ func TestGeneratedTablesAreWellFormed(t *testing.T) {
 			t.Errorf("reading %s: %v", name, err)
 			continue
 		}
-		size := 2 * intl.DataLocaleSize
-		if len(b)%size != 0 {
-			t.Errorf("%s is %d bytes, which is not a whole number of %d-byte records",
-				name, len(b), size)
-		}
-		if len(b) == 0 {
+		if len(b) <= 1 {
 			t.Errorf("%s is empty; run go run ./internal/localegen", name)
+			continue
+		}
+		if b[0] != layout.Pairs {
+			t.Errorf("%s is of version %d, want %d", name, b[0], layout.Pairs)
+		}
+		size := 2 * intl.DataLocaleSize
+		if (len(b)-1)%size != 0 {
+			t.Errorf("%s is %d bytes after its version, which is not a whole number of %d-byte records",
+				name, len(b)-1, size)
 		}
 	}
 }

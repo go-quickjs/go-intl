@@ -12,16 +12,17 @@ import (
 // has, what a zone is called -- is written as one rather than read whole
 // every time a formatter is built.
 //
-// It is the number of records, then where each record ends, four bytes
-// each, then the records: a key, length-prefixed, then the value.
+// It is a version byte, which the reader requires as NewReader does, the
+// number of records, then where each record ends, four bytes each, then
+// the records: a key, length-prefixed, then the value.
 type Index struct {
 	ends    []byte
 	records []byte
 }
 
-// BuildIndex writes records, which it sorts by key. A key given twice is
-// an error.
-func BuildIndex(records map[string][]byte) ([]byte, error) {
+// BuildIndex writes records, which it sorts by key, under a version. A key
+// given twice is an error.
+func BuildIndex(version byte, records map[string][]byte) ([]byte, error) {
 	keys := make([]string, 0, len(records))
 	for k := range records {
 		keys = append(keys, k)
@@ -38,13 +39,22 @@ func BuildIndex(records map[string][]byte) ([]byte, error) {
 		}
 		ends = binary.LittleEndian.AppendUint32(ends, uint32(len(body)))
 	}
-	out := binary.LittleEndian.AppendUint32(nil, uint32(len(keys)))
+	out := binary.LittleEndian.AppendUint32([]byte{version}, uint32(len(keys)))
 	out = append(out, ends...)
 	return append(out, body...), nil
 }
 
-// ReadIndex reads an index's layout.
-func ReadIndex(b []byte) (Index, error) {
+// ReadIndex reads an index's layout, refusing one written under another
+// version.
+func ReadIndex(b []byte, version byte) (Index, error) {
+	if len(b) < 1 || b[0] != version {
+		got := -1
+		if len(b) > 0 {
+			got = int(b[0])
+		}
+		return Index{}, fmt.Errorf("blob: an index of version %d, want %d", got, version)
+	}
+	b = b[1:]
 	if len(b) < 4 {
 		return Index{}, fmt.Errorf("blob: an index of %d bytes", len(b))
 	}

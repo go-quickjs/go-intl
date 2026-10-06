@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // Canonicalization: the form ECMA-402's CanonicalizeUnicodeLocaleId gives an
@@ -52,7 +53,7 @@ func NewCanonicalizer(src Source, opts CanonicalizeOptions) (*Canonicalizer, err
 	if err != nil {
 		return nil, fmt.Errorf("intl: the locale aliases: %w", err)
 	}
-	aliases, err := blob.ReadIndex(b)
+	aliases, err := blob.ReadIndex(b, layout.Aliases)
 	if err != nil {
 		return nil, fmt.Errorf("intl: the locale aliases: %w", err)
 	}
@@ -150,7 +151,7 @@ func canonicalUValue(src Source, key, value string) string {
 	if err != nil {
 		return value
 	}
-	aliases, err := blob.ReadIndex(b)
+	aliases, err := blob.ReadIndex(b, layout.Aliases)
 	if err != nil {
 		return value
 	}

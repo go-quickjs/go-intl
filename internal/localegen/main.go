@@ -39,6 +39,7 @@ import (
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -154,7 +155,8 @@ func build(in map[string]string) ([]byte, error) {
 		return string(keyed[records[i].key]) < string(keyed[records[j].key])
 	})
 
-	out := make([]byte, 0, len(records)*2*intl.DataLocaleSize)
+	out := make([]byte, 1, 1+len(records)*2*intl.DataLocaleSize)
+	out[0] = layout.Pairs
 	var last []byte
 	for _, r := range records {
 		key := keyed[r.key]

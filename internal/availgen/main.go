@@ -37,6 +37,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -269,7 +270,7 @@ func build(zip string) ([]byte, error) {
 		}
 	}
 
-	return blob.BuildIndex(records)
+	return blob.BuildIndex(layout.Available, records)
 }
 
 // indexTrees are the trees of ICU's data go-intl's data mirrors, whose index
@@ -330,7 +331,11 @@ func buildIndex(zip string) (map[string][]byte, error) {
 	files["icufallback.bin"] = tables
 	built := map[string][]byte{}
 	for name, records := range files {
-		b, err := blob.BuildIndex(records)
+		version := layout.ICUTree
+		if name == "icufallback.bin" {
+			version = layout.ICUFallback
+		}
+		b, err := blob.BuildIndex(version, records)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}

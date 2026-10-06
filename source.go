@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datapack"
+	"github.com/go-quickjs/go-intl/internal/layout"
 )
 
 // Where the data comes from.
@@ -272,7 +273,8 @@ func same(s files, m Marker, d DataLocale) (DataLocale, bool) {
 }
 
 // pairTable is a generated table of data locales mapped to data locales, laid
-// out as records of two of them, sorted by the first.
+// out as a version byte, layout.Pairs, then records of two of them, sorted
+// by the first.
 //
 // It is read where it lies. Nothing is decoded until something is looked up,
 // and a lookup is a binary search over the bytes, so a table costs what it
@@ -282,6 +284,10 @@ type pairTable []byte
 const pairSize = 2 * DataLocaleSize
 
 func newPairTable(b []byte) (pairTable, error) {
+	if len(b) == 0 || b[0] != layout.Pairs {
+		return nil, fmt.Errorf("a table of locale pairs not of version %d", layout.Pairs)
+	}
+	b = b[1:]
 	if len(b)%pairSize != 0 {
 		return nil, fmt.Errorf("a table of %d bytes does not divide into %d-byte records",
 			len(b), pairSize)

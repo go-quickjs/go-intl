@@ -117,11 +117,11 @@ func TestSharedRoundTrip(t *testing.T) {
 // TestIndex finds each record of an index, and nothing else.
 func TestIndex(t *testing.T) {
 	records := map[string][]byte{"b": []byte("two"), "a": []byte("one"), "c": nil, "ab": []byte("x")}
-	b, err := BuildIndex(records)
+	b, err := BuildIndex(7, records)
 	if err != nil {
 		t.Fatal(err)
 	}
-	x, err := ReadIndex(b)
+	x, err := ReadIndex(b, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,5 +251,27 @@ func TestStringsShareTheTable(t *testing.T) {
 	// table's own memory.
 	if allocs > 1 {
 		t.Errorf("reading two strings made %v allocations", allocs)
+	}
+}
+
+// An index written under another version, or before indexes had one, is
+// refused rather than misread (ISSUES.md RU-6).
+func TestIndexVersion(t *testing.T) {
+	b, err := BuildIndex(7, map[string][]byte{"a": []byte("one")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b[0] != 7 {
+		t.Fatalf("the index begins %d, not its version", b[0])
+	}
+	if _, err := ReadIndex(b, 8); err == nil {
+		t.Error("version 7 read as 8")
+	}
+	// The layout before the version byte: the count first.
+	if _, err := ReadIndex(b[1:], 7); err == nil {
+		t.Error("an index without a version read")
+	}
+	if _, err := ReadIndex(nil, 7); err == nil {
+		t.Error("an empty index read")
 	}
 }

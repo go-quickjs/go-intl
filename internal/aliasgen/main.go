@@ -42,6 +42,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
@@ -141,7 +142,7 @@ func build(zip, tzDir string) ([]byte, error) {
 		}
 		records[name] = []byte(b.String())
 	}
-	return blob.BuildIndex(records)
+	return blob.BuildIndex(layout.Aliases, records)
 }
 
 // bcpShaped is what a Unicode extension value can hold: subtags of three to
