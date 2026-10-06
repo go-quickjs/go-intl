@@ -36,7 +36,7 @@ number_rounding.cpp does (roundingMag2 += 1). Status: fixed (TestRoundingPriorit
 **NF-3. Compact notation picks its wording from the unrounded magnitude.**
 `compact.go`. `ar {notation:"compact", compactDisplay:"long"}` 9999.9 is
 "10 آلاف", Node "10 ألف". ICU's CompactHandler takes the pattern for the
-rounded magnitude even where the divisor stays. Status: open.
+rounded magnitude even where the divisor stays. Status: fixed (TestCompactCarry).
 
 **NF-4. Compact currency uses the decimal patterns.** `compact.go`,
 `number.go`. ICU formats a compact currency with CLDR's currencyFormats short

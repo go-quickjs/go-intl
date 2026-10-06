@@ -211,10 +211,13 @@ func (f *NumberFormat) compactForm(magnitude mag, negative bool) compactForm {
 	if magnitude.isZero() {
 		return form
 	}
-	// ICU's chooseMultiplierAndApply: the pattern is the one for the
-	// number's power of ten, unless rounding carries it into the next power
-	// and that one divides by a different amount -- 999,999.5 is "1M", not
-	// "1000K".
+	// CompactHandler::processQuantity: the pattern is the one for the power
+	// of ten of the number as rounded. Rounding can carry it into the next
+	// power, and the pattern is that power's even where it divides by the
+	// same amount: Arabic writes 9999.9 as ten thousand, "10 ألف", not as
+	// ten thousands, "10 آلاف". Where the next power divides by another
+	// amount the number is rounded again by it (chooseMultiplierAndApply):
+	// 999,999.5 is "1M", not "1000K".
 	want := magnitude.exponent()
 	divisor := func(want int) int {
 		if exponent, ok := chooseCompact(patterns, want); ok {
@@ -226,8 +229,7 @@ func (f *NumberFormat) compactForm(magnitude mag, negative bool) compactForm {
 	}
 	by := divisor(want)
 	integer, fraction := f.round(magnitude.shift(-by), negative)
-	if rounded := makeMag(integer, fraction); !rounded.isZero() && rounded.exponent()+by != want &&
-		divisor(want+1) != by {
+	if rounded := makeMag(integer, fraction); !rounded.isZero() && rounded.exponent()+by != want {
 		want++
 	}
 	exponent, ok := chooseCompact(patterns, want)
