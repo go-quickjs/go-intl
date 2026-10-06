@@ -3,6 +3,8 @@ package intl
 import (
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/go-quickjs/go-intl/internal/listdata"
 )
@@ -49,6 +51,104 @@ type ListFormat struct {
 	locale   Locale
 	opts     ListFormatOptions
 	patterns listdata.Patterns
+	// context is the language's other two and end patterns, chosen by the
+	// item that follows the join; nil for a language without them.
+	context *listContext
+}
+
+// listContext is a pair of patterns a language uses in place of its own
+// before some words, and the test for those words.
+type listContext struct {
+	test     func(next string) bool
+	two, end string
+}
+
+// contextualPatterns is ICU's createPatternHandler (listformatter.cpp),
+// which changes the join in code, not data: Spanish "y" is "e" before an
+// "i" sound and "o" is "u" before an "o" sound, and Hebrew "ו" takes a dash
+// before a word not written in Hebrew. Only a pattern that is exactly the
+// one ICU looks for changes.
+func contextualPatterns(language string, p listdata.Patterns) *listContext {
+	type rule struct {
+		from, to string
+		test     func(string) bool
+	}
+	var rules []rule
+	switch language {
+	case "es":
+		rules = []rule{{"{0} y {1}", "{0} e {1}", spanishE}, {"{0} o {1}", "{0} u {1}", spanishU}}
+	case "he", "iw":
+		rules = []rule{{"{0} \u05D5{1}", "{0} \u05D5-{1}", hebrewVavDash}}
+	}
+	for _, r := range rules {
+		if p.Two != r.from && p.End != r.from {
+			continue
+		}
+		c := &listContext{test: r.test, two: p.Two, end: p.End}
+		if p.Two == r.from {
+			c.two = r.to
+		}
+		if p.End == r.from {
+			c.end = r.to
+		}
+		return c
+	}
+	return nil
+}
+
+// spanishE is ICU's shouldChangeToE: a word that begins "i" or "hi", but not
+// "hia" or "hie", whatever the case.
+func spanishE(next string) bool {
+	lower := func(i int) byte { return next[i] | 0x20 }
+	switch {
+	case next == "":
+		return false
+	case lower(0) == 'i':
+		return true
+	case lower(0) == 'h' && len(next) > 1 && lower(1) == 'i':
+		return len(next) == 2 || (lower(2) != 'a' && lower(2) != 'e')
+	}
+	return false
+}
+
+// spanishU is ICU's shouldChangeToU: a word that begins "o", "ho" or "8",
+// whatever the case, or the number eleven on its own.
+func spanishU(next string) bool {
+	switch {
+	case next == "":
+		return false
+	case next[0]|0x20 == 'o', next[0] == '8':
+		return true
+	case next[0]|0x20 == 'h' && len(next) > 1 && next[1]|0x20 == 'o':
+		return true
+	}
+	return strings.HasPrefix(next, "11") && (len(next) == 2 || next[2] == ' ')
+}
+
+// hebrewVavDash is ICU's shouldChangeToVavDash: a word whose first letter
+// is not of the Hebrew script.
+func hebrewVavDash(next string) bool {
+	if next == "" {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(next)
+	return !unicode.Is(unicode.Hebrew, r)
+}
+
+// two is the pattern that joins a list of two, before its second item.
+func (f *ListFormat) two(next string) string {
+	if f.context != nil && f.context.test(next) {
+		return f.context.two
+	}
+	return f.patterns.Two
+}
+
+// end is the pattern that joins the last item of a longer list.
+func (f *ListFormat) end(last string) string {
+	if f.context != nil && f.context.test(last) {
+		return f.context.end
+	}
+	return f.patterns.End
 }
 
 // NewListFormat builds a formatter from the data built into the package.
@@ -81,7 +181,8 @@ func NewListFormatFrom(src Source, loc Locale, opts ListFormatOptions) (*ListFor
 		return nil, fmt.Errorf("intl: %s has no list patterns: %w", loc, ErrNotFound)
 	}
 	// ListFormat uses nothing of the Unicode extension.
-	return &ListFormat{locale: loc.onlyKeywords(), opts: opts, patterns: p}, nil
+	return &ListFormat{locale: loc.onlyKeywords(), opts: opts, patterns: p,
+		context: contextualPatterns(loc.Language.String(), p)}, nil
 }
 
 func loadLists(src Source, loc Locale) (*listdata.Locale, error) {
@@ -140,7 +241,7 @@ func (f *ListFormat) FormatToParts(items []string) []ListPart {
 	case 1:
 		return []ListPart{{ListElement, items[0]}}
 	case 2:
-		return applyListPattern(f.patterns.Two,
+		return applyListPattern(f.two(items[1]),
 			[]ListPart{{ListElement, items[0]}},
 			[]ListPart{{ListElement, items[1]}})
 	}
@@ -158,7 +259,7 @@ func (f *ListFormat) formatFolding(items []string) []ListPart {
 	for i := len(items) - 2; i >= 1; i-- {
 		p := f.patterns.Middle
 		if i == len(items)-2 {
-			p = f.patterns.End
+			p = f.end(items[len(items)-1])
 		}
 		parts = applyListPattern(p, []ListPart{{ListElement, items[i]}}, parts)
 	}
@@ -174,7 +275,7 @@ func (f *ListFormat) formatFolding(items []string) []ListPart {
 func (f *ListFormat) formatInOrder(items []string) ([]ListPart, bool) {
 	start, ok1 := splitListPattern(f.patterns.Start)
 	middle, ok2 := splitListPattern(f.patterns.Middle)
-	end, ok3 := splitListPattern(f.patterns.End)
+	end, ok3 := splitListPattern(f.end(items[len(items)-1]))
 	if !ok1 || !ok2 || !ok3 {
 		return nil, false
 	}

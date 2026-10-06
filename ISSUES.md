@@ -108,7 +108,7 @@ Status: fixed (TestCurrencyNameParts).
 ["a","b","Isabel"] is "a, b y Isabel", Node "a, b e Isabel"; disjunction
 ["siete","ocho"] "siete o ocho", Node "siete u ocho"; `he` ["a","Bob"]
 lacks "ו-". ICU's listformatter.cpp chooses these in code, not data.
-Status: open.
+Status: fixed (TestListContextualJoins).
 
 **NF-16. DisplayNames drops a language's variants and dialect names.**
 `displaynames.go`. "en-GB-oxendict" is "British English", Node "British
