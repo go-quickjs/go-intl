@@ -13,7 +13,7 @@ import (
 // an entry in Divergences.
 func TestCompatFlags(t *testing.T) {
 	var all intl.Compat
-	for _, d := range intl.Divergences {
+	for _, d := range intl.Divergences() {
 		if d.Flag == 0 || all&d.Flag != 0 {
 			t.Errorf("%s: flag %d is zero or another's", d.Name, d.Flag)
 		}

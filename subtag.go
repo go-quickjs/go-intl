@@ -37,16 +37,12 @@ type Region [3]byte
 // beginning with a digit.
 type Variant [8]byte
 
-// Und is the undetermined language, which is what an identifier that names no
-// language means, and what "root" is written as.
-var Und Language
-
 // ParseLanguage reads a language subtag.
 func ParseLanguage(s string) (Language, error) {
 	var l Language
 	switch {
 	case s == "" || equalFold(s, "root"):
-		return Und, nil
+		return Language{}, nil
 	case !alphaOnly(s):
 		return l, fmt.Errorf("%w: language %q is not letters", ErrSyntax, s)
 	case len(s) < 2 || len(s) == 4 || len(s) > 8:
@@ -58,7 +54,7 @@ func ParseLanguage(s string) (Language, error) {
 		l[i] = toLower(s[i])
 	}
 	if l == undBytes {
-		return Und, nil
+		return Language{}, nil
 	}
 	return l, nil
 }
@@ -115,11 +111,16 @@ func ParseVariant(s string) (Variant, error) {
 // String writes the subtag. The undetermined language is written "und", which
 // is what it is called wherever a language has to be named.
 func (l Language) String() string {
-	if l == Und {
+	if l.IsUnd() {
 		return "und"
 	}
 	return trimZero(l[:])
 }
+
+// IsUnd reports whether the language is the undetermined one, "und", which
+// is what an identifier that names no language means and what "root" is
+// written as. It is the zero Language.
+func (l Language) IsUnd() bool { return l == Language{} }
 
 func (s Script) String() string  { return trimZero(s[:]) }
 func (r Region) String() string  { return trimZero(r[:]) }

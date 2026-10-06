@@ -18,7 +18,7 @@ func TestRoundingWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	date := func(y, m, d int) PlainDate {
-		p, err := NewPlainDate(y, m, d, ISOCalendar, Reject)
+		p, err := NewPlainDate(y, m, d, ISOCalendar(), Reject)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -40,7 +40,7 @@ func TestRoundingWindow(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got, _ := d.String(DefaultToStringOptions); got != c.until {
+		if got, _ := d.String(DefaultToStringOptions()); got != c.until {
 			t.Errorf("%v: until %s, want %s", c.compat, got, c.until)
 		}
 		year, err := ParseDuration([]byte("P1Y"))
@@ -51,7 +51,7 @@ func TestRoundingWindow(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got, _ := d.String(DefaultToStringOptions); got != c.year {
+		if got, _ := d.String(DefaultToStringOptions()); got != c.year {
 			t.Errorf("%v: round %s, want %s", c.compat, got, c.year)
 		}
 	}
@@ -81,7 +81,7 @@ func TestRepeatedMidnight(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := r.String(OffsetAuto, TimeZoneAuto, CalendarAuto, DefaultToStringOptions)
+		got, err := r.String(OffsetAuto, TimeZoneAuto, CalendarAuto, DefaultToStringOptions())
 		if err != nil {
 			t.Fatal(err)
 		}

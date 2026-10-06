@@ -6,7 +6,11 @@ import (
 )
 
 // ISOCalendar is the ISO 8601 calendar, which needs no data.
-var ISOCalendar = &Calendar{id: "iso8601", r: gregorianRules{eras: isoEras}}
+func ISOCalendar() *Calendar { return isoCalendar }
+
+// isoCalendar is ISOCalendar's calendar, which, like every Calendar, never
+// changes.
+var isoCalendar = &Calendar{id: "iso8601", r: gregorianRules{eras: isoEras}}
 
 func (c *Calendar) isISO() bool { return c.id == "iso8601" }
 

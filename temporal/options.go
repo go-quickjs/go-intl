@@ -424,14 +424,16 @@ func (r RoundingIncrement) validate(dividend uint64, inclusive bool) error {
 type ToStringRoundingOptions struct {
 	// Precision is fractionalSecondDigits: PrecisionAuto where not given.
 	// Its zero value is not the default but 0, no fractional digits, as
-	// fractionalSecondDigits: 0 is; start from DefaultToStringOptions.
+	// fractionalSecondDigits: 0 is; start from DefaultToStringOptions().
 	Precision    Precision
 	SmallestUnit Unit // NoUnit where not given
 	RoundingMode RoundingMode
 }
 
 // DefaultToStringOptions are toString's options where none are given.
-var DefaultToStringOptions = ToStringRoundingOptions{Precision: PrecisionAuto, SmallestUnit: NoUnit}
+func DefaultToStringOptions() ToStringRoundingOptions {
+	return ToStringRoundingOptions{Precision: PrecisionAuto, SmallestUnit: NoUnit}
+}
 
 type resolvedToString struct {
 	precision Precision
@@ -491,10 +493,6 @@ type DifferenceSettings struct {
 	// Compat chooses Node's side of intl.RoundingWindow.
 	Compat intl.Compat
 }
-
-// DefaultDifferenceSettings are until's and since's options where none are
-// given.
-var DefaultDifferenceSettings = DifferenceSettings{LargestUnit: NoUnit, SmallestUnit: NoUnit}
 
 // RoundingOptions are the options of round.
 type RoundingOptions struct {

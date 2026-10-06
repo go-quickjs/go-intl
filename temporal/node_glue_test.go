@@ -142,7 +142,7 @@ func (h *harness) calendarWithISODefault(v any) (*Calendar, error) {
 	}
 	c := get(v, "calendar")
 	if isUndefined(c) {
-		return ISOCalendar, nil
+		return ISOCalendar(), nil
 	}
 	return h.toCalendar(c)
 }

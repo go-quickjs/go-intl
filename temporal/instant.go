@@ -182,7 +182,7 @@ func (i Instant) Equals(o Instant) bool { return i.ns == o.ns }
 
 // ToZonedDateTimeISO is Temporal.Instant.prototype.toZonedDateTimeISO.
 func (i Instant) ToZonedDateTimeISO(tz TimeZone) (ZonedDateTime, error) {
-	return newZonedDateTimeWithOffset(i, tz, ISOCalendar)
+	return newZonedDateTimeWithOffset(i, tz, isoCalendar)
 }
 
 // String is Temporal.Instant.prototype.toString; a nil zone writes UTC

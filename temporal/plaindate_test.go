@@ -16,7 +16,7 @@ func TestPlainDateToZonedDateTimeOutOfRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := NewPlainDate(-271821, 4, 19, ISOCalendar, Reject)
+	d, err := NewPlainDate(-271821, 4, 19, ISOCalendar(), Reject)
 	if err != nil {
 		t.Fatal(err)
 	}

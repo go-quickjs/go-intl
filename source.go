@@ -173,7 +173,17 @@ var embeddedPack string
 // Embedded is the data built into this package. It is the default, so that the
 // simple path needs no setting up, and it is only a default: anything taking a
 // Source can be given another.
-var Embedded Source = packSource{embeddedPack}
+var Embedded EmbeddedSource
+
+// EmbeddedSource is Embedded's type, the data built into the package. Its
+// one value is its zero value, so that Embedded cannot be made to name
+// other data, by one importer for every other.
+type EmbeddedSource struct{}
+
+// Open serves the embedded data.
+func (EmbeddedSource) Open(m Marker, d DataLocale) ([]byte, error) {
+	return packSource{embeddedPack}.Open(m, d)
+}
 
 // packSource serves a pack in place.
 type packSource struct{ pack string }

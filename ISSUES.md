@@ -389,7 +389,15 @@ under 1.24 and 1.27 (uprops_test.go).
 
 **RU-4. Exported package variables can be reassigned.** `subtag.go` (Und),
 `compat.go` (Divergences), `source.go` (Embedded), `temporal` (Calendars,
-ISOCalendar). Status: open.
+ISOCalendar). Status: fixed. Und is gone, the zero Language being und, with
+Language.IsUnd to ask; Divergences and temporal.Calendars are functions
+returning a copy; temporal.ISOCalendar and temporal.DefaultToStringOptions
+are functions, and DefaultDifferenceSettings is gone, the zero
+DifferenceSettings being the default since API-7; Embedded is of a type,
+EmbeddedSource, with one value. Only error sentinels are left, as io.EOF
+is. A test parses the package for any other exported variable
+(exported_vars_test.go). go-quickjs's two ISOCalendar and five
+DefaultToStringOptions uses change with it.
 
 **RU-5. A generator's map order could make its output vary.**
 `internal/namegen` fill: two alternates of one width and no plain name take

@@ -30,7 +30,7 @@ func TestZeroOptionsAreDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, err := d.String(DefaultToStringOptions); err != nil || s != "P439D" {
+	if s, err := d.String(DefaultToStringOptions()); err != nil || s != "P439D" {
 		t.Errorf("PlainDate until: %q %v, want P439D", s, err)
 	}
 
@@ -48,7 +48,7 @@ func TestZeroOptionsAreDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, err := d.String(DefaultToStringOptions); err != nil || s != "PT21H57M57.0000005S" {
+	if s, err := d.String(DefaultToStringOptions()); err != nil || s != "PT21H57M57.0000005S" {
 		t.Errorf("PlainTime until: %q %v, want PT21H57M57.0000005S", s, err)
 	}
 
@@ -62,7 +62,7 @@ func TestZeroOptionsAreDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, err := r.String(DefaultToStringOptions); err != nil || s != "PT21H58M" {
+	if s, err := r.String(DefaultToStringOptions()); err != nil || s != "PT21H58M" {
 		t.Errorf("Round to minutes: %q %v, want PT21H58M", s, err)
 	}
 }

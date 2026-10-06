@@ -13,6 +13,7 @@ package temporal
 
 import (
 	"fmt"
+	"slices"
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/internal/eastasian"
@@ -51,8 +52,11 @@ type Calendar struct {
 
 // Calendars are the calendars Temporal reckons in, as Node's Temporal takes
 // them: every calendar Intl knows but the Islamic calendars that are not
-// arithmetic, "islamic" and "islamic-rgsa".
-var Calendars = []string{"buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic", "gregory",
+// arithmetic, "islamic" and "islamic-rgsa". The list is the caller's own, a
+// copy.
+func Calendars() []string { return slices.Clone(calendarIDs) }
+
+var calendarIDs = []string{"buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic", "gregory",
 	"hebrew", "indian", "islamic-civil", "islamic-tbla", "islamic-umalqura", "iso8601", "japanese",
 	"persian", "roc"}
 

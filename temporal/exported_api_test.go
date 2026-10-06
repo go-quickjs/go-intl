@@ -57,7 +57,7 @@ func TestExportedAPIIsCallable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s, err := d.String(temporal.DefaultToStringOptions); err != nil || s != "PT1H0.000002003S" {
+	if s, err := d.String(temporal.DefaultToStringOptions()); err != nil || s != "PT1H0.000002003S" {
 		t.Errorf("NewDuration: %q %v", s, err)
 	}
 	if _, err := temporal.NewDuration(0, 0, 0, 0, 1, 0, 0, 0, -2, 0); err == nil {

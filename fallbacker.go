@@ -319,7 +319,7 @@ func truncate(d DataLocale) DataLocale {
 	case !d.Script.IsZero():
 		d.Script = Script{}
 	default:
-		d.Language = Und
+		d.Language = Language{}
 	}
 	return d
 }
@@ -337,7 +337,7 @@ func (f *Fallbacker) Maximize(d DataLocale) (DataLocale, bool) {
 		{Language: d.Language, Script: d.Script},
 		{Language: d.Language},
 	}
-	if d.Language == Und {
+	if d.Language.IsUnd() {
 		// ICU's likely-subtags trie takes the script before the region
 		// where the language is unknown, as ICU4X does: "und-Cyrl-CN" is
 		// Russian in China, not Chinese in Cyrillic.
@@ -348,7 +348,7 @@ func (f *Fallbacker) Maximize(d DataLocale) (DataLocale, bool) {
 		if !ok {
 			continue
 		}
-		if d.Language != Und {
+		if !d.Language.IsUnd() {
 			got.Language = d.Language
 		}
 		if !d.Script.IsZero() {

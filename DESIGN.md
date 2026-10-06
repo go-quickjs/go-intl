@@ -158,7 +158,7 @@ of a few (the narrow space, two-letter tags, the collation keyword) and the
 standard's of the rest; `--node-quirks` takes Node's of all.
 
 Every divergence is a named, documented entry in `compat.go`
-(`Divergences`), with what the standard and Node each answer and a test on
+(`Divergences()`), with what the standard and Node each answer and a test on
 both sides. There are thirty-one.
 
 **If the list passes roughly twenty entries, standards mode is wrong somewhere

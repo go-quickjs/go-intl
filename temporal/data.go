@@ -21,7 +21,7 @@ func LoadData(src intl.Source) (*Data, error) {
 		return nil, err
 	}
 	d := &Data{Zones: zs, calendars: map[string]*Calendar{}}
-	for _, id := range Calendars {
+	for _, id := range calendarIDs {
 		c, err := NewCalendarFrom(src, id)
 		if err != nil {
 			return nil, err
@@ -51,7 +51,7 @@ func (d *Data) ParseRelativeTo(s []byte) (RelativeTo, error) {
 	}
 	calendarOf := func() (*Calendar, error) {
 		if !r.hasCal {
-			return ISOCalendar, nil
+			return isoCalendar, nil
 		}
 		id, err := calendarKindFromBytes(r.calendar)
 		if err != nil {

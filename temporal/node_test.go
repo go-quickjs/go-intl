@@ -353,24 +353,24 @@ func encodeResult(v any) any {
 	case *big.Int:
 		return map[string]any{"$big": x.String()}
 	case Duration:
-		s, _ := x.String(DefaultToStringOptions)
+		s, _ := x.String(DefaultToStringOptions())
 		return map[string]any{"$Duration": s}
 	case Instant:
 		return map[string]any{"$Instant": x.stringUTC()}
 	case PlainTime:
-		s, _ := x.String(DefaultToStringOptions)
+		s, _ := x.String(DefaultToStringOptions())
 		return map[string]any{"$PlainTime": s}
 	case PlainDate:
 		return map[string]any{"$PlainDate": x.String(CalendarAlways)}
 	case PlainDateTime:
-		s, _ := x.String(DefaultToStringOptions, CalendarAlways)
+		s, _ := x.String(DefaultToStringOptions(), CalendarAlways)
 		return map[string]any{"$PlainDateTime": s}
 	case PlainYearMonth:
 		return map[string]any{"$PlainYearMonth": x.String(CalendarAlways)}
 	case PlainMonthDay:
 		return map[string]any{"$PlainMonthDay": x.String(CalendarAlways)}
 	case ZonedDateTime:
-		s, _ := x.String(OffsetAuto, TimeZoneAuto, CalendarAlways, DefaultToStringOptions)
+		s, _ := x.String(OffsetAuto, TimeZoneAuto, CalendarAlways, DefaultToStringOptions())
 		return map[string]any{"$ZonedDateTime": s + " " + x.Offset()}
 	}
 	return v
@@ -834,7 +834,7 @@ func (h *harness) durationOps(m map[string]opFunc) {
 	m["method:Duration.negated"] = func(this any, _ func(int) any) (any, error) { return this.(Duration).Negated(), nil }
 	m["method:Duration.abs"] = func(this any, _ func(int) any) (any, error) { return this.(Duration).Abs(), nil }
 	m["method:Duration.toJSON"] = func(this any, _ func(int) any) (any, error) {
-		s, err := this.(Duration).String(DefaultToStringOptions)
+		s, err := this.(Duration).String(DefaultToStringOptions())
 		return s, rustErr(err)
 	}
 	m["method:Duration.add"] = func(this any, arg func(int) any) (any, error) {

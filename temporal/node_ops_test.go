@@ -168,7 +168,7 @@ func offsetOption(opts any, method string, fallback OffsetDisambiguation) (Offse
 // string CanonicalizeCalendar takes.
 func (h *harness) calendarArg(v any) (*Calendar, error) {
 	if isUndefined(v) {
-		return ISOCalendar, nil
+		return ISOCalendar(), nil
 	}
 	s, ok := v.(string)
 	if !ok {
@@ -334,19 +334,19 @@ func (h *harness) jsonOps(m map[string]opFunc) {
 		return this.(PlainMonthDay).String(CalendarAuto), nil
 	}
 	m["method:PlainTime.toJSON"] = func(this any, _ func(int) any) (any, error) {
-		s, err := this.(PlainTime).String(DefaultToStringOptions)
+		s, err := this.(PlainTime).String(DefaultToStringOptions())
 		return s, rustErr(err)
 	}
 	m["method:PlainDateTime.toJSON"] = func(this any, _ func(int) any) (any, error) {
-		s, err := this.(PlainDateTime).String(DefaultToStringOptions, CalendarAuto)
+		s, err := this.(PlainDateTime).String(DefaultToStringOptions(), CalendarAuto)
 		return s, rustErr(err)
 	}
 	m["method:Instant.toJSON"] = func(this any, _ func(int) any) (any, error) {
-		s, err := this.(Instant).String(h.zones, nil, DefaultToStringOptions)
+		s, err := this.(Instant).String(h.zones, nil, DefaultToStringOptions())
 		return s, rustErr(err)
 	}
 	m["method:ZonedDateTime.toJSON"] = func(this any, _ func(int) any) (any, error) {
-		s, err := this.(ZonedDateTime).String(OffsetAuto, TimeZoneAuto, CalendarAuto, DefaultToStringOptions)
+		s, err := this.(ZonedDateTime).String(OffsetAuto, TimeZoneAuto, CalendarAuto, DefaultToStringOptions())
 		return s, rustErr(err)
 	}
 }

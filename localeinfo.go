@@ -64,7 +64,7 @@ func withBase(l Locale, d DataLocale) Locale {
 // UnknownSubtags a locale that names all three is kept as it is.
 func (i *LocaleInfo) Maximize(l Locale) Locale {
 	d := l.Data()
-	if i.opts.Compat.Has(UnknownSubtags) && d.Language != Und && !d.Script.IsZero() && !d.Region.IsZero() {
+	if i.opts.Compat.Has(UnknownSubtags) && !d.Language.IsUnd() && !d.Script.IsZero() && !d.Region.IsZero() {
 		return l
 	}
 	full, ok := i.likely.Maximize(withoutUnknown(d))
@@ -281,7 +281,7 @@ const langDirections = "root-en-es-pt-zh-ja-ko-de-fr-it-ar+he+fa+ru-nl-pl-th-tr-
 func (i *LocaleInfo) RightToLeft(l Locale) (bool, error) {
 	script := l.Script
 	if script.IsZero() {
-		if lang := l.Language.String(); l.Language != Und {
+		if lang := l.Language.String(); !l.Language.IsUnd() {
 			if at := strings.Index(langDirections, lang); at >= 0 {
 				switch langDirections[at+len(lang)] {
 				case '-':

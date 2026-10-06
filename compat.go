@@ -1,6 +1,9 @@
 package intl
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Which behavior to reproduce where Node and the standard disagree.
 //
@@ -179,7 +182,7 @@ func (c Compat) String() string {
 		return "NodeICU"
 	}
 	var names []string
-	for _, d := range Divergences {
+	for _, d := range divergences {
 		if c.Has(d.Flag) {
 			names = append(names, d.Name)
 		}
@@ -189,8 +192,10 @@ func (c Compat) String() string {
 
 // Divergences are the places the two profiles differ, listed so that the set
 // can be read rather than discovered, with the flag that chooses Node's side
-// of each.
-var Divergences = []Divergence{
+// of each. The list is the caller's own, a copy.
+func Divergences() []Divergence { return slices.Clone(divergences) }
+
+var divergences = []Divergence{
 	{
 		Name: "NarrowSpace", Flag: NarrowSpace,
 		Area:     "DateTimeFormat",

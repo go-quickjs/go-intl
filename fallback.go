@@ -39,8 +39,8 @@ func (d DataLocale) Fallback() []DataLocale {
 		next.Script = Script{}
 		chain = append(chain, next)
 	}
-	if next.Language != Und {
-		next.Language = Und
+	if !next.Language.IsUnd() {
+		next.Language = Language{}
 		chain = append(chain, next)
 	}
 	return chain
