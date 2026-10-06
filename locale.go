@@ -239,13 +239,17 @@ func (l *Locale) parseUnicode(body []string) {
 
 // canonicalize puts the parts that have no order of their own into one, so
 // that two identifiers meaning the same thing are written the same way.
+//
+// The sorts are stable: of a key given twice, the first is the one meant,
+// and a sort that is not stable, as sort.Slice is past twelve elements,
+// could put the second first.
 func (l *Locale) canonicalize() {
-	sort.Slice(l.Variants, func(i, j int) bool {
+	sort.SliceStable(l.Variants, func(i, j int) bool {
 		return l.Variants[i].String() < l.Variants[j].String()
 	})
 	sort.Strings(l.Attributes)
-	sort.Slice(l.Keywords, func(i, j int) bool { return l.Keywords[i].Key < l.Keywords[j].Key })
-	sort.Slice(l.Extensions, func(i, j int) bool {
+	sort.SliceStable(l.Keywords, func(i, j int) bool { return l.Keywords[i].Key < l.Keywords[j].Key })
+	sort.SliceStable(l.Extensions, func(i, j int) bool {
 		return l.Extensions[i].Singleton < l.Extensions[j].Singleton
 	})
 }

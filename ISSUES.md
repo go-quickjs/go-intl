@@ -198,7 +198,7 @@ month 0 with an empty name: " 29, 100000(geng-zi)". Status: fixed (TestChineseAs
 `locale.go`. Keywords are sorted with sort.Slice, which is not stable past
 twelve elements, before the first of two duplicates is kept.
 `en-u-ca-gregory-co-phonebk-cu-usd-fw-mon-hc-h23-ka-shifted-kb-kc-kf-upper-kn-kr-space-ks-level1-ca-buddhist`
-canonicalizes with ca-buddhist, Node ca-gregory. Status: open.
+canonicalizes with ca-buddhist, Node ca-gregory. Status: fixed (TestDuplicateKeywordFirstWins).
 
 **LO-2. Canonicalizing can give the same variant twice.** `canonical.go`.
 `en-heploc-alalc97` is "en-alalc97-alalc97", Node "en-alalc97";
