@@ -137,7 +137,7 @@ comparing every calendar in 29 locales while fixing NF-16. Status: fixed (TestCa
 **NF-19. ListFormat keeps an empty item as an element.** `list.go`. `es`
 ["a",""] is [element "a", literal " y ", element ""], Node [element "a",
 literal " y "]: ICU's FormattedList has no field for an empty span. Found
-while fixing NF-15. Status: open.
+while fixing NF-15. Status: fixed (TestEmptyListItems): ECMA-402 writes the element, so this is the divergence EmptyListItems. go-quickjs must pass ListFormat its Compat for its Node side to see it.
 
 **NF-20. A locale with a script ICU's number data lacks resolves to it
 anyway.** `number.go`, the available locales. Node resolves `bm-Nkoo`,

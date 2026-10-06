@@ -26,8 +26,8 @@ import "strings"
 // options PluralRules reports, the unknown subtags a locale maximizes
 // past, the pattern an accounting amount with no sign takes, the offsets a
 // relative time names in words, the digits of a double rounded to an
-// increment, and which currencies a currency's own format is used for.
-// Standard and NodeICU are the two ends.
+// increment, which currencies a currency's own format is used for, and the
+// empty items of a list. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -140,6 +140,9 @@ const (
 	// currency asked for does not, and takes a currency's own pattern for
 	// its name and accounting forms too, as ICU does.
 	CurrencyFormats
+	// EmptyListItems leaves an empty item out of a list's parts, as ICU
+	// does.
+	EmptyListItems
 )
 
 const (
@@ -152,7 +155,8 @@ const (
 		DurationSeparator | LiteralFields | IslamicFallback | HourCycleKeyword | PlainValueZone |
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
-		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats
+		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
+		EmptyListItems
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -470,6 +474,16 @@ var Divergences = []Divergence{
 			"symbol and then the name, \"-US$1,234.50 US dollars\". Where a space comes " +
 			"between such a symbol and the number, ICU then puts the name one character " +
 			"early, \"-CVE\u00a01,234.5 Cape Verdean escudos0\", which is not reproduced",
+	},
+	{
+		Name: "EmptyListItems", Flag: EmptyListItems,
+		Area: "ListFormat",
+		What: "an empty string among the items of formatToParts",
+		Standard: "CreatePartsFromList writes each item as an element, an empty one too: " +
+			"[\"a\", \"\"] is an element \"a\", a literal \" and \" and an element \"\"",
+		Node: "ICU's FormattedList has no field for an empty span, so the item is left out " +
+			"and the literals either side of it are one: [\"a\", \"\", \"b\"] is \"a\", " +
+			"\", , and \", \"b\", and [\"\"] has no parts",
 	},
 }
 

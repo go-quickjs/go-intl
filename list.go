@@ -43,6 +43,9 @@ const (
 type ListFormatOptions struct {
 	Type  ListType
 	Style ListStyle
+
+	// Compat chooses between the standard and Node's observable behavior.
+	Compat Compat
 }
 
 // A ListFormat joins lists in one locale. It never changes after it is built
@@ -235,6 +238,31 @@ type ListPart struct {
 // first with the start pattern. That is what makes "a, b, and c" rather than
 // one separator repeated.
 func (f *ListFormat) FormatToParts(items []string) []ListPart {
+	parts := f.formatToParts(items)
+	if f.opts.Compat.Has(EmptyListItems) {
+		parts = dropEmptyItems(parts)
+	}
+	return parts
+}
+
+// dropEmptyItems leaves out the items that are empty, joining the text
+// either side of each, as ICU's FormattedList has no field for an empty
+// span: ["a", "", "b"] is "a", ", , and ", "b".
+func dropEmptyItems(parts []ListPart) []ListPart {
+	out := parts[:0:0]
+	for _, p := range parts {
+		switch {
+		case p.Kind == ListElement && p.Value == "":
+		case p.Kind == ListLiteral && len(out) > 0 && out[len(out)-1].Kind == ListLiteral:
+			out[len(out)-1].Value += p.Value
+		default:
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (f *ListFormat) formatToParts(items []string) []ListPart {
 	switch len(items) {
 	case 0:
 		return nil
