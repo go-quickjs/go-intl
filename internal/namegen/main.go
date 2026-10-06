@@ -30,6 +30,7 @@ type namesFile struct {
 			Languages   map[string]string `json:"languages"`
 			Territories map[string]string `json:"territories"`
 			Scripts     map[string]string `json:"scripts"`
+			Variants    map[string]string `json:"variants"`
 			Pattern     struct {
 				Locale    string `json:"localePattern"`
 				Separator string `json:"localeSeparator"`
@@ -103,13 +104,14 @@ func run(namesRoot, datesRoot string) error {
 	return nil
 }
 
-// alternates maps CLDR's alternate suffix to the width it belongs to.
+// alternates maps CLDR's alternate suffix to the width it belongs to. The
+// others, "variant" and "menu" among them, ICU keeps in tables of their own,
+// Languages%variant beside Languages, which its display names never read:
+// Japanese has "hi-Latn" only as a variant, and names it as Hindi in Latin.
 var alternates = map[string]int{
-	"":        namedata.Long,
-	"short":   namedata.Short,
-	"narrow":  namedata.Narrow,
-	"variant": namedata.Long,
-	"menu":    namedata.Long,
+	"":       namedata.Long,
+	"short":  namedata.Short,
+	"narrow": namedata.Narrow,
 }
 
 func read(main, datesMain, name string) (*namedata.Built, error) {
@@ -130,6 +132,7 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 	for file, kind := range map[string]int{
 		"territories.json": namedata.Region,
 		"scripts.json":     namedata.Script,
+		"variants.json":    namedata.Variant,
 	} {
 		raw, err := os.ReadFile(filepath.Join(main, name, file))
 		if err != nil {
@@ -144,8 +147,11 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 			continue
 		}
 		source := e.LocaleDisplayNames.Territories
-		if kind == namedata.Script {
+		switch kind {
+		case namedata.Script:
 			source = e.LocaleDisplayNames.Scripts
+		case namedata.Variant:
+			source = e.LocaleDisplayNames.Variants
 		}
 		fill(&out, kind, source)
 		any = true

@@ -116,7 +116,7 @@ English (Oxford English Dictionary spelling)"; "en-US-posix" "English (United
 States)", Node "American English (Computer)"; "ca-ES-valencia" "Catalan
 (Spain)", Node "Catalan (Spain, Valencian)". About half of 220 tags checked
 differ. Needs variant names in the data and UTS #35's dialect lookup.
-Status: open.
+Status: fixed (TestLanguageDisplayNames). Compared with Node over 1,046 tags in 14 locales with five sets of options, all 73,220 alike. go-quickjs rejects "en-US-posix", which canonicalizes to "en-US-u-va-posix", where V8 checks the code as given; that is fixed there when it takes this release.
 
 **NF-17. Three Node behaviours differ from ECMA-402 with no named
 divergence.** Accounting with signDisplay "never" (`nb` EUR: "€ 1,00", Node
@@ -127,6 +127,17 @@ and roundingIncrement on doubles past 16 digits (`{minimumFractionDigits:2,
 maximumFractionDigits:2, roundingIncrement:2}` 3.9967620239602476e27: Node
 "…248000…", go-intl "…247600…": ICU rounds an approximate value).
 Status: open.
+
+**NF-18. DisplayNames names the calendar "islamicc".** `internal/namegen`.
+`ar {type:"calendar", fallback:"none"}` "islamicc" is "التقويم الهجري
+المدني", Node undefined. namegen files CLDR's "islamic-civil" under
+"islamicc" too, a deprecated alias ICU's Types table does not have; found
+comparing every calendar in 29 locales while fixing NF-16. Status: open.
+
+**NF-19. ListFormat keeps an empty item as an element.** `list.go`. `es`
+["a",""] is [element "a", literal " y ", element ""], Node [element "a",
+literal " y "]: ICU's FormattedList has no field for an empty span. Found
+while fixing NF-15. Status: open.
 
 ## JavaScript-visible: DateTimeFormat and the calendars
 

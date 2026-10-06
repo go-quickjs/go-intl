@@ -98,6 +98,8 @@ type DisplayNames struct {
 	data     *namedata.Locale
 	width    int
 	currency *numdata.Locale
+	// canon puts a language's code in canonical form before it is named.
+	canon *Canonicalizer
 	// available are the currencies Intl.supportedValuesOf lists, sorted,
 	// which are the only ones named on the standard side (CurrencyNames).
 	available []string
@@ -129,6 +131,12 @@ func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*Dis
 		d.width = namedata.Narrow
 	default:
 		d.width = namedata.Long
+	}
+	if opts.Kind == DisplayLanguage {
+		// ECMA-402 names a language by its canonical code: "mo" is Romanian.
+		if d.canon, err = NewCanonicalizer(src, CanonicalizeOptions{Compat: opts.Compat}); err != nil {
+			return nil, err
+		}
 	}
 	if opts.Kind == DisplayCurrency {
 		// A currency's name lives with the number data, since that is where it
@@ -172,6 +180,11 @@ func loadNames(src Source, loc Locale, tree string) (*namedata.Locale, error) {
 //
 // The second result says whether a name was found. When none was, the first is
 // the code itself or empty, by the fallback option.
+//
+// A language is always named when the fallback is the code, as ICU names
+// one: a part of it with no name of its own is written as its code, "English
+// (XYZZY)". When the fallback is none, a part with no name leaves the whole
+// without one.
 func (d *DisplayNames) Of(code string) (string, bool) {
 	name, ok := d.lookup(code)
 	if ok {
@@ -233,41 +246,99 @@ var dateTimeFieldKeys = map[string]string{
 	"weekOfYear": "week", "dayPeriod": "dayperiod", "timeZoneName": "zone",
 }
 
-// language names a language, which is the only kind with a shape of its own: a
-// language qualified by a script or a region may have a name for the whole
-// thing, and where it does not the parts are put together.
+// language names a language, which is the only kind with a shape of its own,
+// as ICU's LocaleDisplayNamesImpl::localeDisplayName does: a language
+// qualified by a script or a region may have a name for the whole thing, and
+// what it does not name is put beside it, the script, the region and the
+// variants, "Catalan (Spain, Valencian)".
 func (d *DisplayNames) language(code string) (string, bool) {
-	loc, err := ParseLocale(code)
+	loc, err := d.canon.Canonicalize(code)
 	if err != nil {
 		return "", false
 	}
-	canonical := loc.Data().String()
-
-	if d.opts.LanguageDisplay == LanguageDialect {
-		if name, ok := d.data.Lookup(namedata.Language, d.width, canonical); ok {
+	// A part with no name is written as its code, or leaves the whole
+	// without a name: ICU's UDISPCTX_SUBSTITUTE, which V8 asks for by the
+	// fallback.
+	substitute := d.opts.Fallback == FallbackCode
+	lookup := func(kind int, key string) (string, bool) {
+		if name, ok := d.data.Lookup(kind, d.width, key); ok {
 			return name, true
 		}
+		return key, substitute
 	}
 
-	base, ok := d.data.Lookup(namedata.Language, d.width, loc.Language.String())
-	if !ok {
-		// Standard display still falls back to a whole-name match rather than
-		// answering nothing.
-		return d.data.Lookup(namedata.Language, d.width, canonical)
+	// ICU's language is empty for "und", which it names as "root".
+	lang := loc.Language.String()
+	if lang == "" || lang == "und" {
+		lang = "root"
 	}
+	script, region := loc.Script.String(), loc.Region.String()
+	// ICU's own spelling of the variants, upper case and sorted, POSIX among
+	// them however it was asked for: "sl-posix-rozaj" is "POSIX_ROZAJ".
+	var variants []string
+	for _, v := range loc.Variants {
+		variants = append(variants, strings.ToUpper(v.String()))
+	}
+	if v, ok := loc.Keyword("va"); ok && v == "posix" {
+		variants = append(variants, "POSIX")
+	}
+	slices.Sort(variants)
+	// V8 hands ICU the tag as a string, and ICU's parser takes four letters
+	// after the language for a script without asking what follows them, and
+	// reads no further: "de-baku1926" is German in the script "Baku".
+	if script == "" && region == "" && len(loc.Variants) > 0 {
+		if v := loc.Variants[0].String(); len(v) > 4 && isLetters(v[:4]) && !isLetters(v[4:5]) {
+			script, variants = strings.ToUpper(v[:1])+v[1:4], nil
+		}
+	}
+	hasScript, hasRegion := script != "", region != ""
+	name, named := "", false
+	if d.opts.LanguageDisplay == LanguageDialect {
+		// ICU tries the language with both a script and a region, then
+		// with one of them; but it does not clear the key between tries, so
+		// with both it finds only a name for all three: "en-Latn-GB" is
+		// English in Latin in the United Kingdom, not British English.
+		switch {
+		case hasScript && hasRegion:
+			if name, named = d.data.Lookup(namedata.Language, d.width, lang+"-"+script+"-"+region); named {
+				hasScript, hasRegion = false, false
+			}
+		case hasScript:
+			if name, named = d.data.Lookup(namedata.Language, d.width, lang+"-"+script); named {
+				hasScript = false
+			}
+		case hasRegion:
+			if name, named = d.data.Lookup(namedata.Language, d.width, lang+"-"+region); named {
+				hasRegion = false
+			}
+		}
+	}
+	if !named {
+		var ok bool
+		if name, ok = lookup(namedata.Language, lang); !ok {
+			return "", false
+		}
+	}
+
 	var qualifiers []string
-	if !loc.Script.IsZero() {
-		if name, ok := d.data.Lookup(namedata.Script, d.width, loc.Script.String()); ok {
-			qualifiers = append(qualifiers, name)
-		}
+	qualify := func(kind int, key string) bool {
+		q, ok := lookup(kind, key)
+		qualifiers = append(qualifiers, q)
+		return ok
 	}
-	if !loc.Region.IsZero() {
-		if name, ok := d.data.Lookup(namedata.Region, d.width, loc.Region.String()); ok {
-			qualifiers = append(qualifiers, name)
-		}
+	if hasScript && !qualify(namedata.Script, script) {
+		return "", false
+	}
+	if hasRegion && !qualify(namedata.Region, region) {
+		return "", false
+	}
+	// ICU names the variants together: "BISKE_ROZAJ", which has no name, so
+	// is written as it is.
+	if len(variants) > 0 && !qualify(namedata.Variant, strings.Join(variants, "_")) {
+		return "", false
 	}
 	if len(qualifiers) == 0 {
-		return base, true
+		return name, true
 	}
 
 	separator := d.data.Separator
@@ -282,7 +353,23 @@ func (d *DisplayNames) language(code string) (string, bool) {
 	if pattern == "" {
 		pattern = "{0} ({1})"
 	}
-	return fill2(pattern, base, joined), true
+	// The parentheses in what goes inside the pattern's become brackets,
+	// full width where the pattern's are: "English (Myanmar [Burma])".
+	brackets := strings.NewReplacer("(", "[", ")", "]")
+	if strings.ContainsRune(pattern, '\uFF08') {
+		brackets = strings.NewReplacer("\uFF08", "\uFF3B", "\uFF09", "\uFF3D")
+	}
+	return fill2(pattern, name, brackets.Replace(joined)), true
+}
+
+// isLetters reports whether s is all ASCII letters.
+func isLetters(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if !isAlpha(s[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // fill2 substitutes a two-placeholder pattern.

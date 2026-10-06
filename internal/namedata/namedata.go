@@ -13,7 +13,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 3
+const Version = 4
 
 // The kinds of name, in the order they are stored.
 const (
@@ -22,6 +22,9 @@ const (
 	Script
 	Calendar
 	DateTimeField
+	// Variant is a language's variant, keyed as ICU keys it: upper case,
+	// "VALENCIA", and long only.
+	Variant
 	Kinds
 )
 
