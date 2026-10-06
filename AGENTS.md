@@ -52,9 +52,11 @@ the difference is the change. A new upstream input goes into its source
 list as well as SOURCES.md.
 
 To run one generator on its own, its doc comment gives its arguments; run it
-from the repository root. A generator does its own replacing, and builds
-every table before writing any of them, so a failure partway leaves a matched
-set on disk rather than one new file beside one old one.
+from the repository root. A generator builds every table before writing any,
+then replaces them all as one through `internal/writeset`, which stages each
+file, swaps them in, and puts the old ones back if a swap fails, so a failure
+at any point leaves the data it found. A generator writes nothing any other
+way.
 
 The package embeds `data.pack`, the data directory packed into one file so
 it is read in place. After running a generator on its own, repack; a test

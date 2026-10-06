@@ -25,6 +25,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/unitdata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 // sanctioned maps ECMA-402's name for a unit to CLDR's, which carries the
@@ -112,14 +113,12 @@ func run(root string) error {
 		return fmt.Errorf("no locales found under %s", main)
 	}
 
-	out := filepath.Join("data", "units")
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	set := writeset.New()
+	if err := datawrite.AddLocales(set, filepath.Join("data", "units"), built); err != nil {
 		return err
 	}
-	if err := datawrite.Locales(out, built); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "unitsshared.bin"), pool.Bytes(), 0o644); err != nil {
+	set.File(filepath.Join("data", "unitsshared.bin"), pool.Bytes())
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "unitgen: %d locales, %d units each\n", len(built), len(sanctioned))

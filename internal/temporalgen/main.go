@@ -34,6 +34,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 	"io"
 	"os"
 	"path/filepath"
@@ -64,13 +65,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "temporalgen:", err)
 		os.Exit(1)
 	}
-	target := filepath.Join("data", "temporalcalendars.bin")
-	tmp := target + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, "temporalgen:", err)
-		os.Exit(1)
-	}
-	if err := os.Rename(tmp, target); err != nil {
+	if err := writeset.WriteFile(filepath.Join("data", "temporalcalendars.bin"), out); err != nil {
 		fmt.Fprintln(os.Stderr, "temporalgen:", err)
 		os.Exit(1)
 	}

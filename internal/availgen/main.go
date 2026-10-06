@@ -23,7 +23,7 @@
 // The file is an index (blob.Index), read where it lies, whose keys are a
 // service and a tag, "number zh-Hant-HK", with nothing under them. The index
 // of ICU's trees its resource fallback reads is written beside it (see
-// writeIndex).
+// buildIndex).
 package main
 
 import (
@@ -37,6 +37,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 func main() {
@@ -45,24 +46,34 @@ func main() {
 		os.Exit(2)
 	}
 	tzDir = os.Args[2]
-	out, err := build(os.Args[1])
+	if err := run(os.Args[1]); err != nil {
+		fmt.Fprintln(os.Stderr, "availgen:", err)
+		os.Exit(1)
+	}
+}
+
+// run builds data/available.bin, the indexes of ICU's trees and
+// data/values.bin, and replaces them together.
+func run(zip string) error {
+	available, err := build(zip)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "availgen:", err)
-		os.Exit(1)
+		return err
 	}
-	target := filepath.Join("data", "available.bin")
-	if err := os.WriteFile(target+".tmp", out, 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, "availgen:", err)
-		os.Exit(1)
+	index, err := buildIndex(zip)
+	if err != nil {
+		return err
 	}
-	if err := os.Rename(target+".tmp", target); err != nil {
-		fmt.Fprintln(os.Stderr, "availgen:", err)
-		os.Exit(1)
+	values, err := buildValues(zip)
+	if err != nil {
+		return err
 	}
-	if err := writeValues(os.Args[1]); err != nil {
-		fmt.Fprintln(os.Stderr, "availgen:", err)
-		os.Exit(1)
+	set := writeset.New()
+	set.File(filepath.Join("data", "available.bin"), available)
+	for name, b := range index {
+		set.File(filepath.Join("data", name), b)
 	}
+	set.File(filepath.Join("data", "values.bin"), values)
+	return set.Commit()
 }
 
 // tzDir is the time zone update's directory, which every read of a zone
@@ -258,9 +269,6 @@ func build(zip string) ([]byte, error) {
 		}
 	}
 
-	if err := writeIndex(zip); err != nil {
-		return nil, err
-	}
 	return blob.BuildIndex(records)
 }
 
@@ -268,7 +276,7 @@ func build(zip string) ([]byte, error) {
 // the runtime resolves a locale in as ICU does.
 var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "coll", "brkitr"}
 
-// writeIndex writes what ICU's resource fallback reads, so that go-intl can
+// buildIndex builds what ICU's resource fallback reads, so that go-intl can
 // open, for any locale, the bundle ICU opens. Each tree has a file,
 // data/icutree-<tree>.bin, an index (blob.Index) of its bundles ("bundle
 // <name>"), those that are aliases ("alias <name>", the target) and those
@@ -280,12 +288,12 @@ var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "
 // "sr-ME" is Serbian in Latin, "zh-TW" traditional Chinese and "az-Arab",
 // which ICU has no data for, the root. They are indexes so that a formatter
 // resolving its locale looks up what it needs where it lies.
-func writeIndex(zip string) error {
+func buildIndex(zip string) (map[string][]byte, error) {
 	files := map[string]map[string][]byte{}
 	for _, tree := range indexTrees {
 		t, err := icusrc.OpenTree(zip, tree)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		out := map[string][]byte{}
 		for _, name := range t.Names() {
@@ -293,7 +301,7 @@ func writeIndex(zip string) error {
 			n, err := t.Get(name)
 			if err != nil {
 				t.Close()
-				return err
+				return nil, err
 			}
 			if n == nil {
 				continue
@@ -310,7 +318,7 @@ func writeIndex(zip string) error {
 	}
 	defaults, parents, err := icusrc.FallbackTables()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	tables := map[string][]byte{}
 	for k, v := range defaults {
@@ -320,26 +328,13 @@ func writeIndex(zip string) error {
 		tables["icuparent "+k] = []byte(v)
 	}
 	files["icufallback.bin"] = tables
-	// Every file is built before any is written.
 	built := map[string][]byte{}
 	for name, records := range files {
 		b, err := blob.BuildIndex(records)
 		if err != nil {
-			return fmt.Errorf("%s: %w", name, err)
+			return nil, fmt.Errorf("%s: %w", name, err)
 		}
 		built[name] = b
 	}
-	for name, b := range built {
-		target := filepath.Join("data", name)
-		if err := os.WriteFile(target+".tmp", b, 0o644); err != nil {
-			return err
-		}
-	}
-	for name := range built {
-		target := filepath.Join("data", name)
-		if err := os.Rename(target+".tmp", target); err != nil {
-			return err
-		}
-	}
-	return nil
+	return built, nil
 }

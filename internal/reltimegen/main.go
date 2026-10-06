@@ -21,6 +21,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/reltimedata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 type file struct {
@@ -70,14 +71,12 @@ func run(root string) error {
 		return fmt.Errorf("no locales found under %s", main)
 	}
 
-	out := filepath.Join("data", "reltime")
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	set := writeset.New()
+	if err := datawrite.AddLocales(set, filepath.Join("data", "reltime"), built); err != nil {
 		return err
 	}
-	if err := datawrite.Locales(out, built); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "reltimeshared.bin"), pool.Bytes(), 0o644); err != nil {
+	set.File(filepath.Join("data", "reltimeshared.bin"), pool.Bytes())
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "reltimegen: %d locales\n", len(built))

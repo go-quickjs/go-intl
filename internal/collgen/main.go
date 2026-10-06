@@ -53,6 +53,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 const hanFlavor = "unihan"
@@ -164,19 +165,15 @@ func run(exportPath, dataPath, sourcesPath string) error {
 	}
 	sort.Strings(bcp.Installed)
 
-	out := filepath.Join("data", "collation")
-	if err := os.MkdirAll(out, 0o755); err != nil {
-		return err
-	}
-	if err := write(filepath.Join("data", "collationroot.bin"), colldata.EncodeRoot(root)); err != nil {
-		return err
-	}
-	if err := write(filepath.Join("data", "collationtree.bin"), colldata.EncodeTree(&bcp)); err != nil {
-		return err
-	}
+	set := writeset.New()
+	set.File(filepath.Join("data", "collationroot.bin"), colldata.EncodeRoot(root))
+	set.File(filepath.Join("data", "collationtree.bin"), colldata.EncodeTree(&bcp))
 	// The root's collations are "und", where every data set kept per locale
 	// has its root.
-	if err := datawrite.Locales(out, built); err != nil {
+	if err := datawrite.AddLocales(set, filepath.Join("data", "collation"), built); err != nil {
+		return err
+	}
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	if err := os.Remove(filepath.Join("data", "collation.bin")); err != nil && !os.IsNotExist(err) {
@@ -686,16 +683,4 @@ func dataTag(name string) (string, error) {
 		return "", fmt.Errorf("%s has more than a data locale holds", name)
 	}
 	return d.String(), nil
-}
-
-func write(target string, data []byte) error {
-	temporary := target + ".tmp"
-	if err := os.WriteFile(temporary, data, 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(temporary, target); err != nil {
-		os.Remove(temporary)
-		return err
-	}
-	return nil
 }

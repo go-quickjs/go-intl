@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -12,46 +10,46 @@ import (
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 )
 
-// writeValues writes data/values.bin: the lists Intl.supportedValuesOf
+// buildValues builds data/values.bin: the lists Intl.supportedValuesOf
 // answers with for collations, currencies and time zones, as V8 builds them
 // from ICU (intl-objects.cc), one "<key> <value>" line each; and for
 // Intl.Locale, each region's canonical zones ("zone <region> <id>"), the
 // collation types' BCP 47 spellings ("cotype phonebook phonebk") and the
 // scripts ICU writes right to left ("rtl Arab"). Calendars, numbering
 // systems and units are go-intl's own lists.
-func writeValues(zip string) error {
+func buildValues(zip string) ([]byte, error) {
 	var lines []string
 	collations, err := collationValues(zip)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, v := range collations {
 		lines = append(lines, "collation "+v)
 	}
 	currencies, err := currencyValues(zip)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, v := range currencies {
 		lines = append(lines, "currency "+v)
 	}
 	zones, err := zoneValues(zip)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, v := range zones {
 		lines = append(lines, "timezone "+v)
 	}
 	regional, err := regionZones(zip)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	lines = append(lines, regional...)
 	// The collation types' BCP 47 spellings where ICU's data spells them
 	// otherwise, "cotype phonebook phonebk", for the names Intl.Locale lists.
 	keyTypes, err := readMisc(zip, "keyTypeData")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if t := keyTypes.Get("typeMap", "collation"); t != nil {
 		var cotypes []string
@@ -65,17 +63,13 @@ func writeValues(zip string) error {
 	}
 	rtl, err := icusrc.RightToLeftScripts()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sort.Strings(rtl)
 	for _, script := range rtl {
 		lines = append(lines, "rtl "+script)
 	}
-	target := filepath.Join("data", "values.bin")
-	if err := os.WriteFile(target+".tmp", []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(target+".tmp", target)
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
 func readMisc(zip, name string) (*icutxt.Node, error) {

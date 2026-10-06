@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/listdata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 // names are the CLDR keys for each set, in the order listdata stores them.
@@ -79,11 +80,11 @@ func run(root string) error {
 		return fmt.Errorf("no locales found under %s", main)
 	}
 
-	out := filepath.Join("data", "lists")
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	set := writeset.New()
+	if err := datawrite.AddLocales(set, filepath.Join("data", "lists"), built); err != nil {
 		return err
 	}
-	if err := datawrite.Locales(out, built); err != nil {
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "listgen: %d locales\n", len(built))

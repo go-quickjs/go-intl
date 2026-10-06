@@ -368,7 +368,14 @@ without a temporary file; dategen and availgen write some tables before all
 are built. Seen three times on Windows while fixing NF-10 and DT-1: tzgen
 moved data/tz aside, could not rename data/tz.tmp into its place ("Access
 is denied", something holding the directory), and left the repository
-without data/tz until it was restored from git. Status: open.
+without data/tz until it was restored from git. Status: fixed. Every
+generator builds everything, then commits it as one internal/writeset Set:
+each file is staged beside its target, the old one is kept while all are
+swapped in, and a failed swap puts the old ones back. A directory a
+generator owns, data/tz or a locale directory, is replaced file by file
+rather than renamed whole, and renames are retried for five seconds, which
+outlasts the scanner that held them. packgen refuses a file a failed run
+left behind (internal/writeset/writeset_test.go).
 
 **RU-3. Currency spacing depends on the Go toolchain's Unicode.**
 `unicodeset.go`, `compact.go`. The sets come from Go's unicode tables, which

@@ -26,6 +26,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,13 +49,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "tzidgen:", err)
 		os.Exit(1)
 	}
-	target := filepath.Join("data", "temporalzones.bin")
-	tmp := target + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, "tzidgen:", err)
-		os.Exit(1)
-	}
-	if err := os.Rename(tmp, target); err != nil {
+	if err := writeset.WriteFile(filepath.Join("data", "temporalzones.bin"), out); err != nil {
 		fmt.Fprintln(os.Stderr, "tzidgen:", err)
 		os.Exit(1)
 	}

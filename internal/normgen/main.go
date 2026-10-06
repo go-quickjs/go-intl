@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/normdata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 //go:embed UnicodeData.txt
@@ -186,7 +187,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "normalization.bin"), out, 0o644); err != nil {
+	if err := writeset.WriteFile(filepath.Join("data", "normalization.bin"), out); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr,

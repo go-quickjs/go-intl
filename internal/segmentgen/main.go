@@ -57,6 +57,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 // ucdSHA256 are the Unicode Character Database 17.0.0's files read.
@@ -312,21 +313,7 @@ func ranges(in func(r rune) bool) [][2]rune {
 
 // write replaces data/brkitr, all built before any is written.
 func write(files map[string][]byte) error {
-	tmp := filepath.Join("data", "brkitr.tmp")
-	if err := os.RemoveAll(tmp); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(tmp, 0o755); err != nil {
-		return err
-	}
-	for name, b := range files {
-		if err := os.WriteFile(filepath.Join(tmp, name), b, 0o644); err != nil {
-			return err
-		}
-	}
-	final := filepath.Join("data", "brkitr")
-	if err := os.RemoveAll(final); err != nil {
-		return err
-	}
-	return os.Rename(tmp, final)
+	set := writeset.New()
+	set.Tree(filepath.Join("data", "brkitr"), files)
+	return set.Commit()
 }

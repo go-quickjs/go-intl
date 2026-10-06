@@ -28,6 +28,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 	"github.com/go-quickjs/go-intl/internal/zonedata"
 )
 
@@ -109,17 +110,13 @@ func run(zipPath, tzDir string) error {
 		return err
 	}
 
-	out := filepath.Join("data", "zonenames")
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	set := writeset.New()
+	if err := datawrite.AddLocales(set, filepath.Join("data", "zonenames"), built); err != nil {
 		return err
 	}
-	if err := datawrite.Locales(out, built); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "zonenamesshared.bin"), pool.Bytes(), 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "metazones.bin"), metaBytes, 0o644); err != nil {
+	set.File(filepath.Join("data", "zonenamesshared.bin"), pool.Bytes())
+	set.File(filepath.Join("data", "metazones.bin"), metaBytes)
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "zonegen: %d locales, %d zones, %d aliases\n", len(built), len(meta.Zones), len(meta.Aliases))

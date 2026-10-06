@@ -22,6 +22,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/namedata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 type namesFile struct {
@@ -90,14 +91,12 @@ func run(namesRoot, datesRoot string) error {
 		return fmt.Errorf("no locales found under %s", main)
 	}
 
-	out := filepath.Join("data", "names")
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	set := writeset.New()
+	if err := datawrite.AddLocales(set, filepath.Join("data", "names"), built); err != nil {
 		return err
 	}
-	if err := datawrite.Locales(out, built); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "namesshared.bin"), pool.Bytes(), 0o644); err != nil {
+	set.File(filepath.Join("data", "namesshared.bin"), pool.Bytes())
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "namegen: %d locales\n", len(built))

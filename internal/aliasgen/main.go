@@ -42,6 +42,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 func main() {
@@ -54,13 +55,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "aliasgen:", err)
 		os.Exit(1)
 	}
-	target := filepath.Join("data", "aliases.bin")
-	tmp := target + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, "aliasgen:", err)
-		os.Exit(1)
-	}
-	if err := os.Rename(tmp, target); err != nil {
+	if err := writeset.WriteFile(filepath.Join("data", "aliases.bin"), out); err != nil {
 		fmt.Fprintln(os.Stderr, "aliasgen:", err)
 		os.Exit(1)
 	}

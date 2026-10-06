@@ -36,6 +36,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/numdata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 //go:embed numberingSystems.json
@@ -182,25 +183,17 @@ func run(root, icuData string) error {
 	}
 	systemsTable := numdata.EncodeSystems(rootSystems)
 
-	out := filepath.Join("data", "numbers")
-	if err := os.MkdirAll(out, 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "currencydigits.bin"), fractions, 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "currencyregions.bin"), regions, 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "numberingsystems.bin"), systemsTable, 0o644); err != nil {
-		return err
-	}
+	set := writeset.New()
+	set.File(filepath.Join("data", "currencydigits.bin"), fractions)
+	set.File(filepath.Join("data", "currencyregions.bin"), regions)
+	set.File(filepath.Join("data", "numberingsystems.bin"), systemsTable)
 	// Anything left from a previous run for a locale CLDR no longer has would
 	// otherwise be served forever.
-	if err := datawrite.Locales(out, built); err != nil {
+	if err := datawrite.AddLocales(set, filepath.Join("data", "numbers"), built); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "numbersshared.bin"), pool.Bytes(), 0o644); err != nil {
+	set.File(filepath.Join("data", "numbersshared.bin"), pool.Bytes())
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "numbergen: %d locales\n", len(built))

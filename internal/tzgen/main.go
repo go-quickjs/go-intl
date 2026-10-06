@@ -54,6 +54,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 	"github.com/go-quickjs/go-intl/internal/tzdata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 func main() {
@@ -298,32 +299,15 @@ func buildWindows(dir string) ([]byte, error) {
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
-// write replaces data/tz and data/windowszones.bin, all built before any is
-// written. The names are ICU's, and so safe as paths.
+// write replaces data/tz and data/windowszones.bin together, all built
+// before any is written. The names are ICU's, and so safe as paths.
 func write(files map[string][]byte, windows []byte) error {
-	tmp := filepath.Join("data", "tz.tmp")
-	if err := os.RemoveAll(tmp); err != nil {
-		return err
-	}
+	tree := make(map[string][]byte, len(files))
 	for name, b := range files {
-		target := filepath.Join(tmp, filepath.FromSlash(name)+".bin")
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(target, b, 0o644); err != nil {
-			return err
-		}
+		tree[name+".bin"] = b
 	}
-	winTmp := filepath.Join("data", "windowszones.bin.tmp")
-	if err := os.WriteFile(winTmp, windows, 0o644); err != nil {
-		return err
-	}
-	final := filepath.Join("data", "tz")
-	if err := os.RemoveAll(final); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, final); err != nil {
-		return err
-	}
-	return os.Rename(winTmp, filepath.Join("data", "windowszones.bin"))
+	set := writeset.New()
+	set.Tree(filepath.Join("data", "tz"), tree)
+	set.File(filepath.Join("data", "windowszones.bin"), windows)
+	return set.Commit()
 }

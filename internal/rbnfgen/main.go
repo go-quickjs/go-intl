@@ -19,6 +19,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 	"github.com/go-quickjs/go-intl/internal/rbnfdata"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 func main() {
@@ -93,8 +94,7 @@ func run(zipPath string) error {
 		d.Groups = append(d.Groups, rbnfdata.Group{Name: name, Rules: rules.Values})
 	}
 
-	out := filepath.Join("data", "rbnf.bin")
-	if err := os.WriteFile(out, rbnfdata.Encode(&d), 0o644); err != nil {
+	if err := writeset.WriteFile(filepath.Join("data", "rbnf.bin"), rbnfdata.Encode(&d)); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "rbnfgen: %d systems in %d rule groups\n", len(d.Systems), len(d.Groups))

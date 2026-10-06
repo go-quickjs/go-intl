@@ -38,6 +38,7 @@ import (
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 //go:embed calendarPreferenceData.json
@@ -251,28 +252,12 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		return fmt.Errorf("no locales found under %s", main)
 	}
 
-	out := filepath.Join("data", "dates")
-	if err := os.MkdirAll(out, 0o755); err != nil {
-		return err
-	}
-	if err := datawrite.Locales(out, built); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "datesshared.bin"), pool.Bytes(), 0o644); err != nil {
-		return err
-	}
 	prefs, err := calendarPreferences()
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "calendarprefs.bin"), prefs, 0o644); err != nil {
-		return err
-	}
 	patterns, err := patternCalendars(icu, fb)
 	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "patterncalendars.bin"), patterns, 0o644); err != nil {
 		return err
 	}
 	hours, err := timeData()
@@ -287,20 +272,23 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "japaneseeras.bin"), eras, 0o644); err != nil {
-		return err
-	}
 	umm, err := ummAlQura()
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "ummalqura.bin"), umm, 0o644); err != nil {
+
+	set := writeset.New()
+	if err := datawrite.AddLocales(set, filepath.Join("data", "dates"), built); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join("data", "weekdata.bin"), week, 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join("data", "timedata.bin"), hours, 0o644); err != nil {
+	set.File(filepath.Join("data", "datesshared.bin"), pool.Bytes())
+	set.File(filepath.Join("data", "calendarprefs.bin"), prefs)
+	set.File(filepath.Join("data", "patterncalendars.bin"), patterns)
+	set.File(filepath.Join("data", "japaneseeras.bin"), eras)
+	set.File(filepath.Join("data", "ummalqura.bin"), umm)
+	set.File(filepath.Join("data", "weekdata.bin"), week)
+	set.File(filepath.Join("data", "timedata.bin"), hours)
+	if err := set.Commit(); err != nil {
 		return err
 	}
 

@@ -39,6 +39,7 @@ import (
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 //go:embed likelySubtags.json
@@ -105,15 +106,14 @@ func run() error {
 	// A line each, sorted, which the reader binary-searches.
 	regionTable := []byte(strings.Join(regions, "\n") + "\n")
 
-	// All are built before any is written, so a failure partway leaves a
-	// matched set on disk rather than one new table beside an old one.
-	if err := write("likelysubtags.bin", likelyTable); err != nil {
-		return err
-	}
-	if err := write("parentlocales.bin", parentTable); err != nil {
-		return err
-	}
-	if err := write("validregions.bin", regionTable); err != nil {
+	// All are built before any is written, and replaced together, so a
+	// failure leaves a matched set on disk rather than one new table beside
+	// an old one.
+	set := writeset.New()
+	set.File(filepath.Join("data", "likelysubtags.bin"), likelyTable)
+	set.File(filepath.Join("data", "parentlocales.bin"), parentTable)
+	set.File(filepath.Join("data", "validregions.bin"), regionTable)
+	if err := set.Commit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr,
@@ -185,17 +185,4 @@ func dataLocale(tag string) (intl.DataLocale, error) {
 		return intl.DataLocale{}, fmt.Errorf("%q is more than a data locale", tag)
 	}
 	return l.Data(), nil
-}
-
-func write(name string, data []byte) error {
-	target := filepath.Join("data", name)
-	temporary := target + ".tmp"
-	if err := os.WriteFile(temporary, data, 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(temporary, target); err != nil {
-		os.Remove(temporary)
-		return err
-	}
-	return nil
 }

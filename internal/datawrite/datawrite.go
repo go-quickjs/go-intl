@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	intl "github.com/go-quickjs/go-intl"
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 // SameFile is the table of locales whose data is another's.
@@ -34,9 +35,19 @@ const SameFile = "same.bin"
 // is left out: nothing could read it. ICU has no data under it, and Node
 // writes it as the locale without the variant, which the fallback does.
 //
-// Everything is built before anything is replaced, and each file goes
-// through a temporary one, so a failure leaves the old set.
+// Locales writes the set on its own; a generator writing more than one
+// file adds them all to one writeset.Set with AddLocales, and commits it
+// once, so that a failure leaves the old data.
 func Locales(dir string, files map[string][]byte) error {
+	s := writeset.New()
+	if err := AddLocales(s, dir, files); err != nil {
+		return err
+	}
+	return s.Commit()
+}
+
+// AddLocales adds the files Locales writes to a set, as the whole of dir.
+func AddLocales(s *writeset.Set, dir string, files map[string][]byte) error {
 	tags := make([]string, 0, len(files))
 	for tag := range files {
 		tags = append(tags, tag)
@@ -104,28 +115,16 @@ func Locales(dir string, files map[string][]byte) error {
 		same = append(same, p.value...)
 	}
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	old, _ := filepath.Glob(filepath.Join(dir, "*.bin"))
-	for _, name := range old {
-		if err := os.Remove(name); err != nil {
-			return err
-		}
-	}
+	out := map[string][]byte{}
 	for _, tag := range tags {
-		if _, shared := canonical[tag]; shared {
-			continue
-		}
-		if err := write(filepath.Join(dir, tag+".bin"), files[tag]); err != nil {
-			return err
+		if _, shared := canonical[tag]; !shared {
+			out[tag+".bin"] = files[tag]
 		}
 	}
 	if len(same) > 0 {
-		if err := write(filepath.Join(dir, SameFile), same); err != nil {
-			return err
-		}
+		out[SameFile] = same
 	}
+	s.Tree(dir, out)
 	return nil
 }
 
@@ -164,12 +163,4 @@ func Tags(dir string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
-}
-
-func write(target string, data []byte) error {
-	temporary := target + ".tmp"
-	if err := os.WriteFile(temporary, data, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(temporary, target)
 }
