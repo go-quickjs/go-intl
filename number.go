@@ -633,6 +633,14 @@ func (f *NumberFormat) layers(d Decimal, approximately bool) numberLayers {
 		form = f.compactForm(magnitude, negative)
 		compactNegative = form.hasNeg && (minusShown ||
 			strings.ContainsRune(form.negPrefix+form.negSuffix, '-') && (plusShown || approximately))
+		if form.whole {
+			// A currency's compact pattern stands in place of the currency
+			// or accounting pattern (ICU's TYPE_CURRENCY): the sign goes
+			// where its own negative form puts it, or before everything,
+			// "-$1.2K".
+			useNegative = false
+			prefix, suffix = "", ""
+		}
 	}
 	if !useNegative && !compactNegative && (minusShown || plusShown || approximately) {
 		l.pre = append(l.pre, symbols...)

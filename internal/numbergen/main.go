@@ -240,6 +240,22 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 			out.Others[i].RangePattern = latin
 		}
 	}
+	// CompactData::populate: a system with no currency compact patterns of
+	// its own takes the Latin system's.
+	latinCompact := out.CurrencyCompact
+	for _, s := range out.Others {
+		if s.NumberingSystem == "latn" {
+			latinCompact = s.CurrencyCompact
+		}
+	}
+	if len(out.CurrencyCompact) == 0 {
+		out.CurrencyCompact = latinCompact
+	}
+	for i := range out.Others {
+		if len(out.Others[i].CurrencyCompact) == 0 {
+			out.Others[i].CurrencyCompact = latinCompact
+		}
+	}
 
 	if raw, ok := entry.Numbers["minimumGroupingDigits"]; ok {
 		var s string
@@ -341,8 +357,9 @@ func readSystem(numbers map[string]json.RawMessage, system string, digits map[st
 		InsertBetween    string `json:"insertBetween"`
 	}
 	var currency struct {
-		Standard        string `json:"standard"`
-		Accounting      string `json:"accounting"`
+		Standard        string                       `json:"standard"`
+		Accounting      string                       `json:"accounting"`
+		Short           map[string]map[string]string `json:"short"`
 		CurrencySpacing struct {
 			Before spacing `json:"beforeCurrency"`
 			After  spacing `json:"afterCurrency"`
@@ -366,6 +383,7 @@ func readSystem(numbers map[string]json.RawMessage, system string, digits map[st
 	}
 	out.CompactShort = compactPatterns(decimal.Short["decimalFormat"])
 	out.CompactLong = compactPatterns(decimal.Long["decimalFormat"])
+	out.CurrencyCompact = compactPatterns(currency.Short["standard"])
 	// A system with no range pattern of its own takes the Latin one; the
 	// caller fills that in.
 	if raw, ok := numbers["miscPatterns-numberSystem-"+system]; ok {
@@ -577,13 +595,17 @@ func compactPatterns(in map[string]string) []numdata.CompactPattern {
 	out := make([]numdata.CompactPattern, 0, len(in))
 	for key, pattern := range in {
 		magnitude, count, ok := strings.Cut(key, "-count-")
-		if !ok {
+		// The alternates, "-alt-alphaNextToNumber", are not in ICU's data,
+		// which keeps the plain patterns alone.
+		if !ok || strings.Contains(count, "-alt-") {
 			continue
 		}
 		// A pattern of a bare "0" means the locale writes this magnitude out
-		// in full rather than compacting it, and carries no information.
+		// in full rather than compacting it. It is kept, as ICU keeps it
+		// (USE_FALLBACK), so that the magnitude does not take the pattern of
+		// one below it.
 		if strings.TrimSpace(pattern) == "0" {
-			continue
+			pattern = "0"
 		}
 		exponent := len(magnitude) - 1
 		if _, err := strconv.Atoi(magnitude); err != nil || exponent < 0 {

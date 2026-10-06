@@ -39,6 +39,9 @@ type compactForm struct {
 	// one, which places the sign: Swahili's "elfu 0;elfu -0".
 	negPrefix, negSuffix string
 	hasNeg               bool
+	// whole is a currency's compact pattern, which stands in place of the
+	// currency pattern, its sign and all, rather than inside it.
+	whole bool
 }
 
 // chooseCompact picks the pattern for a magnitude. It returns false when the
@@ -55,7 +58,14 @@ func chooseCompact(patterns []numdata.CompactPattern, want int) (int, bool) {
 			best, found = p.Exponent, true
 		}
 	}
-	return best, found
+	// CompactData::getPattern: a magnitude whose pattern is "0" is written
+	// out in full (USE_FALLBACK), not with a smaller magnitude's pattern.
+	for _, p := range patterns {
+		if found && p.Exponent == best && p.Pattern != "0" {
+			return best, true
+		}
+	}
+	return 0, false
 }
 
 // compactFor builds the form for one exponent and plural category, falling
@@ -63,7 +73,7 @@ func chooseCompact(patterns []numdata.CompactPattern, want int) (int, bool) {
 func compactFor(patterns []numdata.CompactPattern, exponent int, count string) (compactForm, bool) {
 	var chosen string
 	for _, p := range patterns {
-		if p.Exponent != exponent {
+		if p.Exponent != exponent || p.Pattern == "0" {
 			continue
 		}
 		if p.Count == count {
@@ -167,7 +177,7 @@ func isIgnorable(r rune) bool {
 func (f *NumberFormat) compactPieces(form compactForm, magnitude mag, negative bool,
 	useNegative bool, symbols []Part) (pre, body, post []Part) {
 	if form.noBody {
-		return compactAffix(nil, form.prefix), nil, nil
+		return f.compactText(nil, form.prefix), nil, nil
 	}
 
 	// The digit counts are settled once, when the formatter is built, so a
@@ -183,29 +193,52 @@ func (f *NumberFormat) compactPieces(form compactForm, magnitude mag, negative b
 		body = append(body, Part{PartDecimal, f.decimalSep}, Part{PartFraction, f.digits(fraction)})
 	}
 	if useNegative {
-		return compactSigned(form.negPrefix, symbols), body, compactSigned(form.negSuffix, symbols)
+		return f.compactSigned(form.negPrefix, symbols), body, f.compactSigned(form.negSuffix, symbols)
 	}
-	return compactAffix(nil, form.prefix), body, compactAffix(nil, form.suffix)
+	return f.compactText(nil, form.prefix), body, f.compactText(nil, form.suffix)
 }
 
 // compactSigned writes a compact affix whose minus is a sign placeholder.
-func compactSigned(affix string, symbols []Part) []Part {
+func (f *NumberFormat) compactSigned(affix string, symbols []Part) []Part {
 	var parts []Part
 	for i, piece := range strings.Split(affix, "-") {
 		if i > 0 {
 			parts = append(parts, symbols...)
+		}
+		parts = f.compactText(parts, piece)
+	}
+	return parts
+}
+
+// compactText writes a compact pattern's text: a currency's sign where the
+// pattern has one, "¤0K", and the rest as compactAffix writes it.
+func (f *NumberFormat) compactText(parts []Part, text string) []Part {
+	for i, piece := range strings.Split(text, "¤") {
+		if i > 0 {
+			parts = append(parts, Part{PartCurrency, f.currencyText})
 		}
 		parts = compactAffix(parts, piece)
 	}
 	return parts
 }
 
+// compactPatterns are the patterns compact notation writes with: a
+// currency's own where it is written with a symbol or a code, as ICU's
+// TYPE_CURRENCY, whose long form CLDR leaves to the short; the decimal ones
+// otherwise, a spelled-out currency name among them.
+func (f *NumberFormat) compactPatterns() ([]numdata.CompactPattern, bool) {
+	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay != CurrencyName {
+		return f.data.CurrencyCompact, true
+	}
+	if f.opts.CompactDisplay == CompactLong {
+		return f.data.CompactLong, false
+	}
+	return f.data.CompactShort, false
+}
+
 // compactForm chooses the compact pattern a magnitude is written with.
 func (f *NumberFormat) compactForm(magnitude mag, negative bool) compactForm {
-	patterns := f.data.CompactShort
-	if f.opts.CompactDisplay == CompactLong {
-		patterns = f.data.CompactLong
-	}
+	patterns, currency := f.compactPatterns()
 
 	form := compactForm{zeros: 1}
 	if magnitude.isZero() {
@@ -260,6 +293,7 @@ func (f *NumberFormat) compactForm(magnitude mag, negative bool) compactForm {
 				}
 				if exact != "" && hasCompactCount(patterns, exponent, exact) {
 					if form, ok := compactFor(patterns, exponent, exact); ok {
+						form.whole = currency
 						return form
 					}
 				}
@@ -274,6 +308,7 @@ func (f *NumberFormat) compactForm(magnitude mag, negative bool) compactForm {
 			} else {
 				form = first
 			}
+			form.whole = currency
 		}
 	}
 	return form

@@ -45,7 +45,7 @@ which replace the currency and accounting patterns. `en {style:"currency",
 currency:"USD", notation:"compact", compactDisplay:"long"}` 1234 is
 "$1.2 thousand", Node "$1.2K"; accounting −1234 "($1.2K)", Node "-$1.2K";
 `nl` −1234567 "US$ -1,2 mln.", Node "-US$ 1,2 mln."; `fa`, `ar`, `he`, `lo`,
-`de-CH` differ too. Status: open.
+`de-CH` differ too. Status: fixed (TestCompactCurrency).
 
 **NF-5. A compact percentage is not written as the unit percent.**
 `number.go`. V8 makes percent style the unit percent, and ICU writes a
