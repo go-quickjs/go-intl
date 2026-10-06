@@ -331,7 +331,9 @@ release that takes this (decimal_exact_test.go).
 ## Corrupt data
 
 **DA-1. A huge pool part number panics on 64-bit.** `internal/blob/blob.go`.
-`4*i+4 > len(s.ends)` overflows for i ≥ 2⁶¹. Status: open.
+`4*i+4 > len(s.ends)` overflows for i ≥ 2⁶¹. Status: fixed. The part
+number is compared with the number of parts, not multiplied out
+(internal/blob/blob_test.go).
 
 **DA-2. Corrupt collation tables panic.** `internal/colldata`,
 `collelements.go`. The trie and the element arrays are read without bounds

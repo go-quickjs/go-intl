@@ -275,3 +275,24 @@ func TestIndexVersion(t *testing.T) {
 		t.Error("an empty index read")
 	}
 }
+
+// A part number too large to multiply out is not in the pool: 4*i+4 had
+// overflowed to a small number for i at 2^61 and indexed out of range
+// (ISSUES.md DA-1).
+func TestHugePartNumber(t *testing.T) {
+	p := NewPool(3)
+	w := NewPooledWriter(3, p)
+	w.SharedString("one")
+	shared, err := ReadShared(p.Bytes(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range []int{math.MaxInt/4 + 1, math.MaxInt / 4, math.MaxInt, 1} {
+		if part, ok := shared.part(i); ok {
+			t.Errorf("part %d: %q", i, part)
+		}
+	}
+	if part, ok := shared.part(0); !ok || string(part) != "one" {
+		t.Errorf("part 0: %q, %v", part, ok)
+	}
+}
