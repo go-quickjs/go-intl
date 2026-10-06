@@ -1,0 +1,5 @@
+# Every file is checked out as it is committed, byte for byte, as Go's own
+# repository has it. The generated data is read as bytes, and several of
+# its files are lines of text: a checkout that turned their LFs into CRLFs,
+# as Git for Windows does by default, would no longer match data.pack.
+* -text
