@@ -200,7 +200,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 
 	case 'y':
 		if fd.count == 2 {
-			return f.number(p, fd.letter, mod(p.year, 100), 2)
+			return f.twoDigitYear(p, fd.letter, p.year)
 		}
 		// A calendar with one era counts back through zero before it:
 		// the Islamic year -435.
@@ -208,7 +208,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 	case 'Y':
 		year := f.weekYear(p)
 		if fd.count == 2 {
-			return f.number(p, fd.letter, mod(year, 100), 2)
+			return f.twoDigitYear(p, fd.letter, year)
 		}
 		return f.signedNumber(p, fd.letter, year, fd.count)
 	case 'u':
@@ -220,7 +220,7 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 			return cal.CyclicYears[p.year-1]
 		}
 		if fd.count == 2 {
-			return f.number(p, fd.letter, mod(p.year, 100), 2)
+			return f.twoDigitYear(p, fd.letter, p.year)
 		}
 		return f.signedNumber(p, fd.letter, p.year, fd.count)
 	case 'r':

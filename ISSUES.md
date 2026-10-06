@@ -184,7 +184,7 @@ likewise; `es-419 {month:"long", day:"2-digit"}` "13 de julio", Node
 **DT-5. A two-digit year below zero loses its sign.** `datepattern.go`.
 `en` persian `{year:"2-digit"}` 500 CE is "78 AP", Node "-22 AP"; Japanese,
 Hebrew, Buddhist, Indian likewise. ICU's zeroPaddingNumber(value, 2, 2)
-keeps the sign. Status: open.
+keeps the sign. Status: fixed (TestTwoDigitYearSign).
 
 **DT-6. The NodeICU Chinese and Dangi reckoning writes month 0 in the far
 future.** `calchinese.go`. ICU refuses a date outside two winter solstices

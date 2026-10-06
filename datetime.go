@@ -698,6 +698,20 @@ func (f *DateTimeFormat) signedNumber(p *dateParts, letter byte, v, width int) s
 	return f.number(p, letter, v, width)
 }
 
+// twoDigitYear is a year's last two digits, as ICU's
+// zeroPaddingNumber(value, 2, 2) writes them: a number of at most two
+// digits, so it keeps its sign. The Persian year -121 is "-21".
+func (f *DateTimeFormat) twoDigitYear(p *dateParts, letter byte, v int) string {
+	if v < 0 {
+		minus := f.minus
+		if minus == "" {
+			minus = "-"
+		}
+		return minus + f.number(p, letter, -v%100, 2)
+	}
+	return f.number(p, letter, v%100, 2)
+}
+
 func (f *DateTimeFormat) number(p *dateParts, letter byte, v, width int) string {
 	if system, ok := p.overrides[letter]; ok {
 		if rules, ok := f.rbnf[system]; ok {
