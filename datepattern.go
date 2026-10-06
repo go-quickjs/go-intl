@@ -107,6 +107,11 @@ type dateParts struct {
 	// hour12 and dayPeriod are worked out once rather than per field.
 	hour12    int
 	afternoon bool
+	// failed says the calendar cannot reckon the date, as ICU's Chinese
+	// astronomy cannot far enough from now, and yearStartFails whether it
+	// can find where a year starts, by its extended year.
+	failed         bool
+	yearStartFails func(eyear int) bool
 }
 
 func partsOf(t time.Time) dateParts {

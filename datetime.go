@@ -2,6 +2,7 @@ package intl
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -201,6 +202,10 @@ type DateTimeFormat struct {
 	// week is the region's week conventions, read when the pattern has a
 	// week-based year.
 	week weekRules
+	// calendarWeek are the week conventions of the formatter's calendar,
+	// which ICU's Chinese astronomy reckons the week of the year with
+	// (Check).
+	calendarWeek weekRules
 	// rules are the tables the calendar reckons with, read when it is the
 	// one in use.
 	rules calendarRules
@@ -314,6 +319,9 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 		if f.rules.eastAsian, err = loadEastAsian(src, system); err != nil {
 			return nil, err
 		}
+	}
+	if (system == Chinese || system == Dangi) && opts.Compat.Has(ChineseAstronomy) {
+		f.calendarWeek = loadWeekRules(src, loc)
 	}
 	if f.tz, f.zoneName, f.zoneID, err = loadZone(src, opts.TimeZone, opts.Compat); err != nil {
 		return nil, err
@@ -781,6 +789,44 @@ func (f *DateTimeFormat) digits(s string) string {
 		return s
 	}
 	return mapDigits(s, f.numbers.digits)
+}
+
+// ErrCalendarRange reports that a formatter's calendar cannot reckon an
+// instant, where Node throws a TypeError.
+var ErrCalendarRange = errors.New("intl: the calendar cannot reckon the date")
+
+// Check reports whether the formatter can write an instant: with
+// ChineseAstronomy, ICU's Chinese and Korean calendars cannot from about
+// the year 70,400 or before about the year -99,997, where the winter
+// solstices its astronomy finds no longer fall either side of a date it
+// needs, and Node throws. What Format writes for such an instant is not to
+// be relied on.
+func (f *DateTimeFormat) Check(t time.Time) error {
+	p := f.instant(t)
+	if p.failed {
+		return ErrCalendarRange
+	}
+	if p.yearStartFails == nil {
+		return nil
+	}
+	// Calendar::computeWeekFields asks for the length of the year the date
+	// is in, or of the one before where the date is in its last week, and
+	// handleGetYearLength finds where both years start.
+	firstDay := f.calendarWeek.firstDay + 1
+	dayOfWeek := p.weekday + 1
+	relDowJan1 := (dayOfWeek - p.dayOfYear + 7001 - firstDay) % 7
+	woy := (p.dayOfYear - 1 + relDowJan1) / 7
+	if 7-relDowJan1 >= f.calendarWeek.minDays {
+		woy++
+	}
+	year := p.extYear
+	if woy == 0 {
+		year--
+	}
+	if p.yearStartFails(year+1) || p.yearStartFails(year) {
+		return ErrCalendarRange
+	}
+	return nil
 }
 
 // Format writes an instant.

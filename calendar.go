@@ -287,6 +287,7 @@ func reckon(t time.Time, system CalendarSystem, rules calendarRules) dateParts {
 		p.day, p.dayOfYear = d.day, d.dayOfYear
 		p.extYear, p.relatedYear = d.extYear, d.extYear
 		p.yearLength = c.yearLength
+		p.failed, p.yearStartFails = d.failed, c.yearStartFails
 		return p
 	case Hebrew:
 		p.year, p.month, p.day, p.dayOfYear = hebrewDate(julianDay(t))

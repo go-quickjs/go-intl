@@ -190,7 +190,7 @@ keeps the sign. Status: fixed (TestTwoDigitYearSign).
 **DT-6. The NodeICU Chinese and Dangi reckoning writes month 0 in the far
 future.** `calchinese.go`. ICU refuses a date outside two winter solstices
 (chnsecal.cpp) and Node throws past about year 69,096; go-intl writes dangi
-month 0 with an empty name: " 29, 100000(geng-zi)". Status: open.
+month 0 with an empty name: " 29, 100000(geng-zi)". Status: fixed (TestChineseAstronomyRange): DateTimeFormat.Check reports ErrCalendarRange where ICU fails, its own solstice check and the year lengths Calendar::computeWeekFields asks for, which match Node's failing days exactly in both windows, for both calendars, by each locale's week rules. go-quickjs must call Check before formatting to throw where Node does.
 
 ## JavaScript-visible: locales
 

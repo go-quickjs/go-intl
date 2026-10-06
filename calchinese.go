@@ -145,6 +145,9 @@ type chineseDate struct {
 	extYear     int // the Gregorian year the Chinese year starts in
 	day         int
 	dayOfYear   int
+	// failed says ICU refuses the date: its solstices do not fall either
+	// side of it.
+	failed bool
 }
 
 // date reckons a local date, given as its Gregorian year and month and its
@@ -152,14 +155,8 @@ type chineseDate struct {
 func (c chineseReckoner) date(gyear int, gmonth time.Month, days int) chineseDate {
 	// computeMonthInfo: the winter solstices either side of the date
 	// place month 11.
-	solsticeAfter := c.winterSolstice(gyear)
-	var solsticeBefore int
-	if days < solsticeAfter {
-		solsticeBefore = c.winterSolstice(gyear - 1)
-	} else {
-		solsticeBefore = solsticeAfter
-		solsticeAfter = c.winterSolstice(gyear + 1)
-	}
+	solsticeBefore, solsticeAfter, ok := c.solsticesAround(gyear, days)
+	failed := !ok
 	firstMoon := c.newMoonNear(float64(solsticeBefore+1), true)
 	lastMoon := c.newMoonNear(float64(solsticeAfter+1), false)
 	thisMoon := c.newMoonNear(float64(days+1), false)
@@ -192,7 +189,33 @@ func (c chineseReckoner) date(gyear int, gmonth time.Month, days int) chineseDat
 		cycle: cycle + 1, yearOfCycle: yearOfCycle + 1,
 		extYear: eyear,
 		day:     days - thisMoon + 1, dayOfYear: days - newYear + 1,
+		failed: failed,
 	}
+}
+
+// solsticesAround is the start of computeMonthInfo: the winter solstices
+// ICU finds before and after a day, and whether they are either side of
+// it, which ICU fails where they are not; its astronomy comes to that some
+// seventy thousand years from now and a hundred thousand ago.
+func (c chineseReckoner) solsticesAround(gyear, days int) (before, after int, ok bool) {
+	after = c.winterSolstice(gyear)
+	if days < after {
+		before = c.winterSolstice(gyear - 1)
+	} else {
+		before = after
+		after = c.winterSolstice(gyear + 1)
+	}
+	return before, after, before <= days && days < after
+}
+
+// yearStartFails reports whether ICU fails to find the start of a Chinese
+// year, by its extended year, as handleComputeMonthStartWithLeap does for
+// its first month: computeMonthInfo for the new moon the year starts at.
+func (c chineseReckoner) yearStartFails(eyear int) bool {
+	newMoon := c.newMoonNear(float64(c.newYear(eyear)), true)
+	gyear := time.Unix(int64(newMoon)*86400, 0).UTC().Year()
+	_, _, ok := c.solsticesAround(gyear, newMoon)
+	return !ok
 }
 
 // yearLength is the days from the new year of a Chinese year, by its
