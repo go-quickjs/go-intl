@@ -102,8 +102,12 @@ func shiftDigits(integer, fraction string, exponent int) (string, string) {
 // writes it: the digits after rounding, and in compact or scientific
 // notation the power of ten written apart, which French and others count.
 func (f *NumberFormat) pluralOperands(v float64) operands {
-	negative := math.Signbit(v)
-	magnitude := magOf(v)
+	return f.operandsOf(magOf(v), math.Signbit(v))
+}
+
+// operandsOf are what plural rules see of a number's magnitude and sign as
+// this formatter writes them, as pluralOperands says.
+func (f *NumberFormat) operandsOf(magnitude mag, negative bool) operands {
 	switch f.opts.Notation {
 	case NotationCompact:
 		form := f.compactForm(magnitude, negative)

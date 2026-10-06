@@ -58,13 +58,13 @@ Status: fixed (TestCompactPercent).
 positive.** `number.go` (`f.round(magnitude, false)`). `en {style:"unit",
 unit:"day", unitDisplay:"long", maximumFractionDigits:0, roundingMode:
 "floor"}` −1.5 is "-2 day", Node "-2 days"; with ceil "-1 days", Node
-"-1 day". Status: open.
+"-1 day". Status: fixed (TestUnitPluralSignAndNotation).
 
 **NF-7. A unit's or currency's plural ignores scientific notation.**
 `number.go`. `pt {style:"unit", unit:"meter", unitDisplay:"long", notation:
 "scientific"}` 0.001 is "1E-3 metro", Node "1E-3 metros"; `lv`, `zu`, `pl`
 too. ICU picks the plural from the mantissa with the exponent as an operand.
-Status: open.
+Status: fixed (TestUnitPluralSignAndNotation).
 
 **NF-8. PluralRules.Select of NaN or an infinity returns a real category.**
 `plural.go`. `fr` Select(NaN) and Select(+Inf) are "one", `cy` NaN "few";

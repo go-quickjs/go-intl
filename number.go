@@ -682,7 +682,7 @@ func (f *NumberFormat) layers(d Decimal, approximately bool) numberLayers {
 	finite := d.kind == decimalFinite
 	if f.opts.Style == StyleCurrency && f.opts.CurrencyDisplay == CurrencyName || f.unit != "" {
 		l.outer = true
-		l.count = f.outerCount(magnitude, finite)
+		l.count = f.outerCount(magnitude, negative, finite)
 	}
 	var b strings.Builder
 	if negative {
@@ -722,13 +722,15 @@ func (f *NumberFormat) assemble(l numberLayers) []Part {
 // outerCount is the plural category a unit or currency name is chosen by.
 // It comes from the digits the formatter writes, not from the value: money
 // is written with two decimals, so one dollar is "1.00", which English calls
-// "dollars" rather than "dollar".
-func (f *NumberFormat) outerCount(magnitude mag, finite bool) string {
+// "dollars" rather than "dollar". The digits are rounded with the number's
+// sign, which a directed rounding mode needs -- -1.5 floored is -2 days --
+// and in scientific or compact notation are the mantissa's with the
+// exponent beside them, as ICU's LongNameHandler sees them: "1E-3 metros".
+func (f *NumberFormat) outerCount(magnitude mag, negative, finite bool) string {
 	if f.plurals == nil || !finite {
 		return string(PluralOther)
 	}
-	integer, fraction := f.round(magnitude, false)
-	o := operandsFor(padInteger(integer, f.minInt), fraction, 0)
+	o := f.operandsOf(magnitude, negative)
 	return string(f.plurals.selectOperands(&o))
 }
 
