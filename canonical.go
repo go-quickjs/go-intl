@@ -151,8 +151,7 @@ func (c *Canonicalizer) alias(table, from string) (string, bool) {
 }
 
 // legacyVariants is ICU's reading of private use: what follows "lvariant"
-// is variants, "-x-lvariant-posix" being "posix", and a lone variant
-// "posix" is written as the keyword "-u-va-posix".
+// is variants, "-x-lvariant-posix" being "posix".
 func legacyVariants(l Locale) (Locale, error) {
 	if l.Private != "" {
 		subtags := strings.Split(l.Private, "-")
@@ -179,12 +178,6 @@ func legacyVariants(l Locale) (Locale, error) {
 			break
 		}
 	}
-	if len(l.Variants) == 1 && l.Variants[0].String() == "posix" {
-		l.Variants = nil
-		if _, ok := l.Keyword("va"); !ok {
-			l.Keywords = append(l.Keywords, Keyword{Key: "va", Value: "posix"})
-		}
-	}
 	return l, nil
 }
 
@@ -194,9 +187,18 @@ func (c *Canonicalizer) CanonicalizeLocale(l Locale) Locale {
 	out.Variants = append([]Variant(nil), l.Variants...)
 	c.replaceAliases(&out)
 
+	// A lone variant "posix" left once the aliases are replaced is written
+	// as the keyword "-u-va-posix", as ICU writes it when it makes the tag,
+	// after AliasReplacer: "en-arevela-posix" is "en-u-va-posix".
+	keywords := l.Keywords
+	if len(out.Variants) == 1 && out.Variants[0].String() == "posix" {
+		out.Variants = nil
+		keywords = append(slices.Clip(keywords), Keyword{Key: "va", Value: "posix"})
+	}
+
 	out.Keywords = nil
 	seen := map[string]bool{}
-	for _, k := range l.Keywords {
+	for _, k := range keywords {
 		// A key given twice means what it said first.
 		if seen[k.Key] {
 			continue

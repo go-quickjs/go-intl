@@ -219,7 +219,7 @@ Status: fixed (TestKeywordRegionValid). A keyword with no value, "en-u-rg-gb" be
 **LO-5. A lone POSIX variant becomes -u-va-posix before aliases are
 replaced.** `canonical.go`. ICU makes the change when it writes the tag, after
 AliasReplacer. `en-arevela-posix` is "en-posix", Node "en-u-va-posix".
-Status: open.
+Status: fixed (TestLonePosixAfterAliases).
 
 **LO-6. Private use before lvariant is kept.** `canonical.go`. ICU's
 ultag_parse drops it. `en-x-foo-lvariant-abcde` is "en-abcde-x-foo", Node
