@@ -48,6 +48,13 @@ func (f *NumberFormat) FormatDecimalRangeToParts(start, end Decimal) ([]RangePar
 	if start.IsNaN() || end.IsNaN() {
 		return nil, fmt.Errorf("intl: a number range with an end that is not a number")
 	}
+	// A range's ends are rounded from the double's own decimal with Node's
+	// quirks too. V8 hands ICU a double for a range as for format, but
+	// ICU's range formatter reads each end through a Formattable, whose
+	// populateDecimalQuantity corrects the fast reading of a double
+	// (roundToInfinity), where formatDouble keeps it: ApproximateIncrement
+	// is never made of a range's ends.
+	start.fromFloat, end.fromFloat = false, false
 	a, b := f.layers(start, false), f.layers(end, false)
 	innerSame := sameParts(a.inner, b.inner)
 	middleSame := sameParts(a.pre, b.pre) && sameParts(a.post, b.post)

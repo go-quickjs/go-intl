@@ -474,7 +474,9 @@ var divergences = []Divergence{
 		Node: "ICU's DecimalQuantity reads a double by scaling it to an integer in floating " +
 			"point, which is right to about sixteen digits, and roundToIncrement divides " +
 			"those digits by the increment as decimals without correcting them, where its " +
-			"other roundings do: \"3,996,762,023,960,248,000,000,000,000.00\"",
+			"other roundings do: \"3,996,762,023,960,248,000,000,000,000.00\". A range's " +
+			"ends are the standard's: ICU's range formatter reads each through a Formattable, " +
+			"which corrects the reading",
 	},
 	{
 		Name: "CurrencyFormats", Flag: CurrencyFormats,

@@ -137,6 +137,12 @@ func TestApproximateIncrement(t *testing.T) {
 			if got := f.FormatDecimal(intl.ParseDecimal(intl.DecimalFromFloat(c.v).String())); got != c.standard {
 				t.Errorf("%+v %v %v as a decimal: %q, want %q", c.opts, c.v, side.compat, got, c.standard)
 			}
+			// So are a range's ends, which ICU reads through a Formattable
+			// that corrects the fast reading: Node writes formatRange(x, x)
+			// as "~" and the standard's digits.
+			if got, err := f.FormatRange(c.v, c.v); err != nil || got != "~"+c.standard {
+				t.Errorf("%+v %v %v as a range: %q, %v, want %q", c.opts, c.v, side.compat, got, err, "~"+c.standard)
+			}
 		}
 	}
 }
