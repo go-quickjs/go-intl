@@ -21,10 +21,15 @@ func (f *NumberFormat) exponentFor(magnitude mag) int {
 	if magnitude.isZero() {
 		return 0
 	}
-	e := magnitude.exponent()
+	return f.exponentAt(magnitude.exponent())
+}
+
+// exponentAt is the power of ten a number whose first digit stands at the
+// power e is written against: e itself, or in engineering notation the
+// multiple of three at or below it, a floor and not a truncation, so -4 goes
+// to -6 and not to -3.
+func (f *NumberFormat) exponentAt(e int) int {
 	if f.opts.Notation == NotationEngineering {
-		// Down to the multiple of three at or below it, which is a floor and
-		// not a truncation: -4 goes to -6, not to -3.
 		e = int(math.Floor(float64(e)/3)) * 3
 	}
 	return e
@@ -53,19 +58,20 @@ func (f *NumberFormat) scientificPieces(magnitude mag, negative bool) (body, inn
 // rounded digits of its mantissa.
 func (f *NumberFormat) scientificDigits(magnitude mag, negative bool) (int, string, string) {
 	exponent := f.exponentFor(magnitude)
-	mantissa := magnitude.shift(-exponent)
-
-	integer, fraction := f.round(mantissa, negative)
-	// Rounding can carry the mantissa past what the notation allows: 9.9995
-	// becomes 10.000, which in scientific notation is 1.000 one power higher.
-	limit := 1
-	if f.opts.Notation == NotationEngineering {
-		limit = 3
-	}
-	if len(integer) > limit {
-		exponent += len(integer) - limit
-		mantissa = magnitude.shift(-exponent)
-		integer, fraction = f.round(mantissa, negative)
+	integer, fraction := f.round(magnitude.shift(-exponent), negative)
+	// RoundingImpl::chooseMultiplierAndApply: rounding can carry the
+	// mantissa to the next power, 9.9995 to 10.000. The number is then
+	// written against the exponent of one power higher, rounded again from
+	// the start where that exponent is another: one power up in scientific
+	// notation, but in engineering only where the next power begins another
+	// group of three, so 999999.5 is 1E6 and 99999.5 stays 100E3.
+	if !magnitude.isZero() {
+		if trimmed := strings.TrimLeft(integer, "0"); trimmed != "" && exponent+len(trimmed)-1 > magnitude.exponent() {
+			if next := f.exponentAt(magnitude.exponent() + 1); next != exponent {
+				exponent = next
+				integer, fraction = f.round(magnitude.shift(-exponent), negative)
+			}
+		}
 	}
 	return exponent, padInteger(integer, f.minInt), fraction
 }

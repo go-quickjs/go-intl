@@ -7,10 +7,10 @@ says what goes wrong, how to see it, what the right answer is and where that
 answer comes from.
 
 An entry is closed by the commit that fixes it, with a regression test, and
-its status says which. Where a fix finds the entry was wrong, the status says
-that instead.
+its status names the test, which `git log -S` finds the commit by. Where a
+fix finds the entry was wrong, the status says that instead.
 
-Status: **open**, **fixed** (commit), or **not a bug** (why).
+Status: **open**, **fixed** (the test), or **not a bug** (why).
 
 ## JavaScript-visible: NumberFormat, PluralRules and their kin
 
@@ -20,7 +20,7 @@ the next power.** `scientific.go`. `en {notation:"engineering"}` 999999.5 is
 `fr` engineering 0.99999 is "many", Node "one". On a carry the exponent moves
 by one where engineering must move to the next multiple of three, as ICU's
 ScientificHandler does (getMultiplier(magnitude+1), and re-rounding as
-chooseMultiplierAndApply does). Status: open.
+chooseMultiplierAndApply does). Status: fixed (TestScientificCarry). The French plural the review gave as "one" is "many" in Node too.
 
 **NF-2. roundingPriority picks the wrong side when both counts round at the
 same place and rounding carries.** `digits.go`. `en {maximumSignificantDigits:3,
