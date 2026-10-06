@@ -92,7 +92,7 @@ datagen inherited short ones. Status: open.
 **NF-12. Burmese writes a currency name on the wrong side.** Data. `my` GBP
 currencyDisplay name −700.3 is "ဗြိတိသျှ ပေါင် -၇၀၀.၃၀", Node
 "-၇၀၀.၃၀ ဗြိတိသျှ ပေါင်". cldr-json's unitPattern is "{1} {0}", ICU's
-curr/my.txt "{0} {1}". Status: open.
+curr/my.txt "{0} {1}". Status: fixed (TestCurrencyUnitPatterns). The patterns now come from ICU's curr tree for every locale; over 25,740 currency amounts only Burmese changed.
 
 **NF-13. Scientific signDisplay ignores a mantissa that rounds to zero.**
 `number.go`. `de-CH {notation:"scientific", signDisplay:"exceptZero",

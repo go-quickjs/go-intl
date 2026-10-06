@@ -144,6 +144,9 @@ func run(root, icuData string) error {
 		if l.CurrencyFormats, err = currencyFormats(curr, fb, e.Name()); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		if l.UnitPatterns, err = currencyUnitPatterns(curr, fb, e.Name()); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		built[e.Name()] = numdata.Encode(l, pool)
 		locales[e.Name()] = l
 	}
@@ -288,29 +291,6 @@ func readLocale(main, name string, digits map[string]string) (*numdata.Locale, e
 	if out.MinimumGroupingDigits < 1 {
 		out.MinimumGroupingDigits = 1
 	}
-
-	// The patterns that join an amount to a spelled-out currency name do not
-	// vary by numbering system in any locale, so the default's are kept.
-	var currencyPatterns map[string]json.RawMessage
-	if err := unmarshalKey(entry.Numbers, "currencyFormats-numberSystem-"+system,
-		&currencyPatterns); err != nil {
-		return nil, err
-	}
-	for key, raw := range currencyPatterns {
-		count, ok := strings.CutPrefix(key, "unitPattern-count-")
-		if !ok {
-			continue
-		}
-		var text string
-		if err := json.Unmarshal(raw, &text); err != nil || text == "" {
-			continue
-		}
-		out.UnitPatterns = append(out.UnitPatterns,
-			numdata.CountedText{Count: count, Text: text})
-	}
-	sort.Slice(out.UnitPatterns, func(i, j int) bool {
-		return out.UnitPatterns[i].Count < out.UnitPatterns[j].Count
-	})
 
 	if out.Currencies, err = readCurrencies(main, name); err != nil {
 		return nil, err
@@ -645,6 +625,35 @@ func currencyRegionsTable() ([]byte, error) {
 		}
 	}
 	return []byte(b.String()), nil
+}
+
+// currencyUnitPatterns are the patterns that join an amount to a currency's
+// name, by plural category, as ICU's LongNameHandler reads them: the curr
+// tree's CurrencyUnitPatterns, each category from the first bundle that has
+// it. cldr-json resolves them otherwise for a locale that does not give its
+// own: Burmese, which inherits the root's "{0} {1}" in ICU, has "{1} {0}".
+func currencyUnitPatterns(curr *icusrc.Locales, fb icusrc.Fallback, name string) ([]numdata.CountedText, error) {
+	chain, err := curr.Resolve(strings.ReplaceAll(name, "-", "_"), fb)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []numdata.CountedText
+	for _, n := range chain {
+		patterns := n.Get("CurrencyUnitPatterns")
+		if patterns == nil {
+			continue
+		}
+		for _, p := range patterns.Children {
+			if seen[p.Key] || p.Value == "" {
+				continue
+			}
+			seen[p.Key] = true
+			out = append(out, numdata.CountedText{Count: p.Key, Text: p.Value})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Count < out[j].Count })
+	return out, nil
 }
 
 // currencyFormats are the currencies a locale writes by a pattern and
