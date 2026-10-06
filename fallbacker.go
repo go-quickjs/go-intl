@@ -337,6 +337,12 @@ func (f *Fallbacker) Maximize(d DataLocale) (DataLocale, bool) {
 		{Language: d.Language, Script: d.Script},
 		{Language: d.Language},
 	}
+	if d.Language == Und {
+		// ICU's likely-subtags trie takes the script before the region
+		// where the language is unknown, as ICU4X does: "und-Cyrl-CN" is
+		// Russian in China, not Chinese in Cyrillic.
+		keys[1], keys[2] = keys[2], keys[1]
+	}
 	for _, key := range keys {
 		got, ok := f.likely.lookup(key)
 		if !ok {

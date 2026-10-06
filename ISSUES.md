@@ -208,7 +208,7 @@ drops repeated variants (uloc_tag.cpp). Status: fixed (TestVariantGivenTwice).
 **LO-3. und with a script and a region is maximized by the region first.**
 `fallbacker.go`. ICU and ICU4X look up und_S_R, then und_S, then und_R.
 `und-Cyrl-CN` maximizes to "zh-Cyrl-CN", Node "ru-Cyrl-CN"; minimize "zh-Cyrl",
-Node "ru-CN". 237 of 33,216 combinations. Status: open.
+Node "ru-CN". 237 of 33,216 combinations. Status: fixed (TestLikelySubtagsUndScriptFirst). Of 7,700 language, script and region combinations, maximize and minimize all now match Node; the 149 that differed were all und with a script and a region.
 
 **LO-4. A -u-rg- or -u-sd- region is not checked.** `localeinfo.go`,
 `skeleton.go`. ICU ignores a region not in RegionValidateMap
