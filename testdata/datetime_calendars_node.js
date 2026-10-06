@@ -1,7 +1,8 @@
 // Writes testdata/datetime_calendars_node.txt.gz: what Node's DateTimeFormat
 // writes in every calendar it supports, in forty locales chosen for their
 // scripts and calendars, under styles and field sets, for dates from 1900 to
-// 2077 -- leap days, year ends and the turn of eras among them.
+// 2077 -- leap days, year ends and the turn of eras among them, the first
+// days of the Japanese eras too.
 //
 //	node testdata/datetime_calendars_node.js
 //
@@ -25,6 +26,10 @@ const configs = [
 const instants = [
   Date.UTC(1900, 2, 1), Date.UTC(1970, 0, 1), Date.UTC(2000, 1, 29), Date.UTC(2024, 0, 5, 15, 4),
   Date.UTC(2024, 2, 20), Date.UTC(2024, 8, 15), Date.UTC(2033, 5, 1), Date.UTC(2077, 10, 11),
+  // The first days of the Japanese eras, whose first years are written
+  // 元年 where the pattern asks for it, and the days either side of Reiwa's.
+  Date.UTC(1912, 6, 30), Date.UTC(1926, 11, 25), Date.UTC(1989, 0, 8), Date.UTC(2019, 3, 30),
+  Date.UTC(2019, 4, 1), Date.UTC(2019, 11, 31),
 ];
 
 const lines = [];
