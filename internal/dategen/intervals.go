@@ -161,6 +161,54 @@ func intervalsFromICU(chain []*icutxt.Node, calendar string) (string, []datedata
 	return intervalFallback(chain, calendar), out, nil
 }
 
+// availableFromICU is a calendar's available formats in the order ICU's
+// pattern generator adds them (addCLDRData's AvailableFormatsSink, through
+// ures_getAllChildrenWithFallback): the locale's own bundle first, its keys
+// in sorted order, then each bundle up the chain for the skeletons the ones
+// before it lacked, and a calendar whose formats are an alias to another's
+// then goes on to that one's, as the interval formats do. The order decides
+// between two skeletons equally near one asked for, and cldr-json, which
+// resolves a locale's formats into one set, loses it: Spanish in Latin
+// America takes "d-MMMM" for a day and a long month, as its own bundle
+// adds it first, not Spanish's "d 'de' MMMM".
+func availableFromICU(chain []*icutxt.Node, calendar string) ([]datedata.Skeleton, error) {
+	var out []datedata.Skeleton
+	have := map[string]bool{}
+	seen := map[string]bool{}
+	for cal := calendar; cal != ""; {
+		if seen[cal] {
+			return nil, fmt.Errorf("the available formats of %s alias in a loop", calendar)
+		}
+		seen[cal] = true
+		next := ""
+		for _, n := range chain {
+			formats := n.Get("calendar", cal, "availableFormats")
+			if formats == nil {
+				continue
+			}
+			if formats.Alias {
+				const prefix, suffix = "/LOCALE/calendar/", "/availableFormats"
+				if !strings.HasPrefix(formats.Value, prefix) || !strings.HasSuffix(formats.Value, suffix) {
+					return nil, fmt.Errorf("an available formats alias to %q", formats.Value)
+				}
+				next = formats.Value[len(prefix) : len(formats.Value)-len(suffix)]
+				continue
+			}
+			skeletons := append([]*icutxt.Node(nil), formats.Children...)
+			sort.Slice(skeletons, func(i, j int) bool { return skeletons[i].Key < skeletons[j].Key })
+			for _, s := range skeletons {
+				if have[s.Key] || s.Table || s.Alias || len(s.Values) > 0 || s.Value == "" {
+					continue
+				}
+				have[s.Key] = true
+				out = append(out, datedata.Skeleton{ID: s.Key, Pattern: s.Value})
+			}
+		}
+		cal = next
+	}
+	return out, nil
+}
+
 // intervalFallback is the pattern ICU joins a range with when nothing better
 // fits, as DateIntervalInfo::initializeData reads it: the calendar's
 // "intervalFormats/fallback" up the chain, where the tables up the chain

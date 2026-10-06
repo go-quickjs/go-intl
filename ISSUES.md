@@ -180,7 +180,7 @@ Data (`dategen`) and `dtpg.go`. ICU adds them bundle by bundle, the child
 first, and keeps the first of two equally near; datagen sorts them by ID.
 `en-ZA {month:"numeric", day:"2-digit"}` is "13/7", Node "07/13"; `es-PA`
 likewise; `es-419 {month:"long", day:"2-digit"}` "13 de julio", Node
-"13-julio". Status: open.
+"13-julio". Status: fixed (TestAvailableFormatsOrder). Over 13,630 Gregorian option sets in every locale Node supports, all now match Node, from 25 differing. The entry's claim that ICU keeps the first of two equally near is right; ICU's AvailableFormatsSink also lets every entry, the root's included, override a pattern the styles made.
 
 **DT-5. A two-digit year below zero loses its sign.** `datepattern.go`.
 `en` persian `{year:"2-digit"}` 500 CE is "78 AP", Node "-22 AP"; Japanese,

@@ -198,8 +198,14 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		if greg.IntervalFallback, greg.Intervals, err = intervalsFromICU(chain, "gregorian"); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		if greg.Available, err = availableFromICU(chain, "gregorian"); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
 		iso := isoCalendar(*greg, chain)
 		if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, "iso8601"); err != nil {
+			return fmt.Errorf("%s: iso8601: %w", e.Name(), err)
+		}
+		if iso.Available, err = availableFromICU(chain, "iso8601"); err != nil {
 			return fmt.Errorf("%s: iso8601: %w", e.Name(), err)
 		}
 		for i := range extras {
@@ -219,6 +225,9 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
 			}
 			if c.IntervalFallback, c.Intervals, err = intervalsFromICU(chain, extras[i].cldr); err != nil {
+				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
+			}
+			if c.Available, err = availableFromICU(chain, extras[i].cldr); err != nil {
 				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
 			}
 			l.Calendars = append(l.Calendars, datedata.NamedCalendar{

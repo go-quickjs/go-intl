@@ -1,9 +1,6 @@
 package main
 
 import (
-	"sort"
-	"strings"
-
 	"github.com/go-quickjs/go-intl/internal/datedata"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 )
@@ -36,17 +33,9 @@ func isoCalendar(greg datedata.Calendar, chain []*icutxt.Node) *datedata.Calenda
 		break
 	}
 
-	available := map[string]string{}
+	// The available formats are availableFromICU's.
 	var items [datedata.Fields]string
 	for _, n := range chain {
-		if t := n.Get("calendar", "iso8601", "availableFormats"); t != nil && t.Table {
-			for _, s := range t.Children {
-				if _, done := available[s.Key]; !done && !s.Table && !s.Alias && s.Value != "" &&
-					!strings.Contains(s.Key, "-alt-") {
-					available[s.Key] = s.Value
-				}
-			}
-		}
 		if t := n.Get("calendar", "iso8601", "appendItems"); t != nil && t.Table {
 			for i, key := range appendFields {
 				if key == "" || items[i] != "" {
@@ -57,13 +46,6 @@ func isoCalendar(greg datedata.Calendar, chain []*icutxt.Node) *datedata.Calenda
 				}
 			}
 		}
-	}
-	if len(available) > 0 {
-		c.Available = nil
-		for id, text := range available {
-			c.Available = append(c.Available, datedata.Skeleton{ID: id, Pattern: text})
-		}
-		sort.Slice(c.Available, func(i, j int) bool { return c.Available[i].ID < c.Available[j].ID })
 	}
 	for i, item := range items {
 		if item != "" {

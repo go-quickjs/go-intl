@@ -9,13 +9,12 @@ package datedata
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 6
+const Version = 7
 
 // The widths a name may be written at, in the order they are stored.
 const (
@@ -107,7 +106,8 @@ type Calendar struct {
 	// them with "at" there and with a comma otherwise.
 	AtTimeFormats [Lengths]string
 
-	// Available are the skeletons the locale answers, sorted by id.
+	// Available are the skeletons the locale answers, in the order ICU's
+	// pattern generator adds them, which decides between two equally near.
 	Available []Skeleton
 
 	// DateNumbers and TimeNumbers are the numbering overrides of the style
@@ -220,15 +220,6 @@ func pick(sets []Names, context, width, index int) string {
 		}
 	}
 	return ""
-}
-
-// Skeleton finds the pattern for an exact skeleton.
-func (c *Calendar) Skeleton(id string) (string, bool) {
-	i := sort.Search(len(c.Available), func(i int) bool { return c.Available[i].ID >= id })
-	if i < len(c.Available) && c.Available[i].ID == id {
-		return c.Available[i].Pattern, true
-	}
-	return "", false
 }
 
 // Locale holds the calendars a locale has data for, keyed by name, and the
