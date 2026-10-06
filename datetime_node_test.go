@@ -55,6 +55,14 @@ func TestDateTimeCalendarsMatchNode(t *testing.T) {
 	testDateTimeAgainstNode(t, "testdata/datetime_calendars_node.txt.gz")
 }
 
+// TestDateTimeCalendarsInEveryLocaleMatchNode holds every calendar but the
+// Gregorian to Node in every locale whose date data is its own, more
+// thinly (ISSUES.md TE-1). The expectations are written by
+// testdata/datetime_calendars_all_node.js.
+func TestDateTimeCalendarsInEveryLocaleMatchNode(t *testing.T) {
+	testDateTimeAgainstNode(t, "testdata/datetime_calendars_all_node.txt.gz")
+}
+
 // TestDateTimeFeaturesMatchNode holds dayPeriod, fractionalSecondDigits and
 // the six timeZoneName styles to Node, in every locale. The expectations are
 // written by testdata/datetime_features_node.js.
