@@ -97,7 +97,7 @@ curr/my.txt "{0} {1}". Status: open.
 **NF-13. Scientific signDisplay ignores a mantissa that rounds to zero.**
 `number.go`. `de-CH {notation:"scientific", signDisplay:"exceptZero",
 minimumFractionDigits:3, maximumFractionDigits:3, roundingIncrement:2500}` 1
-is "+0.000E0", Node "0.000E0". Status: open.
+is "+0.000E0", Node "0.000E0". Status: fixed (TestScientificSignOfZero).
 
 **NF-14. formatToParts splits a currency name's pattern text.** `number.go`.
 `ro` CHF name, maximumFractionDigits 0, 100: `[literal " de ", currency

@@ -866,11 +866,15 @@ func (f *NumberFormat) roundsToZero(m mag, negative bool) bool {
 	if m.isZero() {
 		return true
 	}
+	integer, fraction := "", ""
 	switch f.opts.Notation {
 	case NotationScientific, NotationEngineering:
-		return false
+		// The mantissa as written decides, which a rounding increment can
+		// take to zero: 1 to the nearest 2.5 thousandths is "0.000E0".
+		_, integer, fraction = f.scientificDigits(m, negative)
+	default:
+		integer, fraction = f.round(m, negative)
 	}
-	integer, fraction := f.round(m, negative)
 	return strings.Trim(integer, "0") == "" && strings.Trim(fraction, "0") == ""
 }
 
