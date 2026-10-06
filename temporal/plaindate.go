@@ -1,6 +1,9 @@
 package temporal
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // ISOCalendar is the ISO 8601 calendar, which needs no data.
 var ISOCalendar = &Calendar{id: "iso8601", r: gregorianRules{eras: isoEras}}
@@ -135,6 +138,12 @@ func newISODateWithOverflow(year, month, day int, overflow Overflow) (ISODate, e
 
 // regulateISODateRS is IsoDate::regulate over u8 fields.
 func regulateISODateRS(year, month, day int, overflow Overflow) (ISODate, error) {
+	// temporal_rs holds a year in an i32, and a year outside it is no ISO
+	// date at all, before the limits are asked: 4294969316 had wrapped to
+	// 2020.
+	if year < math.MinInt32 || year > math.MaxInt32 {
+		return ISODate{}, rangeError("Invalid ISO date.")
+	}
 	if overflow == Constrain {
 		month = clamp(month, 1, 12)
 		return ISODate{year, month, clamp(day, 1, gregorianMonthLength(year, month))}, nil

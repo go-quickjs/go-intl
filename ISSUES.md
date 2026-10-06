@@ -271,7 +271,7 @@ Status: fixed (TestDateAddMinInt64). A full validity check in front of DateAdd w
 
 **API-4. Temporal wraps years outside int32.** `temporal/plaindate.go`.
 `NewPlainDate(4294969316, 1, 1, ISOCalendar, Reject)` succeeds and prints
-"2020-01-01"; Node "Invalid ISO date.". Status: open.
+"2020-01-01"; Node "Invalid ISO date.". Status: fixed (TestYearOutsideInt32).
 
 **API-5. A Hebrew date far out of range hangs.** `temporal/lunisolar.go`.
 `heb.Date(ISODate{1<<40, 6, 15})` overflows and loops; the solar calendars
