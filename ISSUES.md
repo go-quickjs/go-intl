@@ -228,7 +228,7 @@ ultag_parse drops it. `en-x-foo-lvariant-abcde` is "en-abcde-x-foo", Node
 **LO-7. HostLocale gives up on a POSIX locale with a modifier.**
 `hostlocale.go`. `LANG=de_DE.UTF-8@euro` becomes en-US; ICU's toLanguageTag
 keeps German, "de-DE-x-lvariant-euro". `de@euro` reads as the script Euro.
-Status: open.
+Status: fixed (TestLocaleFromICUID), following ICU's _appendVariantsToLanguageTag; Node on Windows reads the Windows locale, not LANG, so this could not be checked against it here.
 
 **LO-8. A -t- extension's fields are ordered by key alone.** `canonical.go`.
 ICU sorts them by key and value. `art-CS-t-m0-names-names-m0-hwidth-names`:
