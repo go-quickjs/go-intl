@@ -467,7 +467,10 @@ Standard, and the 7,065,792 pairs of RU-1 still match Node
 
 **PE-2. Temporal's until in months is quadratic in the Chinese and Dangi
 calendars.** `temporal/arith.go`. 48,000 years take 17 s, Node 6 s.
-Status: open.
+Status: fixed. Each month until tried was balanced from the first year
+again, walking the years; the next is now balanced from the last, a month
+on, which reaches the same day. 48,000 years take 0.04 s where they took
+31 s here, and Node 21 s (temporal/until_months_test.go).
 
 ## Tests and dead code
 

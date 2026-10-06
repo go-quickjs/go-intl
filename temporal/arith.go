@@ -350,6 +350,13 @@ type surpassesChecker struct {
 	m0           int
 	endOfMonth   arithDate
 	regulatedDay int
+	// lastMonths and last are the months surpassesMonths last balanced and
+	// where they came to, which the next, a month on, starts from rather
+	// than walking the years from y0 again: until in months over thousands
+	// of Chinese years had been quadratic.
+	lastMonths int
+	last       arithDate
+	haveLast   bool
 }
 
 func (s *surpassesChecker) surpassesYears(years int) bool {
@@ -361,16 +368,32 @@ func (s *surpassesChecker) surpassesYears(years int) bool {
 		m0 = 1
 	}
 	s.m0 = m0
+	s.haveLast = false
 	return surpasses || s.surpassesMonths(0)
 }
 
 func (s *surpassesChecker) surpassesMonths(months int) bool {
-	added := s.c.balance(s.y0, months+s.m0, 1)
+	added := s.monthsOn(months)
 	return s.compareOrdinal(added.y, added.month, s.parts.day)
 }
 
+// monthsOn is the first of the month months after y0's m0: balance(y0,
+// months+m0, 1), balanced from the month last asked for, which gives the
+// same day, a month's first day being reached from any other by its
+// months alone.
+func (s *surpassesChecker) monthsOn(months int) arithDate {
+	var added arithDate
+	if s.haveLast {
+		added = s.c.balance(s.last.y, s.last.month+months-s.lastMonths, 1)
+	} else {
+		added = s.c.balance(s.y0, months+s.m0, 1)
+	}
+	s.lastMonths, s.last, s.haveLast = months, added, true
+	return added
+}
+
 func (s *surpassesChecker) setMonths(months int) {
-	added := s.c.balance(s.y0, months+s.m0, 1)
+	added := s.monthsOn(months)
 	s.endOfMonth = s.c.balance(added.y, added.month+1, 0)
 	s.regulatedDay = s.parts.day
 	if s.parts.day >= s.endOfMonth.day {
