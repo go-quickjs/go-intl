@@ -100,6 +100,9 @@ func run(exportPath, dataPath, sourcesPath string) error {
 	if err != nil {
 		return fmt.Errorf("root: %w", err)
 	}
+	if root.Data.Unsafe, err = rootUnsafe(sourcesPath, dat); err != nil {
+		return fmt.Errorf("root: %w", err)
+	}
 
 	installed := map[string]bool{}
 	for _, name := range tree.Installed {
@@ -389,7 +392,7 @@ func buildRoot(files exportFiles) (*colldata.Root, error) {
 	return root, nil
 }
 
-func buildLocale(name string, files exportFiles, def string, compiled map[string]*colldata.Data) (*colldata.Locale, error) {
+func buildLocale(name string, files exportFiles, def string, compiled map[string]compiled) (*colldata.Locale, error) {
 	loc := &colldata.Locale{Default: def}
 	kinds := make([]string, 0, len(files))
 	for kind := range files {
@@ -415,8 +418,16 @@ func buildLocale(name string, files exportFiles, def string, compiled map[string
 			}
 			c.Data = d
 		}
-		if d, ok := compiled[kind]; ok {
-			c.Data = d
+		if cc, ok := compiled[kind]; ok {
+			if cc.data != nil {
+				c.Data = cc.data
+			}
+			if cc.unsafe != nil {
+				if c.Data == nil {
+					return nil, fmt.Errorf("%s adds unsafe-backward ranges to no table", kind)
+				}
+				c.Data.Unsafe = colldata.MakeU32s(cc.unsafe)
+			}
 		}
 		if parts["reord"] != nil {
 			o, err := buildReordering(parts["reord"])

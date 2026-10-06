@@ -34,6 +34,16 @@ type Dat map[string][]byte
 // Read reads icudt78l.dat out of the source release, after checking the
 // release's checksum.
 func Read(sources string) (Dat, error) {
+	dat, err := ReadSourceFile(sources, datPath)
+	if err != nil {
+		return nil, err
+	}
+	return parseDat(dat)
+}
+
+// ReadSourceFile reads one file of the source release, such as
+// "icu/source/i18n/collunsafe.h", after checking the release's checksum.
+func ReadSourceFile(sources, name string) ([]byte, error) {
 	raw, err := os.ReadFile(sources)
 	if err != nil {
 		return nil, err
@@ -46,26 +56,18 @@ func Read(sources string) (Dat, error) {
 		return nil, err
 	}
 	r := tar.NewReader(z)
-	var dat []byte
 	for {
 		h, err := r.Next()
 		if err == io.EOF {
-			break
+			return nil, fmt.Errorf("%s has no %s", sources, name)
 		}
 		if err != nil {
 			return nil, err
 		}
-		if h.Name == datPath {
-			if dat, err = io.ReadAll(r); err != nil {
-				return nil, err
-			}
-			break
+		if h.Name == name {
+			return io.ReadAll(r)
 		}
 	}
-	if dat == nil {
-		return nil, fmt.Errorf("%s has no %s", sources, datPath)
-	}
-	return parseDat(dat)
 }
 
 // parseDat splits a common data file: its header, then a table of contents

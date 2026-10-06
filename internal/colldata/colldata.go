@@ -19,12 +19,13 @@ package colldata
 import (
 	"encoding/binary"
 	"fmt"
+	"sort"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
 )
 
 // Version is the encoding's version.
-const Version = 2
+const Version = 3
 
 // Data is the table of one collation: the root, or one language's changes to
 // it.
@@ -39,6 +40,31 @@ type Data struct {
 	// Contexts holds the contraction and prefix tries, each after a default
 	// element.
 	Contexts U16s
+	// Unsafe is ICU's unsafe-backward set, as an inversion list: the start
+	// of each range, then the character after it. A string ICU compares
+	// from after the prefix it shares with another is compared from no
+	// later than a character in it, which a contraction or a combining
+	// mark might join to what precedes it. The root's is the set ICU
+	// carries in collunsafe.h with the root table's own ranges; a
+	// tailoring's holds only the ranges it adds to the root's.
+	Unsafe U32s
+}
+
+// InUnsafe reports whether a character is in the data's unsafe-backward
+// set.
+func (d *Data) InUnsafe(c rune) bool { return d.UnsafeIntersects(c, c) }
+
+// UnsafeIntersects reports whether any character from lo to hi is in the
+// data's unsafe-backward set.
+func (d *Data) UnsafeIntersects(lo, hi rune) bool {
+	// The first boundary above lo: inside a range when it is a range's end,
+	// or when it is a start no higher than hi.
+	n := d.Unsafe.Len()
+	i := sort.Search(n, func(i int) bool { return rune(d.Unsafe.At(i)) > lo })
+	if i == n {
+		return false
+	}
+	return i%2 == 1 || rune(d.Unsafe.At(i)) <= hi
 }
 
 // The arrays are little-endian bytes, read where they lie: decoding a table
@@ -356,6 +382,7 @@ func encodeData(w *blob.Writer, d *Data) {
 	w.String(string(d.CE32s))
 	w.String(string(d.CEs))
 	w.String(string(d.Contexts))
+	w.String(string(d.Unsafe))
 }
 
 func decodeData(r *blob.Reader) (*Data, error) {
@@ -367,6 +394,10 @@ func decodeData(r *blob.Reader) (*Data, error) {
 	d.CE32s = U32s(r.Bytes())
 	d.CEs = U64s(r.Bytes())
 	d.Contexts = U16s(r.Bytes())
+	d.Unsafe = U32s(r.Bytes())
+	if d.Unsafe.Len()%2 != 0 {
+		return nil, fmt.Errorf("colldata: an unsafe-backward set of %d boundaries", d.Unsafe.Len())
+	}
 	if d.Trie.Data.Len() < highValueNegative || d.Trie.Index.Len() == 0 {
 		return nil, fmt.Errorf("colldata: a trie with %d values", d.Trie.Data.Len())
 	}

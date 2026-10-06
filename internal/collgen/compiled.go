@@ -37,8 +37,9 @@ const (
 const fallbackCE32 = 0xc0
 
 // compiledCollations reads a locale's collation types from ICU's compiled
-// data, keeping those whose trie tailors a conjoining jamo.
-func compiledCollations(dat icudat.Dat, name string) (map[string]*colldata.Data, error) {
+// data: the table of each that tailors a conjoining jamo, and the
+// unsafe-backward ranges of each that adds some.
+func compiledCollations(dat icudat.Dat, name string) (map[string]compiled, error) {
 	item, ok := dat["icudt78l/coll/"+name+".res"]
 	if !ok {
 		return nil, nil
@@ -55,7 +56,7 @@ func compiledCollations(dat icudat.Dat, name string) (map[string]*colldata.Data,
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]*colldata.Data{}
+	out := map[string]compiled{}
 	for kind, r := range kinds {
 		if !r.IsTable() {
 			// "default", which names a type.
@@ -73,24 +74,42 @@ func compiledCollations(dat icudat.Dat, name string) (map[string]*colldata.Data,
 		if err != nil {
 			return nil, fmt.Errorf("coll/%s.res %s: %w", name, kind, err)
 		}
-		d, err := readCompiled(bin)
+		c, err := readCompiled(bin)
 		if err != nil {
 			return nil, fmt.Errorf("coll/%s.res %s: %w", name, kind, err)
 		}
-		if d != nil {
-			out[kind] = d
+		if c.data != nil || c.unsafe != nil {
+			out[kind] = c
 		}
 	}
 	return out, nil
 }
 
-// readCompiled reads a compiled collation's table, or nothing when the
-// type has no table of its own or tailors no conjoining jamo.
-func readCompiled(bin []byte) (*colldata.Data, error) {
+// compiled is what is taken from a compiled collation type: its table,
+// where it tailors a conjoining jamo, and the unsafe-backward ranges it
+// adds to the root's.
+type compiled struct {
+	data   *colldata.Data
+	unsafe []uint32
+}
+
+// readCompiled reads a compiled collation type.
+func readCompiled(bin []byte) (compiled, error) {
 	b, err := icudat.StripHeader(bin)
 	if err != nil {
-		return nil, err
+		return compiled{}, err
 	}
+	unsafe, err := compiledUnsafe(b)
+	if err != nil {
+		return compiled{}, err
+	}
+	d, err := readCompiledTable(b)
+	return compiled{d, unsafe}, err
+}
+
+// readCompiledTable reads a compiled collation's table, or nothing when the
+// type has no table of its own or tailors no conjoining jamo.
+func readCompiledTable(b []byte) (*colldata.Data, error) {
 	if len(b) < 4 {
 		return nil, fmt.Errorf("a compiled collation of %d bytes", len(b))
 	}

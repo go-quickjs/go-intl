@@ -148,6 +148,10 @@ const (
 	// wherever the locale has a -u-hc keyword, even one hour12 or
 	// hourCycle overrode, as V8 gives ICU the locale's keyword.
 	HourCycleStyles
+	// IdenticalPrefix compares two strings from after the prefix they
+	// share, backed up only as far as ICU's unsafe-backward set says, as
+	// ICU's RuleBasedCollator does.
+	IdenticalPrefix
 )
 
 const (
@@ -161,7 +165,7 @@ const (
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
-		EmptyListItems | HourCycleStyles
+		EmptyListItems | HourCycleStyles | IdenticalPrefix
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -500,6 +504,22 @@ var Divergences = []Divergence{
 		Node: "V8 gives ICU the locale with its keyword, and SimpleDateFormat::construct makes " +
 			"the time style afresh in the keyword's cycle, which V8 then turns to twelve hours " +
 			"keeping its two digits: \"02:12:47 PM\"",
+	},
+	{
+		Name: "IdenticalPrefix", Flag: IdenticalPrefix,
+		Area: "Collator",
+		What: "two strings that share a prefix",
+		Standard: "UCA's comparison of the whole strings: with numeric, \"١٥\" (15) " +
+			"sorts before \"١٠٠\" (100) in Arabic and \"1é\" before \"1𝟏\" " +
+			"(1 before 11), French Canada's backward accents are read from the end of each whole " +
+			"string, and with ignorePunctuation an ignorable after a shifted character is ignored: " +
+			"\"-\" and \"-ं\" are equal",
+		Node: "ICU's doCompare compares from after the shared prefix, backed up only before a " +
+			"character in its unsafe-backward set or, with numeric, a digit. Its digit test reads " +
+			"only the collation's own table, which in Arabic holds no Arabic-Indic digit, and one " +
+			"UTF-16 unit, which is never a supplementary digit: 15 against 100 compares 5 with 00, " +
+			"and \"1é\" sorts after \"1𝟏\". The backward accents are those after the " +
+			"prefix, and the ignorable after a shifted \"-\" is weighed: \"-\" sorts first",
 	},
 }
 

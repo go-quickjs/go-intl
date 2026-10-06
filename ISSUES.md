@@ -351,7 +351,15 @@ no named divergence.** `collator.go`. ICU's doCompare skips the prefix two
 strings share unless the next character is unsafe; its digit test reads
 only the tailoring. go-intl compares the whole strings, which is UCA's
 answer. `ar {numeric:true}` "١٥" vs "١٠٠": Node 1, go-intl −1; fr-CA
-backward secondaries and one ignorePunctuation case likewise. Status: open.
+backward secondaries and one ignorePunctuation case likewise. Status: fixed,
+as the IdenticalPrefix divergence. NodeICU ports doCompare's prefix test
+over UTF-16 units, with ICU's unsafe-backward sets, which collgen now reads
+from collunsafe.h and each compiled table, and its one-unit,
+tailoring-only digit test, which also misses a supplementary digit in the
+root ("1é" against "1𝟏"). It matches Node on 7,065,792 pairs of strings
+sharing a prefix over 29 locales and 8 option sets; Standard differs from
+Node on 30,560 of them, all with numeric. go-quickjs's standards mode
+takes Standard (collator_prefix_test.go).
 
 **RU-2. A failed generator run does not leave the old data.**
 `internal/datawrite`, the generators. datawrite deletes the old files before

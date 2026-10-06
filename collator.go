@@ -109,6 +109,8 @@ type Collator struct {
 	backwardSecondary  bool
 	lithuanianDotAbove bool
 	variableTop        uint32
+	// skipPrefix is the IdenticalPrefix divergence.
+	skipPrefix bool
 }
 
 // The strengths, as ICU numbers the levels.
@@ -130,7 +132,7 @@ func NewCollator(loc Locale, opts CollatorOptions) (*Collator, error) {
 
 // NewCollatorFrom builds a collator from a source of the caller's own.
 func NewCollatorFrom(src Source, loc Locale, opts CollatorOptions) (*Collator, error) {
-	c := &Collator{usage: opts.Usage}
+	c := &Collator{usage: opts.Usage, skipPrefix: opts.Compat.Has(IdenticalPrefix)}
 
 	// The collation type, as ECMA-402's ResolveLocale chooses it: the option
 	// if the locale has that type, else the -u-co keyword if it has that,
@@ -508,6 +510,10 @@ func (c *Collator) Compare(a, b string) int {
 	if a == b {
 		return 0
 	}
+	if c.skipPrefix {
+		start := c.comparisonStart(a, b)
+		return c.compareElements(c.sortElementsFrom(a, start), c.sortElementsFrom(b, start))
+	}
 	return c.compareElements(c.sortElements(a), c.sortElements(b))
 }
 
@@ -537,8 +543,22 @@ func (c *Collator) normalizedText(s string) []rune {
 
 // sortElements returns what a string is compared by: its collation elements,
 // with the variable ones shifted when punctuation is ignored.
-func (c *Collator) sortElements(s string) []uint64 {
-	ces := c.elementsOf(c.normalizedText(s))
+func (c *Collator) sortElements(s string) []uint64 { return c.sortElementsFrom(s, 0) }
+
+// sortElementsFrom is sortElements of the text from a byte offset, which
+// starts a character that no combining mark or contraction joins to what
+// precedes it, so that the text either side decomposes on its own. What
+// precedes it is read only for the prefixes a character's weight depends
+// on.
+func (c *Collator) sortElementsFrom(s string, start int) []uint64 {
+	text := c.normalizedText(s[start:])
+	from := 0
+	if start > 0 {
+		before := c.normalizedText(s[:start])
+		from = len(before)
+		text = append(before, text...)
+	}
+	ces := c.elementsFrom(text, from)
 	if c.shifted {
 		c.shiftVariables(ces)
 	}

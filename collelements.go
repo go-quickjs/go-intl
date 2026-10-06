@@ -79,10 +79,14 @@ type elementWriter struct {
 func (c *Collator) elements(s string) []uint64 { return c.elementsOf([]rune(s)) }
 
 // elementsOf is elements, of the characters themselves.
-func (c *Collator) elementsOf(text []rune) []uint64 {
+func (c *Collator) elementsOf(text []rune) []uint64 { return c.elementsFrom(text, 0) }
+
+// elementsFrom is elementsOf of the characters from index from, those
+// before it read only as the context a prefix matches.
+func (c *Collator) elementsFrom(text []rune, from int) []uint64 {
 	w := elementWriter{c: c, text: text}
-	w.out = make([]uint64, 0, len(w.text)+1)
-	for i := 0; i < len(w.text); {
+	w.out = make([]uint64, 0, len(w.text)-from+1)
+	for i := from; i < len(w.text); {
 		if w.consumed != nil && w.consumed[i] {
 			i++
 			continue
