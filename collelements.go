@@ -73,7 +73,10 @@ type elementWriter struct {
 	// consumed marks the combining marks a discontiguous contraction took
 	// out of the middle of a run, so they are not weighed again.
 	consumed []bool
-	out      []uint64
+	// classEnds is, for each mark, the index after the marks of its class
+	// that follow it, made when a discontiguous contraction first needs it.
+	classEnds []int
+	out       []uint64
 }
 
 func (c *Collator) elements(s string) []uint64 { return c.elementsOf([]rune(s)) }
@@ -368,6 +371,14 @@ func (w *elementWriter) discontiguous(state colldata.CharTrie, result uint32, fi
 			}
 		}
 		if !matched {
+			if prevCC == cc {
+				// No mark of this class can match either: they are blocked
+				// as this one is. The text is in canonical order, which sorts
+				// a run's marks by class, so they are the ones that follow,
+				// and going past them at once keeps a long run of marks that
+				// each begin a contraction, Tibetan's U+0F71, linear.
+				pos = w.classEnd(pos) - 1
+			}
 			prevCC = cc
 		}
 		pos = w.next(pos)
@@ -375,6 +386,23 @@ func (w *elementWriter) discontiguous(state colldata.CharTrie, result uint32, fi
 			return result
 		}
 	}
+}
+
+// classEnd is the index after the marks of the class of the one at i that
+// follow it.
+func (w *elementWriter) classEnd(i int) int {
+	if w.classEnds == nil {
+		w.classEnds = make([]int, len(w.text))
+		for k := len(w.text) - 1; k >= 0; k-- {
+			cc := w.ccc(k)
+			if k+1 < len(w.text) && cc != 0 && w.ccc(k+1) == cc {
+				w.classEnds[k] = w.classEnds[k+1]
+			} else {
+				w.classEnds[k] = k + 1
+			}
+		}
+	}
+	return w.classEnds[i]
 }
 
 // numeric weighs a run of digits by its value, as ICU's

@@ -457,7 +457,13 @@ Compat, and date.Options carries one (hostabbrev_test.go).
 
 **PE-1. Collation is quadratic in a contraction followed by a run of
 combining marks.** `collelements.go`. 10,000 marks take 3 s, 100,000 about
-22 s; Node is quadratic too. Status: open.
+22 s; Node is quadratic too. Status: fixed. The case is a run of marks that
+each begin a contraction, Tibetan's U+0F71: each looked through every mark
+after it, though those of its own class are blocked. A run's marks are in
+canonical order, sorted by class, so the search now goes past a class at
+once; 40,000 take 0.1 s where they took 54 s under NodeICU and 108 s under
+Standard, and the 7,065,792 pairs of RU-1 still match Node
+(collator_marks_test.go).
 
 **PE-2. Temporal's until in months is quadratic in the Chinese and Dangi
 calendars.** `temporal/arith.go`. 48,000 years take 17 s, Node 6 s.
