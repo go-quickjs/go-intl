@@ -320,7 +320,13 @@ calls (temporal/exported_api_test.go).
 
 **API-11. Exact decimals with huge exponents allocate without bound.**
 `mag.go`. maxDecimalExponent is 2³⁰, so "1e1000000000" can build a
-gigabyte string. Status: open.
+gigabyte string. Status: fixed. ParseExactDecimal keeps only digits
+written out exactly; a string with an exponent is read as ParseDecimal
+reads it, rounding past a float's range to an infinity, as Node does with
+every such string. A BigInt's decimal string has no exponent. go-quickjs
+had handed BigInts over as "0.<digits>e<exp>", a by-product of its own
+decimal type, and now writes them out in full; that change goes with the
+release that takes this (decimal_exact_test.go).
 
 ## Corrupt data
 

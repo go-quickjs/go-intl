@@ -204,10 +204,15 @@ func ParseDecimal(s string) Decimal { return parseDecimal(s, true) }
 // too large for a float as it is written: ToIntlMathematicalValue takes a
 // BigInt as the integer it is, where it rounds a string to a float's range
 // first. A formatter writes a BigInt past 1.8e308 in full, as V8 does.
+//
+// Only digits written out are kept so: a string with an exponent is read as
+// ParseDecimal reads it, so that a short string cannot stand for a number
+// too long to write, "1e1000000000" a gigabyte of zeros. A BigInt's decimal
+// string has no exponent.
 func ParseExactDecimal(s string) Decimal { return parseDecimal(s, false) }
 
 // parseDecimal is ParseDecimal, rounding a number too large for a float to
-// an infinity when round is set.
+// an infinity when round is set or the string has an exponent.
 func parseDecimal(s string, round bool) Decimal {
 	s = strings.TrimFunc(s, isJSWhitespace)
 	if s == "" {
@@ -247,6 +252,7 @@ func parseDecimal(s string, round bool) Decimal {
 	}
 	mantissa, exp := body, 0
 	if i := strings.IndexAny(body, "eE"); i >= 0 {
+		round = true
 		mantissa = body[:i]
 		e := body[i+1:]
 		if e == "" || e == "+" || e == "-" {
