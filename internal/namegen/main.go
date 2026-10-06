@@ -103,14 +103,20 @@ func run(namesRoot, datesRoot string) error {
 	return nil
 }
 
-// alternates maps CLDR's alternate suffix to the width it belongs to. The
-// others, "variant" and "menu" among them, ICU keeps in tables of their own,
-// Languages%variant beside Languages, which its display names never read:
-// Japanese has "hi-Latn" only as a variant, and names it as Hindi in Latin.
-var alternates = map[string]int{
-	"":       namedata.Long,
-	"short":  namedata.Short,
-	"narrow": namedata.Narrow,
+// An alternate is one of CLDR's alternate suffixes and the width it fills.
+type alternate struct {
+	suffix string
+	width  int
+}
+
+// alternates are the suffixes whose names fill a width, in the order they
+// are taken where two fill one. The others, "variant" and "menu" among
+// them, ICU keeps in tables of their own, Languages%variant beside
+// Languages, which its display names never read: Japanese has "hi-Latn"
+// only as a variant, and names it as Hindi in Latin.
+var alternates = []alternate{
+	{"short", namedata.Short},
+	{"narrow", namedata.Narrow},
 }
 
 func read(main, datesMain, name string) (*namedata.Built, error) {
@@ -124,7 +130,7 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 			return nil, fmt.Errorf("languages.json: %w", err)
 		}
 		if e, ok := f.Main[name]; ok {
-			fill(&out, namedata.Language, e.LocaleDisplayNames.Languages)
+			fill(&out, namedata.Language, e.LocaleDisplayNames.Languages, alternates)
 			any = true
 		}
 	}
@@ -152,7 +158,7 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 		case namedata.Variant:
 			source = e.LocaleDisplayNames.Variants
 		}
-		fill(&out, kind, source)
+		fill(&out, kind, source, alternates)
 		any = true
 	}
 
@@ -166,7 +172,7 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 			out.Pattern = e.LocaleDisplayNames.Pattern.Locale
 			out.Separator = e.LocaleDisplayNames.Pattern.Separator
 			if calendars, ok := e.LocaleDisplayNames.Types["calendar"]; ok {
-				fill(&out, namedata.Calendar, withBCP47(calendars))
+				fill(&out, namedata.Calendar, withBCP47(calendars), alternates)
 			}
 			any = true
 		}
@@ -197,7 +203,7 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 					fields[base+"-alt-"+suffix] = field.DisplayName
 				}
 			}
-			fill(&out, namedata.DateTimeField, fields)
+			fill(&out, namedata.DateTimeField, fields, alternates)
 			any = true
 		}
 	}
@@ -209,30 +215,29 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 }
 
 // fill sorts CLDR's names into the widths, by the alternate suffix each key
-// carries.
-func fill(out *namedata.Built, kind int, source map[string]string) {
+// carries: a plain name is the long one, and an alternate fills its width
+// where nothing has, the first of alts to that wins. Nothing depends on the
+// order source's keys come in.
+func fill(out *namedata.Built, kind int, source map[string]string, alts []alternate) {
 	byWidth := make([]map[string]string, namedata.Widths)
 	for i := range byWidth {
 		byWidth[i] = map[string]string{}
 	}
 	for key, name := range source {
-		if name == "" {
-			continue
+		if name != "" && !strings.Contains(key, "-alt-") {
+			byWidth[namedata.Long][key] = name
 		}
-		code, alt, found := strings.Cut(key, "-alt-")
-		width := namedata.Long
-		if found {
-			w, known := alternates[alt]
-			if !known {
+	}
+	for _, a := range alts {
+		for key, name := range source {
+			code, suffix, found := strings.Cut(key, "-alt-")
+			if !found || suffix != a.suffix || name == "" {
 				continue
 			}
-			width = w
+			if _, taken := byWidth[a.width][code]; !taken {
+				byWidth[a.width][code] = name
+			}
 		}
-		// A long alternate only stands in where there is nothing already.
-		if _, taken := byWidth[width][code]; taken && found {
-			continue
-		}
-		byWidth[width][code] = name
 	}
 	for w := range byWidth {
 		entries := make([]namedata.Entry, 0, len(byWidth[w]))

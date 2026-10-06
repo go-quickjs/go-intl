@@ -402,7 +402,10 @@ DefaultToStringOptions uses change with it.
 **RU-5. A generator's map order could make its output vary.**
 `internal/namegen` fill: two alternates of one width and no plain name take
 whichever the map gives first. No CLDR 48.2 locale has that today.
-Status: open.
+Status: fixed. The alternates are an ordered list: a plain name is the long
+one, and an alternate fills its width where nothing has, the first in the
+list winning; the meaningless empty suffix is gone. The data is unchanged
+(internal/namegen/main_test.go).
 
 **RU-6. Index and pair tables have no version byte.** `internal/blob`.
 Status: open.
