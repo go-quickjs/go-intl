@@ -186,7 +186,8 @@ func temporalOutcome(tag string, in map[string]any, method, kind, calendar strin
 func temporalInstant(f *intl.DateTimeFormat, kind string, v []any) time.Time {
 	n := func(i int) int { return int(v[i].(float64)) }
 	if kind == "instant" || kind == "zoned" {
-		return time.UnixMilli(int64(n(0)))
+		// Epoch milliseconds overflow a 32-bit int.
+		return time.UnixMilli(int64(v[0].(float64)))
 	}
 	return f.PlainInstant(n(0), time.Month(n(1)), n(2), n(3), n(4), n(5), n(6)*1_000_000)
 }
