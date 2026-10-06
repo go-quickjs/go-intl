@@ -126,9 +126,11 @@ func (f *DateTimeFormat) ForTemporal(kind TemporalKind) (*DateTimeFormat, error)
 		pattern = replaceHourCycleInPattern(g.bestPattern(skeleton, matchHourFieldLength), f.clock)
 		d.hourCycle = f.clock
 	}
-	d.overrides, d.systems, d.rbnf = nil, nil, nil
+	// The jpanyear rules stay loaded: a Temporal value's pattern with a 年
+	// writes 元年 as any other does.
+	d.overrides, d.systems = nil, nil
 	d.patternText = pattern
-	d.pattern = compileDatePattern(pattern, nil)
+	d.pattern = compileDatePattern(pattern, d.patternOverrides(pattern, nil))
 	if d.ranges, err = d.newRangeFormat(f.src, g, skeleton); err != nil {
 		return nil, err
 	}

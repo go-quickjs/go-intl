@@ -791,7 +791,7 @@ func (r *rangeFormat) format(f *DateTimeFormat, from, to dateParts) ([]dateSeg, 
 		field = datedata.IntervalMillisecond
 	}
 	write := func(pattern string, p dateParts) []dateSeg {
-		dp := compileDatePattern(pattern, nil)
+		dp := compileDatePattern(pattern, f.patternOverrides(pattern, nil))
 		return f.render(&dp, p)
 	}
 	if field < 0 {

@@ -251,16 +251,41 @@ func (f *DateTimeFormat) styleOverrides(src Source) {
 		for _, s := range f.systems {
 			numeric = numeric || s.Name == system
 		}
-		if numeric || f.rbnf[system].rules != nil {
-			continue
-		}
-		if rules, set, err := loadRBNF(src, system); err == nil {
-			if f.rbnf == nil {
-				f.rbnf = map[string]rbnfSystem{}
-			}
-			f.rbnf[system] = rbnfSystem{rules, set}
+		if !numeric {
+			f.loadRules(src, system)
 		}
 	}
+}
+
+// loadRules loads a rule-based numbering system an override names.
+func (f *DateTimeFormat) loadRules(src Source, system string) {
+	if f.rbnf[system].rules != nil {
+		return
+	}
+	if rules, set, err := loadRBNF(src, system); err == nil {
+		if f.rbnf == nil {
+			f.rbnf = map[string]rbnfSystem{}
+		}
+		f.rbnf[system] = rbnfSystem{rules, set}
+	}
+}
+
+// gannen reports whether a Japanese year is written by ICU's jpanyear rules,
+// which call the first year of an era 元: SimpleDateFormat does so in
+// Japanese, in the Japanese calendar, for a pattern with a 年 in it,
+// quoted or not, that has no override of its own (smpdtfmt.cpp).
+func (f *DateTimeFormat) gannen() bool {
+	return f.system == Japanese && f.locale.Language.String() == "ja"
+}
+
+// patternOverrides are the numbering overrides a pattern is written with:
+// its own, or for one with a 年 in it, the jpanyear rules for the year
+// where gannen says so.
+func (f *DateTimeFormat) patternOverrides(pattern string, own map[byte]string) map[byte]string {
+	if len(own) > 0 || !f.gannen() || !strings.Contains(pattern, "年") {
+		return own
+	}
+	return map[byte]string{'y': "jpanyear"}
 }
 
 // hourCycleFromPattern is the cycle of the first hour letter outside quotes.

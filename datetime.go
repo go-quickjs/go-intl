@@ -336,7 +336,10 @@ func NewDateTimeFormatFrom(src Source, loc Locale, opts DateTimeFormatOptions) (
 	f.hourCycle = cycle
 	f.reported = f.reportedLocale()
 	f.patternText = pattern
-	f.pattern = compileDatePattern(pattern, f.overrides)
+	if f.gannen() {
+		f.loadRules(src, "jpanyear")
+	}
+	f.pattern = compileDatePattern(pattern, f.patternOverrides(pattern, f.overrides))
 	if f.ranges, err = f.newRangeFormat(src, g, staticSkeleton(pattern)); err != nil {
 		return nil, err
 	}

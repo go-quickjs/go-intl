@@ -165,7 +165,7 @@ with no keyword. Status: open.
 `skeleton.go`. ICU writes year 1 of a Japanese era as 元年 in any pattern with
 an unquoted 年 when the language is ja (smpdtfmt.cpp, jpanyear). `ja`
 japanese `{year:"numeric", month:"long", day:"numeric"}` 2019-07-23 is
-"令和1年7月23日", Node "令和元年7月23日"; ranges likewise. Status: open.
+"令和1年7月23日", Node "令和元年7月23日"; ranges likewise. Status: fixed (TestGannen), for fields, styles, ranges and Temporal values alike, each checked against Node.
 
 **DT-3. Non-Gregorian patterns come from cldr-json, not ICU.** Data
 (`dategen`). cldr-json resolves root's generic calendar alias to the locale's
