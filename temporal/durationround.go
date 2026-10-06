@@ -501,6 +501,9 @@ func (d Duration) Round(o RoundingOptions, rel RelativeTo) (Duration, error) {
 	if err := groupDateTime.validate(o.SmallestUnit, NoUnit); err != nil {
 		return Duration{}, err
 	}
+	if err := groupDateTime.validate(o.LargestUnit, UnitAuto); err != nil {
+		return Duration{}, err
+	}
 	smallest := o.SmallestUnit
 	if smallest == NoUnit {
 		smallest = Nanosecond
@@ -600,6 +603,16 @@ func (d Duration) Round(o RoundingOptions, rel RelativeTo) (Duration, error) {
 
 // Total is Temporal.Duration.prototype.total.
 func (d Duration) Total(u Unit, rel RelativeTo) (float64, error) {
+	// The unit is required and is a unit: "auto" is refused as temporal_rs
+	// refuses it, where the total had come out infinite.
+	switch {
+	case u == NoUnit:
+		return 0, rangeError("Unit is required")
+	case u == UnitAuto:
+		return 0, rangeError("Auto unit not allowed here")
+	case u < UnitAuto || u > Year:
+		return 0, rangeError("Unit was not a valid unit.")
+	}
 	switch {
 	case rel.Zoned != nil:
 		z := *rel.Zoned

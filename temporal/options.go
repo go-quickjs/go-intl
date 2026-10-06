@@ -112,6 +112,11 @@ func (g unitGroup) validate(u, extra Unit) error {
 	if u == extra {
 		return nil
 	}
+	// A value no Unit names, which a Go caller can give where JavaScript
+	// cannot: Unit(11) had divided by zero.
+	if u != NoUnit && (u < UnitAuto || u > Year) {
+		return rangeError("Unit was not a valid unit.")
+	}
 	switch g {
 	case groupDate:
 		if u == NoUnit || u.isDateUnit() {

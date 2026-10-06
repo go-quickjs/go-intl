@@ -280,7 +280,7 @@ return garbage years. Status: fixed (TestCalendarDateOutOfRange): Calendar.Date 
 **API-6. Duration.Round and Total with an unnamed unit panic or answer
 infinity.** `temporal/durationround.go`, `temporal/duration.go`.
 `SmallestUnit: Unit(11)` divides by zero; Total(UnitAuto) is +Inf, where
-temporal_rs refuses it. Status: open.
+temporal_rs refuses it. Status: fixed (TestDurationUnitOptions).
 
 **API-7. Temporal's zero option structs are errors.** `temporal/options.go`.
 `DifferenceSettings{}` gives "Unit was not part of the date unit group."
