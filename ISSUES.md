@@ -477,7 +477,14 @@ on, which reaches the same day. 48,000 years take 0.04 s where they took
 **TE-1. Gaps.** No recording reaches a first Japanese year, the non-Gregorian
 calendars in every locale, Segmenter.containing, duplicate keywords and
 variants, corrupt data or the 32-bit paths; internal/datapack has no tests.
-Status: open.
+Status: fixed. Corrupt data has tests (DA-2, DA-3, DA-4), as has
+internal/datapack (DA-3), and CI runs the whole suite under GOARCH=386,
+which found two tests that did not build or pass there. The calendar
+recording reaches the first days of the Japanese eras; a new one holds
+every calendar to Node in every locale whose date data is its own (51,680
+cases); another holds Segments.Containing to Node at every offset of 1,170
+texts (28,878); and the canonicalization recording has duplicate keywords,
+attributes, transformed fields and variants, in any case (11,163 tags).
 
 **TE-2. Dead code.** The quaternary collation level and Collator.elements;
 digitsOf; DateDuration.negated, durationFromDate and Calendar.fieldsOf in

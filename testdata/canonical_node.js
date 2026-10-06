@@ -119,6 +119,15 @@ for (const t of [
   "aaaaaaaaa", "en-US-ab", "en-t-en-t-en", "en-u-ca-japanese-u-nu-thai", "hy-SU", "und-SU",
   "tl", "no", "no-bok", "nb", "iw", "in", "ji", "jw", "mo", "sh-Cyrl", "zh-guoyu", "zh-hakka",
   "zh-xiang", "en-scouse", "en-US-t-mul-latn-h0-hybrid", "en-t-ru-x0-private", "und-t-und-latn",
+  // Duplicates: a keyword, whose first UTS #35 keeps, an attribute, a
+  // transformed field, and variants, which are no tag, in any case.
+  "en-u-ca-gregory-ca-buddhist", "en-u-nu-thai-ca-gregory-nu-arab", "en-u-ca-ca-buddhist",
+  "en-u-kn-kn-true", "en-u-kn-true-kn-false", "en-u-co-phonebk-co", "de-u-co-phonebk-ka-shifted-co-emoji",
+  "en-u-foo-foo-ca-gregory", "en-u-foo-bar-foo", "en-u-attr-ATTR", "en-u-CA-gregory-ca-buddhist",
+  "en-t-zh-m0-ungegn-m0-bgn", "en-t-m0-ungegn-m0-ungegn", "en-t-zh-h0-hybrid-H0-hybrid",
+  "sl-rozaj-ROZAJ", "de-1996-fonipa-1996", "de-1996-FONIPA-fonipa", "ja-hepburn-heploc-hepburn",
+  "en-x-a-a", "en-u-ca-gregory-x-u-ca-buddhist", "en-u-ca-gregory-u-ca-buddhist",
+  "en-a-foo-a-bar", "en-US-u-rg-gbzzzz-rg-uszzzz", "en-u-sd-usca-sd-usny",
 ]) add(t);
 
 if (test262) {
