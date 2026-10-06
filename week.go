@@ -24,7 +24,7 @@ func loadWeekRules(src Source, loc Locale) weekRules {
 	if err != nil {
 		return rules
 	}
-	region := regionForSupplementalData(loc)
+	region := regionForSupplementalData(src, loc)
 	if region == "" {
 		if f, err := NewFallbacker(src); err == nil {
 			if full, ok := f.Maximize(loc.Data()); ok {

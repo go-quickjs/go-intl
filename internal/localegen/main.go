@@ -1,6 +1,6 @@
 // Command localegen writes the locale tables the intl package carries.
 //
-// Two of them, both from CLDR's supplemental data, vendored beside this
+// Three of them, two from CLDR's supplemental data, vendored beside this
 // command:
 //
 //   - the likely subtags, which say what an identifier that leaves out a
@@ -9,15 +9,18 @@
 //   - the parent locales, which redirect a fallback that truncation would send
 //     somewhere wrong. "zh-Hant" must not fall back through "zh": traditional
 //     Chinese inheriting from simplified is worse than inheriting from the
-//     root.
+//     root;
+//   - the regions a "-u-rg-" or "-u-sd-" keyword may name, which ICU
+//     compiles into loclikely.cpp rather than reading from CLDR, read
+//     through internal/icusrc.
 //
 // Usage, from the repository root:
 //
 //	go run ./internal/localegen
 //
-// It writes data/likelysubtags.bin and data/parentlocales.bin, replacing them
-// only once both have been built, so a failed run leaves the tracked files
-// alone.
+// It writes data/likelysubtags.bin, data/parentlocales.bin and
+// data/validregions.bin, replacing them only once all have been built, so a
+// failed run leaves the tracked files alone.
 //
 // Each table is records of two data locales, sorted by the first, which the
 // intl package binary-searches where it lies. The layout is that package's
@@ -32,8 +35,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	intl "github.com/go-quickjs/go-intl"
+	"github.com/go-quickjs/go-intl/internal/icusrc"
 )
 
 //go:embed likelySubtags.json
@@ -93,13 +98,22 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("the parent locales: %w", err)
 	}
+	regions, err := icusrc.ValidRegions()
+	if err != nil {
+		return err
+	}
+	// A line each, sorted, which the reader binary-searches.
+	regionTable := []byte(strings.Join(regions, "\n") + "\n")
 
-	// Both are built before either is written, so a failure partway leaves a
-	// matched pair on disk rather than one new table and one old one.
+	// All are built before any is written, so a failure partway leaves a
+	// matched set on disk rather than one new table beside an old one.
 	if err := write("likelysubtags.bin", likelyTable); err != nil {
 		return err
 	}
 	if err := write("parentlocales.bin", parentTable); err != nil {
+		return err
+	}
+	if err := write("validregions.bin", regionTable); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr,

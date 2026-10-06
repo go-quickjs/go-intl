@@ -214,7 +214,7 @@ Node "ru-CN". 237 of 33,216 combinations. Status: fixed (TestLikelySubtagsUndScr
 `skeleton.go`. ICU ignores a region not in RegionValidateMap
 (loclikely.cpp). `en-u-rg-xxzzzz` getWeekInfo().firstDay is 1, Node 7;
 getHourCycles ["h23"], Node ["h12"]; `en-u-rg-abcdefgh` h23, Node h12.
-Status: open.
+Status: fixed (TestKeywordRegionValid). A keyword with no value, "en-u-rg-gb" being the keywords gb and rg, is ICU's "yes" and names Yemen on Node's side, part of the YesValues divergence.
 
 **LO-5. A lone POSIX variant becomes -u-va-posix before aliases are
 replaced.** `canonical.go`. ICU makes the change when it writes the tag, after

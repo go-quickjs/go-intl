@@ -432,7 +432,7 @@ func allowedHourFormats(src Source, loc Locale) (byte, []string, error) {
 		return 0, nil, err
 	}
 	language := loc.Language.String()
-	region := regionForSupplementalData(loc)
+	region := regionForSupplementalData(src, loc)
 	if language == "" || language == "und" || region == "" {
 		if fb, err := NewFallbacker(src); err == nil {
 			if full, ok := fb.Maximize(loc.Data()); ok {
@@ -487,10 +487,11 @@ func allowedHourFormats(src Source, loc Locale) (byte, []string, error) {
 }
 
 // regionForSupplementalData is the region a locale's preferences are looked
-// up by: the -u-rg keyword's where it names one, else the locale's own.
-func regionForSupplementalData(loc Locale) string {
-	if rg, ok := loc.keywordValue("rg"); ok && len(rg) >= 3 {
-		return strings.ToUpper(rg[:2])
+// up by: the -u-rg keyword's where it names a valid one, else the locale's
+// own.
+func regionForSupplementalData(src Source, loc Locale) string {
+	if r := keywordRegion(src, loc, "rg", false); r != "" {
+		return r
 	}
 	return loc.Region.String()
 }

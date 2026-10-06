@@ -102,13 +102,13 @@ func withoutUnknown(d DataLocale) DataLocale {
 // "-u-rg-", else the region subtag, else, when inferring, that of "-u-sd-"
 // or the likely region.
 func (i *LocaleInfo) supplementalRegion(l Locale, infer bool) string {
-	if r := keywordRegion(l, "rg"); r != "" {
+	if r := keywordRegion(i.src, l, "rg", i.opts.Compat.Has(YesValues)); r != "" {
 		return r
 	}
 	if !l.Region.IsZero() || !infer {
 		return l.Region.String()
 	}
-	if r := keywordRegion(l, "sd"); r != "" {
+	if r := keywordRegion(i.src, l, "sd", i.opts.Compat.Has(YesValues)); r != "" {
 		return r
 	}
 	if full, ok := i.likely.Maximize(l.Data()); ok {
@@ -118,11 +118,31 @@ func (i *LocaleInfo) supplementalRegion(l Locale, infer bool) string {
 }
 
 // keywordRegion is the region of a "-u-rg-" or "-u-sd-" keyword's value,
-// its first two letters; empty where it has none.
-func keywordRegion(l Locale, key string) string {
+// as ICU's GetRegionFromKey reads it: its first two letters, of a value of
+// three to six that starts with them, where RegionValidateMap has them as a
+// region; empty where it has none. "-u-rg-xxzzzz" names none, and the
+// locale's own region stands.
+//
+// With yes, a keyword with no value reads as ICU spells it, "yes", which
+// names Yemen (YesValues): "en-u-rg-gb" is the keywords "gb" and "rg".
+func keywordRegion(src Source, l Locale, key string, yes bool) string {
 	v, ok := l.Keyword(key)
-	if ok && len(v) >= 3 && len(v) <= 6 && isAlpha(v[0]) && isAlpha(v[1]) {
-		return strings.ToUpper(v[:2])
+	if ok && v == "" && yes {
+		v = "yes"
+	}
+	if !ok || len(v) < 3 || len(v) > 6 || !isAlpha(v[0]) || !isAlpha(v[1]) {
+		return ""
+	}
+	region := strings.ToUpper(v[:2])
+	b, err := src.Open(MarkerValidRegions, DataLocale{})
+	if err != nil {
+		return ""
+	}
+	// Each line is two letters and a newline, sorted.
+	n := len(b) / 3
+	i := sort.Search(n, func(i int) bool { return string(b[3*i:3*i+2]) >= region })
+	if i < n && string(b[3*i:3*i+2]) == region {
+		return region
 	}
 	return ""
 }
@@ -203,7 +223,7 @@ func (i *LocaleInfo) HourCycles(l Locale) ([]string, error) {
 		return hc, nil
 	}
 	if l.Region.IsZero() && !i.opts.Compat.Has(SubdivisionHourCycles) {
-		if r, err := ParseRegion(keywordRegion(l, "sd")); err == nil && !r.IsZero() {
+		if r, err := ParseRegion(keywordRegion(i.src, l, "sd", i.opts.Compat.Has(YesValues))); err == nil && !r.IsZero() {
 			l.Region = r
 		}
 	}

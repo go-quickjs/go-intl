@@ -35,6 +35,9 @@ const (
 	// MarkerParentLocales is CLDR's parent-locale table, which redirects a
 	// fallback that truncation would send somewhere wrong.
 	MarkerParentLocales Marker = "parentlocales"
+	// MarkerValidRegions is the regions a "-u-rg-" or "-u-sd-" keyword may
+	// name, as ICU's RegionValidateMap has them, a line each.
+	MarkerValidRegions Marker = "validregions"
 	// MarkerNumbers is one locale's number symbols and patterns.
 	MarkerNumbers Marker = "numbers"
 	// MarkerCurrencyDigits is how many decimals each currency is written
