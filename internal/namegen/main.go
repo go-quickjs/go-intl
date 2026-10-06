@@ -249,12 +249,13 @@ func fill(out *namedata.Built, kind int, source map[string]string) {
 	}
 }
 
-// calendarAliases are the calendars BCP-47 spells differently from CLDR.
-// ECMA-402 asks for "gregory" and CLDR files it under "gregorian".
+// calendarAliases are the calendars BCP-47 spells differently from CLDR,
+// as V8 maps them before it asks ICU for a name: ECMA-402 asks for "gregory"
+// and CLDR files it under "gregorian". "islamicc", a deprecated alias of
+// "islamic-civil", is not among them, and has no name.
 var calendarAliases = map[string]string{
 	"gregorian":           "gregory",
 	"ethiopic-amete-alem": "ethioaa",
-	"islamic-civil":       "islamicc",
 }
 
 // withBCP47 adds the spelling ECMA-402 uses beside CLDR's own, so that a

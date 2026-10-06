@@ -132,7 +132,7 @@ Status: fixed (TestAccountingNever, TestRelativeEpsilon, TestApproximateIncremen
 `ar {type:"calendar", fallback:"none"}` "islamicc" is "التقويم الهجري
 المدني", Node undefined. namegen files CLDR's "islamic-civil" under
 "islamicc" too, a deprecated alias ICU's Types table does not have; found
-comparing every calendar in 29 locales while fixing NF-16. Status: open.
+comparing every calendar in 29 locales while fixing NF-16. Status: fixed (TestCalendarDisplayNames). Every region, script and calendar name in 29 locales and three widths now matches Node, 45,849 of them.
 
 **NF-19. ListFormat keeps an empty item as an element.** `list.go`. `es`
 ["a",""] is [element "a", literal " y ", element ""], Node [element "a",
