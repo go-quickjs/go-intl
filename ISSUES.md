@@ -10,7 +10,8 @@ An entry is closed by the commit that fixes it, with a regression test, and
 its status names the test, which `git log -S` finds the commit by. Where a
 fix finds the entry was wrong, the status says that instead.
 
-Status: **open**, **fixed** (the test), or **not a bug** (why).
+Status: **open**, **fixed** (the test), **documented** (the example), or **not a
+bug** (why).
 
 ## JavaScript-visible: NumberFormat, PluralRules and their kin
 
@@ -145,7 +146,7 @@ anyway.** `number.go`, the available locales. Node resolves `bm-Nkoo`,
 NumberFormat to the language alone and formats with its data: `zh-Latn`
 compact CVE is "-CVE 123万", go-intl "-CVE 1.2M"; `mni-Mtei` writes
 Bengali digits. Found comparing currencies in every locale while fixing
-NF-10. Status: open.
+NF-10. Status: documented (ExampleLocaleMatcher_Resolve). Not JS-visible: a constructor works in the locale it is given, and ECMA-402's ResolveLocale, LocaleMatcher.Resolve over the service's available locales, is what makes "az-Arab" "az", as V8 does; go-quickjs runs it and writes all seven locales as Node does. A Go program calling a constructor directly does not get it, so each constructor, LocaleMatcher.Resolve and the README now say so, and the example shows it.
 
 ## JavaScript-visible: DateTimeFormat and the calendars
 

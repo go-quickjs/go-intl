@@ -92,6 +92,10 @@ type compiledRule struct {
 }
 
 // NewPluralRules builds rules from the data built into the package.
+//
+// It works in loc as it is given. Resolve a requested locale among the
+// service's available locales first, with a LocaleMatcher, to answer as
+// ECMA-402 and Node do: "az-Arab" resolves to "az".
 func NewPluralRules(loc Locale, opts PluralRulesOptions) (*PluralRules, error) {
 	return NewPluralRulesFrom(Embedded, loc, opts)
 }

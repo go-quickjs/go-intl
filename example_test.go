@@ -50,3 +50,27 @@ func Example() {
 	// one other
 	// -1
 }
+
+// A formatter writes in the locale it is given, as it is. ECMA-402 first
+// resolves the requested locale among the service's available locales,
+// which is what makes Node format "az-Arab" in Azerbaijani's Latin data:
+// ICU has no number data of its own for it. LocaleMatcher is that step.
+func ExampleLocaleMatcher_Resolve() {
+	requested, err := intl.ParseLocale("az-Arab")
+	if err != nil {
+		panic(err)
+	}
+	m, err := intl.NewLocaleMatcher(intl.Embedded, intl.ServiceNumberFormat)
+	if err != nil {
+		panic(err)
+	}
+	def, _ := intl.ParseLocale("en-US")
+	resolved := m.Resolve([]intl.Locale{requested}, intl.BestFit, def)
+	f, err := intl.NewNumberFormat(resolved, intl.NumberFormatOptions{Notation: intl.NotationCompact})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s %q\n", resolved, f.Format(1234567))
+	// Output:
+	// az "1,2\u00a0mln"
+}

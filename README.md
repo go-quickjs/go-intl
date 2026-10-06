@@ -62,6 +62,11 @@ checked with the tests. The spaces before "€" are CLDR's no-break spaces.
 
 Every formatter has `ToParts` where ECMA-402 does, and a `ResolvedOptions`.
 
+A constructor works in the locale it is given, as it is. ECMA-402 first
+resolves a requested locale among the service's available locales, which is
+`LocaleMatcher.Resolve`; a program that wants Node's answers resolves before
+it builds, or "az-Arab" is written in data Node would not use for it.
+
 Two packages beside it hold what a JavaScript engine needs apart from `Intl`:
 
 - [`date`](date) is JavaScript's `Date`: ECMA-262's time arithmetic, local

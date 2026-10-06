@@ -183,6 +183,12 @@ func splitUnicodeExtension(tag string) (base, extension string) {
 // that matched with the request's Unicode extension, or the default when
 // none is. The requested locales are canonical, as a Canonicalizer gives
 // them; the service reads the extension's keywords itself.
+//
+// A formatter's constructor takes the locale this answers with. It does not
+// resolve one itself, and given a locale the service is not available in it
+// works in that locale's own data, which ECMA-402 never does: built for
+// "az-Arab" directly, a NumberFormat writes in the root's data, where
+// resolved it is "az" and writes in Azerbaijani's, as Node does.
 func (m *LocaleMatcher) Resolve(requested []Locale, kind MatcherKind, def Locale) Locale {
 	for _, r := range requested {
 		base, extension := splitUnicodeExtension(r.String())
