@@ -102,6 +102,18 @@ func NewPluralRules(loc Locale, opts PluralRulesOptions) (*PluralRules, error) {
 
 // NewPluralRulesFrom builds rules from a source of the caller's own.
 func NewPluralRulesFrom(src Source, loc Locale, opts PluralRulesOptions) (*PluralRules, error) {
+	for _, v := range []fmt.Stringer{opts.Type, opts.Notation, opts.CompactDisplay} {
+		if !named(v) {
+			return nil, fmt.Errorf("%w: %s", ErrOption, v)
+		}
+	}
+	if err := (digitOptions{minInt: opts.MinimumIntegerDigits, minFrac: opts.MinimumFractionDigits,
+		maxFrac: opts.MaximumFractionDigits, minSig: opts.MinimumSignificantDigits,
+		maxSig: opts.MaximumSignificantDigits, increment: opts.RoundingIncrement,
+		mode: opts.RoundingMode, priority: opts.RoundingPriority,
+		trailing: opts.TrailingZeroDisplay}).check(); err != nil {
+		return nil, err
+	}
 	data, err := loadPlurals(src, loc)
 	if err != nil {
 		return nil, err

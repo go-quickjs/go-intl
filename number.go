@@ -235,19 +235,27 @@ func loadNumberSources(src Source, loc Locale, numberingSystem string) (*numberS
 
 // check refuses the options no formatter can be built for.
 func (opts *NumberFormatOptions) check() error {
-	switch opts.Notation {
-	case NotationStandard, NotationCompact, NotationScientific, NotationEngineering:
-	default:
-		return fmt.Errorf("intl: %d is not a notation", opts.Notation)
+	for _, v := range []fmt.Stringer{opts.Style, opts.UnitDisplay, opts.CurrencyDisplay, opts.Notation,
+		opts.CompactDisplay, opts.SignDisplay, opts.UseGrouping, opts.CurrencySign} {
+		if !named(v) {
+			return fmt.Errorf("%w: %s", ErrOption, v)
+		}
+	}
+	// A currency or unit given is checked whatever the style, as
+	// InitializeNumberFormat checks them.
+	if opts.Currency != "" && !isWellFormedCurrencyCode(opts.Currency) {
+		return fmt.Errorf("%w: %q is not a currency code", ErrOption, opts.Currency)
 	}
 	if opts.Style == StyleCurrency && opts.Currency == "" {
 		return fmt.Errorf("intl: a currency style needs a currency")
 	}
-	if opts.Style == StyleUnit && !HasUnit(opts.Unit) {
-		return fmt.Errorf("intl: %q is not a unit a number may be written in",
-			opts.Unit)
+	if opts.Unit != "" && !HasUnit(opts.Unit) || opts.Style == StyleUnit && opts.Unit == "" {
+		return fmt.Errorf("%w: %q is not a unit a number may be written in", ErrOption, opts.Unit)
 	}
-	return nil
+	return digitOptions{minInt: opts.MinimumIntegerDigits, minFrac: opts.MinimumFractionDigits,
+		maxFrac: opts.MaximumFractionDigits, minSig: opts.MinimumSignificantDigits,
+		maxSig: opts.MaximumSignificantDigits, increment: opts.RoundingIncrement,
+		mode: opts.RoundingMode, priority: opts.RoundingPriority, trailing: opts.TrailingZeroDisplay}.check()
 }
 
 // numberFormat builds a formatter from loaded sources. The options' own

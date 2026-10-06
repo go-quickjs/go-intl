@@ -125,8 +125,8 @@ func (r digitRequest) resolve() (digitPlan, error) {
 		p.maxFrac = max(p.minFrac, r.maxFracDefault)
 	}
 	if p.minFrac > p.maxFrac {
-		return p, fmt.Errorf("intl: at least %d decimals but at most %d",
-			p.minFrac, p.maxFrac)
+		return p, fmt.Errorf("%w: at least %d decimals but at most %d",
+			ErrOption, p.minFrac, p.maxFrac)
 	}
 
 	p.minSig, p.maxSig = 1, 21
@@ -137,8 +137,8 @@ func (r digitRequest) resolve() (digitPlan, error) {
 		p.maxSig = *r.maxSig
 	}
 	if hasSig && p.minSig > p.maxSig {
-		return p, fmt.Errorf("intl: at least %d significant digits but at most %d",
-			p.minSig, p.maxSig)
+		return p, fmt.Errorf("%w: at least %d significant digits but at most %d",
+			ErrOption, p.minSig, p.maxSig)
 	}
 
 	switch {
@@ -175,8 +175,8 @@ func (r digitRequest) resolve() (digitPlan, error) {
 	p.reportFrac = needFrac || !needSig
 
 	if p.increment > 1 && (p.rounding != roundFractionDigits || p.minFrac != p.maxFrac) {
-		return p, fmt.Errorf("intl: a rounding increment needs the same " +
-			"smallest and largest number of decimals and no significant digits")
+		return p, fmt.Errorf("%w: a rounding increment needs the same "+
+			"smallest and largest number of decimals and no significant digits", ErrOption)
 	}
 	return p, nil
 }

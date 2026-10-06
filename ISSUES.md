@@ -255,7 +255,7 @@ some panic.** `number.go`, `digits.go`. MaximumFractionDigits −1 builds and
 then panics in Format; 101, MaximumSignificantDigits 22,
 MinimumSignificantDigits 0, MinimumIntegerDigits 22, a roundingIncrement not
 in ECMA-402's list, unnamed enum values and an ill-formed currency code are
-accepted. Status: open.
+accepted. Status: fixed (TestNumberOptionsRefused): the new ErrOption wraps every option NumberFormat or PluralRules refuses.
 
 **API-2. DateTimeFormat accepts options ECMA-402 rejects, and one panics.**
 `datetime.go`, `skeleton.go`. DateStyle 9 panics; FractionalSecondDigits 4
