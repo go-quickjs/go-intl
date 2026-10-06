@@ -136,7 +136,10 @@ func (c *Calendar) DateAdd(date ISODate, dur DateDuration, overflow Overflow) (I
 	d := icuDuration{negative: neg, years: abs64(dur.Years), months: abs64(dur.Months),
 		weeks: abs64(dur.Weeks), days: abs64(dur.Days)}
 	for _, v := range []int64{d.years, d.months, d.weeks, d.days} {
-		if v > 1<<32-1 {
+		// math.MinInt64 has no absolute value, and abs64 leaves it below
+		// zero: it is as far out of range as anything above, where a loop
+		// counting its months down had run for ever.
+		if v < 0 || v > 1<<32-1 {
 			return ISODate{}, rangeError("Duration was not valid.")
 		}
 	}

@@ -267,7 +267,7 @@ Status: fixed (TestDateTimeOptionsRefused).
 **API-3. Temporal's DateAdd hangs on math.MinInt64.** `temporal/calendarops.go`.
 `abs64(MinInt64)` stays negative, so the range check passes and the month
 loop runs for ever in every non-ISO calendar. temporal_rs refuses it.
-Status: open.
+Status: fixed (TestDateAddMinInt64). A full validity check in front of DateAdd was tried first and is wrong: temporal_rs lets the days balanced out of time units through to the ISO arithmetic, which reports "epoch days exceed maximum range.", and go-intl's Node replay caught the changed message.
 
 **API-4. Temporal wraps years outside int32.** `temporal/plaindate.go`.
 `NewPlainDate(4294969316, 1, 1, ISOCalendar, Reject)` succeeds and prints
