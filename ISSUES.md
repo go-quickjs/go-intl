@@ -68,7 +68,7 @@ Status: fixed (TestUnitPluralSignAndNotation).
 
 **NF-8. PluralRules.Select of NaN or an infinity returns a real category.**
 `plural.go`. `fr` Select(NaN) and Select(+Inf) are "one", `cy` NaN "few";
-Node answers "other". Status: open.
+Node answers "other". Status: fixed (TestPluralNonFinite).
 
 **NF-9. Currency spacing is missing after an exponent.** `number.go`. `bn
 {style:"currency", currency:"USD", currencyDisplay:"code", notation:

@@ -200,6 +200,11 @@ func loadPlurals(src Source, loc Locale) (*plurdata.Locale, error) {
 
 // Select returns the plural form a number calls for.
 func (p *PluralRules) Select(v float64) PluralCategory {
+	// NaN and the infinities are "other" in every language, as ICU's
+	// plural rules answer for a number that is not finite.
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return PluralOther
+	}
 	if p.written != nil {
 		o := p.written.pluralOperands(v)
 		return p.selectOperands(&o)
