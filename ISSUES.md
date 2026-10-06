@@ -31,7 +31,7 @@ maximumFractionDigits:3, minimumFractionDigits:2, roundingPriority:
 morePrecision}` 9.99 is "1E1", Node "1.0E1"; compact 999.99 "1K", Node "1.0K".
 The significant place is taken from the unrounded magnitude; ECMA-402's
 ToRawPrecision takes [[RoundingMagnitude]] from the rounded result, as ICU's
-number_rounding.cpp does (roundingMag2 += 1). Status: open.
+number_rounding.cpp does (roundingMag2 += 1). Status: fixed (TestRoundingPriorityCarry).
 
 **NF-3. Compact notation picks its wording from the unrounded magnitude.**
 `compact.go`. `ar {notation:"compact", compactDisplay:"long"}` 9999.9 is

@@ -202,13 +202,19 @@ func roundSignificant(m mag, n int, negative bool, mode RoundingMode) (integer, 
 	return roundAt(m, n-1-m.exponent(), negative, mode)
 }
 
-// significantPlace says where rounding to significant digits would round, as
-// a power of ten: ECMA-402's [[RoundingMagnitude]] of ToRawPrecision, whose
-// exponent is 0 for zero. The smaller place keeps more.
-func significantPlace(m mag, maxSignificant int) int {
+// significantPlace says where rounding to significant digits rounded, as a
+// power of ten: ECMA-402's [[RoundingMagnitude]] of ToRawPrecision, e - p + 1,
+// where e is the exponent of the rounded result, 0 for zero. A rounding that
+// carried rounded one place higher than the number it began with, as ICU's
+// number_rounding.cpp has it (roundingMag2 += 1): 0.99999 to three
+// significant digits is 1.00, rounded at the hundredths. The smaller place
+// keeps more.
+func significantPlace(integer, fraction string, maxSignificant int) int {
 	e := 0
-	if !m.isZero() {
-		e = m.exponent()
+	if trimmed := strings.TrimLeft(integer, "0"); trimmed != "" {
+		e = len(trimmed) - 1
+	} else if lead := len(fraction) - len(strings.TrimLeft(fraction, "0")); lead < len(fraction) {
+		e = -lead - 1
 	}
 	return e - maxSignificant + 1
 }

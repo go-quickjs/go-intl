@@ -198,7 +198,8 @@ func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 		// FormatNumericToString: morePrecision takes the significant
 		// digits' result where its rounding magnitude is at or below the
 		// decimals', and lessPrecision takes the decimals' there.
-		sig := significantPlace(magnitude, p.maxSig)
+		sInteger, sFraction := roundSignificant(magnitude, p.maxSig, negative, p.mode)
+		sig := significantPlace(sInteger, sFraction, p.maxSig)
 		frac := -p.maxFrac
 		useSig := sig <= frac
 		if p.rounding == roundLessPrecision {
@@ -208,7 +209,7 @@ func (p *digitPlan) round(magnitude mag, negative bool) (string, string) {
 		// FormatNumericToString takes sResult or fResult.
 		significant = useSig
 		if useSig {
-			integer, fraction = roundSignificant(magnitude, p.maxSig, negative, p.mode)
+			integer, fraction = sInteger, sFraction
 		} else {
 			integer, fraction = roundAt(magnitude, p.maxFrac, negative, p.mode)
 		}
