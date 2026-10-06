@@ -74,7 +74,7 @@ Node answers "other". Status: fixed (TestPluralNonFinite).
 {style:"currency", currency:"USD", currencyDisplay:"code", notation:
 "scientific"}` 1234 is "১.২৩৪E৩USD", Node "১.২৩৪E৩ USD"; accounting `ar`
 likewise, ranges too. ICU tests only whether the adjoining character is a
-digit. Status: open.
+digit. Status: fixed (TestCurrencySpacingAfterExponent).
 
 **NF-10. Per-currency formats are missing.** Data (`numbergen`). CLDR gives
 some currencies their own pattern, decimal or group, and ICU applies a

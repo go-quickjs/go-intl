@@ -844,7 +844,11 @@ func (f *NumberFormat) currencySpace(left, right Part) (string, bool) {
 // opposed to an affix or a sign.
 func isNumberPart(k PartKind) bool {
 	switch k {
-	case PartInteger, PartFraction, PartDecimal, PartGroup, PartNaN, PartInfinity:
+	case PartInteger, PartFraction, PartDecimal, PartGroup, PartNaN, PartInfinity,
+		PartExponentInteger:
+		// An exponent's digits end the number as much as an integer's do:
+		// ICU asks only whether the character beside the currency is a
+		// digit, so "1.234E3" is followed by " USD".
 		return true
 	}
 	return false
