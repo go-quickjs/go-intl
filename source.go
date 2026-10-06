@@ -143,6 +143,10 @@ const (
 	// categories, the default ignorables, the Hebrew script -- in the
 	// Unicode ICU carries.
 	MarkerProperties Marker = "properties"
+	// MarkerAbbreviationZones is ICU's table of the zones a host's
+	// abbreviations and offset stand for, where nothing else names its
+	// zone.
+	MarkerAbbreviationZones Marker = "abbreviationzones"
 )
 
 // ErrNotFound reports that a source has no data under a marker and locale. It

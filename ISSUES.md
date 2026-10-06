@@ -426,7 +426,15 @@ a minute without a response, and a generator after ten minutes
 **RU-8. The host zone's last fallback on Linux is not a named divergence.**
 `hostzone_other.go`. ICU falls back to the C library's abbreviations where
 /etc/localtime is not under zoneinfo; go-intl gives Etc/Unknown.
-Status: open.
+Status: fixed, as the HostAbbreviations divergence; to be measured against
+Node on a Linux host. Standard reports the host's offset, "+01:00", as
+ECMA-262's SystemTimeZoneIdentifier has it. NodeICU ports uprv_tzname's
+end: the abbreviations at 2007's solstices, as glibc's localtime_r leaves
+them, of the zone Go loads from the same /etc/localtime, looked up with the
+standard offset in putil.cpp's OFFSET_ZONE_MAPPINGS, which tzgen now reads
+from the sources archive, else the standard abbreviation, which
+detectHostZone makes a zone of. HostTimeZone and DefaultTimeZone take a
+Compat, and date.Options carries one (hostabbrev_test.go).
 
 ## Performance
 

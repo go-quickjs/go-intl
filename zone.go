@@ -113,18 +113,24 @@ func (z *TimeZone) PreviousTransition(ms int64) (ZoneTransition, bool) {
 // the user's region, or Etc/GMT at the offset where daylight saving is
 // turned off. Elsewhere it is TZ where that names a zone, then the zone
 // /etc/localtime links to, then the zone file it is a copy of. A name ICU
-// does not know is a zone of the host's standard offset, and no name at all
-// is Etc/Unknown, which is UTC.
+// does not know is a zone of the host's standard offset. Where nothing names
+// the zone, it is the host's offset, "+01:00", as ECMA-262 has it, or, with
+// HostAbbreviations, ICU's guess from the C library's abbreviations; on
+// Windows, Etc/Unknown, which is UTC.
 //
 // ICU on Windows does not read TZ, and Node sets ICU's default zone from
 // it there itself, when it starts: a TZ that is not empty is the zone
 // createTimeZone makes of it, as Node's is.
-func HostTimeZone(src Source) *TimeZone {
+func HostTimeZone(src Source, compat Compat) *TimeZone {
 	if tz, ok := nodeTZ(); ok {
 		return createTimeZone(src, tz)
 	}
 	id, raw := hostZone(src)
-	return detectHostZone(src, id, raw, time.Now().UnixMilli())
+	now := time.Now().UnixMilli()
+	if id == "" {
+		return unnamedHostZone(src, compat, raw, now, hostAbbreviations)
+	}
+	return detectHostZone(src, id, raw, now)
 }
 
 // unknownZone is Etc/Unknown, which is UTC.
@@ -272,8 +278,8 @@ func detectHostZone(src Source, id string, raw int, now int64) *TimeZone {
 // zone of offset zero, and for a host zone ICU has no name for. It differs
 // from what a DateTimeFormat made with no zone reports, the host zone's
 // Canonical, which is "+00:00" for that ID.
-func DefaultTimeZone(src Source) string {
-	host := HostTimeZone(src)
+func DefaultTimeZone(src Source, compat Compat) string {
+	host := HostTimeZone(src, compat)
 	if host.ID() == "GMT" {
 		return "UTC"
 	}

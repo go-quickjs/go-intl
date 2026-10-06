@@ -145,3 +145,7 @@ func registryZoneByStandardName(tzi *dynamicTimeZoneInformation) string {
 	}
 	return ""
 }
+
+// hostAbbreviations is not read on Windows: ICU names the zone Windows is
+// set to, and where it cannot, the host is Etc/Unknown.
+func hostAbbreviations() (hostAbbreviation, bool) { return hostAbbreviation{}, false }

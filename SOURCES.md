@@ -36,6 +36,7 @@ authority.
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
 | ICU data sources | `icu4c-78.3-data.zip` | the collation tree and defaults (`collgen`); numbering-system entries and en_US_POSIX's number patterns (`numbergen`); calendar glue and interval patterns (`dategen`); the rules of the algorithmic numbering systems (`rbnfgen`); zone names, region names for zones, and the zone metadata (`zonegen`); the locale aliases and extension types, from `misc/metadata.txt`, `keyTypeData.txt` and `timezoneTypes.txt` (`aliasgen`); each service's available locales, from the locale and collation trees, their `LOCALE_DEPS.json` and `misc/plurals.txt`, and the collations, currencies and time zones `supportedValuesOf` lists, from the collation and currency trees, `keyTypeData.txt`, `zoneinfo64.txt` and `timezoneTypes.txt` (`availgen`) | yes |
 | ICU's compiled data | `icudt78l.dat` in `icu4c-78.3-sources.tgz` | the break rules and dictionaries (`segmentgen`); the collation types that tailor conjoining jamo, which the export leaves incomplete (`collgen`) | yes: Node carries this data |
+| ICU's sources | `icu4c-78.3-sources.tgz` | the root collation's unsafe-backward set, `collunsafe.h` (`collgen`); the host abbreviations' zones, `putil.cpp` (`tzgen`) | yes: Node builds this ICU |
 | Unicode (UCD) properties | 17.0.0 `Scripts.txt`, `LineBreak.txt`, `extracted/DerivedGeneralCategory.txt`, `PropList.txt` | the break engines' sets and the Script property (`segmentgen`); the general categories, default ignorables and Hebrew script that currency spacing, number parts and Hebrew lists read (`propgen`) | yes, from node |
 | Temporal's crates | `temporal_rs` 0.2.3, `temporal_capi` 0.2.3, `ixdtf` 0.6.4, `timezone_provider` 0.2.3, `zoneinfo64` 0.3.0, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0, `icu_locale_core` 2.2.0 | the `temporal` package: Temporal's calendars, arithmetic, parsing and zones; Temporal's zone names (`tzidgen`) | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
 | V8 | as Node v26.10.0 vendors it, `deps/v8` | the `date` package: Date's offset cache, parser and strings, ported; no data | yes, from node |
@@ -97,7 +98,10 @@ Other URLs:
   what go-intl carries: Casablanca and El Aaiun join the Western European
   metazone from 2026-09-20. `tzgen` writes each zone's offsets from
   `zoneinfo64.txt`, with its canonical name from `timezoneTypes.txt`, and
-  the Windows zone mapping from `windowsZones.txt`.
+  the Windows zone mapping from `windowsZones.txt`; and, from
+  `icu4c-78.3-sources.tgz` (checksum below), `source/common/putil.cpp`'s
+  `OFFSET_ZONE_MAPPINGS`, the zones ICU guesses from a host's abbreviations
+  where nothing names its zone (`HostAbbreviations`).
 - `collgen` reads the same `icudt78l.dat`, through `internal/icudat`, for
   each collation type whose compiled trie tailors a conjoining jamo -- the
   search collations and Korean's `searchjl` -- and takes its table whole:

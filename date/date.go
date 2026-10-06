@@ -27,6 +27,9 @@ type Options struct {
 	TimeZone *intl.TimeZone
 	// Now is the clock; nil is the system's.
 	Now func() time.Time
+	// Compat chooses Node's side of intl.HostAbbreviations, for the host's
+	// zone where TimeZone is nil.
+	Compat intl.Compat
 }
 
 // An Environment is local time as a JavaScript realm sees it, V8's
@@ -57,7 +60,7 @@ func New(opts Options) (*Environment, error) {
 	}
 	tz := opts.TimeZone
 	if tz == nil {
-		tz = intl.HostTimeZone(src)
+		tz = intl.HostTimeZone(src, opts.Compat)
 	}
 	now := opts.Now
 	if now == nil {

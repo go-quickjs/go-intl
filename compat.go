@@ -155,6 +155,9 @@ const (
 	// share, backed up only as far as ICU's unsafe-backward set says, as
 	// ICU's RuleBasedCollator does.
 	IdenticalPrefix
+	// HostAbbreviations guesses a host zone that nothing names from the C
+	// library's abbreviations and offset, as ICU's uprv_tzname does.
+	HostAbbreviations
 )
 
 const (
@@ -168,7 +171,7 @@ const (
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
-		EmptyListItems | HourCycleStyles | IdenticalPrefix
+		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -525,6 +528,20 @@ var divergences = []Divergence{
 			"UTF-16 unit, which is never a supplementary digit: 15 against 100 compares 5 with 00, " +
 			"and \"1é\" sorts after \"1𝟏\". The backward accents are those after the " +
 			"prefix, and the ignorable after a shifted \"-\" is weighed: \"-\" sorts first",
+	},
+	{
+		Name: "HostAbbreviations", Flag: HostAbbreviations,
+		Area: "TimeZone",
+		What: "the host's zone where nothing names it: outside Windows, neither TZ, nor the zone " +
+			"/etc/localtime links to, nor a zone file it is a copy of; on Windows, no zone Windows " +
+			"names that CLDR maps",
+		Standard: "the host's offset, an offset time zone identifier, as ECMA-262's " +
+			"SystemTimeZoneIdentifier has it: \"+01:00\"",
+		Node: "ICU's uprv_tzname guesses from the C library's abbreviations: whether daylight " +
+			"saving was in force at the solstices of 2007, the two abbreviations and the standard " +
+			"offset, looked up in putil.cpp's OFFSET_ZONE_MAPPINGS, \"EST\" and \"EDT\" at five " +
+			"hours west being US/Eastern; else the standard abbreviation, a zone where ICU has " +
+			"one at that offset and a fixed zone of that name where not. On Windows, Etc/Unknown",
 	},
 }
 

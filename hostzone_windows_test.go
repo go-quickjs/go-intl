@@ -28,14 +28,14 @@ func TestHostTimeZoneFromTZ(t *testing.T) {
 		"EST":          {"EST", "America/Panama"},
 	} {
 		t.Setenv("TZ", tz)
-		z := intl.HostTimeZone(intl.Embedded)
+		z := intl.HostTimeZone(intl.Embedded, intl.NodeICU)
 		canonical, _ := z.Canonical()
 		if z.ID() != want.id || canonical != want.canonical {
 			t.Errorf("TZ=%s: %s, %s; want %s, %s", tz, z.ID(), canonical, want.id, want.canonical)
 		}
 	}
 	t.Setenv("TZ", "GMT+5:30:15")
-	if got := intl.HostTimeZone(intl.Embedded).Offset(0).Total(); got != 5*3600+30*60+15 {
+	if got := intl.HostTimeZone(intl.Embedded, intl.NodeICU).Offset(0).Total(); got != 5*3600+30*60+15 {
 		t.Errorf("GMT+5:30:15 is %d seconds east", got)
 	}
 }
@@ -60,9 +60,9 @@ func TestHostTimeZoneGMT(t *testing.T) {
 		{"UTC+00", "Etc/Unknown", "Etc/Unknown", "GMT+00:00"},
 	} {
 		t.Setenv("TZ", c.tz)
-		z := intl.HostTimeZone(intl.Embedded)
+		z := intl.HostTimeZone(intl.Embedded, intl.NodeICU)
 		canonical, _ := z.Canonical()
-		temporal := intl.DefaultTimeZone(intl.Embedded)
+		temporal := intl.DefaultTimeZone(intl.Embedded, intl.NodeICU)
 		name, err := intl.TimeZoneDisplayName(intl.Embedded, en, z, false, time.Unix(0, 0))
 		if err != nil {
 			t.Fatal(err)

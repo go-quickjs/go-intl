@@ -15,9 +15,9 @@ import (
 // reports there: TZ, where it names a zone, then the zone /etc/localtime
 // links to, then the zone file it is a copy of.
 //
-// ICU's last resort, which guesses the zone from the C library's two
-// abbreviations and offset, is not taken: Go has no such names from the C
-// library, and the host is then Etc/Unknown.
+// Where none of them names a zone, ICU guesses from the C library's two
+// abbreviations, which hostAbbreviations reads as the C library would from
+// the zone Go's time package loads (see hostabbrev.go).
 
 const (
 	tzDefault  = "/etc/localtime"
@@ -56,6 +56,8 @@ func hostZoneName() string {
 				return id
 			}
 		}
+		// A link to no zone's name leaves ICU nothing but the
+		// abbreviations.
 		return ""
 	}
 	want, err := os.ReadFile(tzDefault)
@@ -127,3 +129,8 @@ func hostRawOffset() int {
 	}
 	return offset
 }
+
+// hostAbbreviations is what ICU reads of the C library's zone, which on
+// Linux, macOS and the BSDs is /etc/localtime's, or TZ's, as Go's time
+// package loads it too.
+func hostAbbreviations() (hostAbbreviation, bool) { return abbreviationsOf(time.Local), true }

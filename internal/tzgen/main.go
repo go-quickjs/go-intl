@@ -2,7 +2,7 @@
 // ICU's zoneinfo64, from its time zone update 2026c, which is what Node runs
 // (see icusrc.TZSHA256).
 //
-//	go run ./internal/tzgen <icu-tz-2026c dir>
+//	go run ./internal/tzgen <icu-tz-2026c dir> <icu4c-78.3-sources.tgz>
 //
 // Each zone ICU knows by name has a file, data/tz/<name>.bin, the name in
 // lowercase, so that a name is valid when its file exists, in any case, as
@@ -35,6 +35,15 @@
 //	Eastern Standard Time	001	America/New_York
 //	Eastern Standard Time	US	America/New_York America/Detroit ...
 //
+// data/abbreviationzones.bin is putil.cpp's OFFSET_ZONE_MAPPINGS, from the
+// ICU 78.3 sources, which ICU consults to name the zone a machine is set to
+// where nothing names it but the C library's abbreviations: a line per
+// entry, in ICU's order, the first match being the one ICU takes, of the
+// standard offset in seconds west, when daylight saving falls (0 never, 1
+// in June, 2 in December), the two abbreviations and the zone.
+//
+//	18000	1	EST	EDT	US/Eastern
+//
 // A name whose canonical zone is Etc/Unknown, as Etc/Unknown's and
 // Factory's are, has no file: V8 rejects it.
 //
@@ -47,10 +56,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
 	"github.com/go-quickjs/go-intl/internal/tzdata"
@@ -58,8 +69,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/tzgen <icu-tz-2026c dir>")
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/tzgen <icu-tz-2026c dir> <icu4c-78.3-sources.tgz>")
 		os.Exit(2)
 	}
 	files, err := build(os.Args[1])
@@ -72,7 +83,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "tzgen:", err)
 		os.Exit(1)
 	}
-	if err := write(files, windows); err != nil {
+	abbreviations, err := buildAbbreviations(os.Args[2])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "tzgen:", err)
+		os.Exit(1)
+	}
+	if err := write(files, windows, abbreviations); err != nil {
 		fmt.Fprintln(os.Stderr, "tzgen:", err)
 		os.Exit(1)
 	}
@@ -299,9 +315,46 @@ func buildWindows(dir string) ([]byte, error) {
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
-// write replaces data/tz and data/windowszones.bin together, all built
-// before any is written. The names are ICU's, and so safe as paths.
-func write(files map[string][]byte, windows []byte) error {
+// putilPath is where ICU's sources keep OFFSET_ZONE_MAPPINGS.
+const putilPath = "icu/source/common/putil.cpp"
+
+var (
+	offsetZoneMappings = regexp.MustCompile(`(?s)OFFSET_ZONE_MAPPINGS\[\] = \{(.*?)\n\};`)
+	offsetZoneMapping  = regexp.MustCompile(`\{(-?\d+), ([012]), "([A-Z]+)", "([A-Z]+)", "([A-Za-z_/]+)"\}`)
+)
+
+// buildAbbreviations reads putil.cpp's table of abbreviations and offsets.
+func buildAbbreviations(sources string) ([]byte, error) {
+	src, err := icudat.ReadSourceFile(sources, putilPath)
+	if err != nil {
+		return nil, err
+	}
+	m := offsetZoneMappings.FindSubmatch(src)
+	if m == nil {
+		return nil, fmt.Errorf("%s has no OFFSET_ZONE_MAPPINGS", putilPath)
+	}
+	var lines []string
+	for _, line := range strings.Split(string(m[1]), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "/*") {
+			continue
+		}
+		e := offsetZoneMapping.FindStringSubmatch(line)
+		if e == nil {
+			return nil, fmt.Errorf("%s: an entry this does not read: %q", putilPath, line)
+		}
+		lines = append(lines, strings.Join(e[1:], "\t"))
+	}
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("%s's OFFSET_ZONE_MAPPINGS is empty", putilPath)
+	}
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
+}
+
+// write replaces data/tz, data/windowszones.bin and
+// data/abbreviationzones.bin together, all built before any is written.
+// The names are ICU's, and so safe as paths.
+func write(files map[string][]byte, windows, abbreviations []byte) error {
 	tree := make(map[string][]byte, len(files))
 	for name, b := range files {
 		tree[name+".bin"] = b
@@ -309,5 +362,6 @@ func write(files map[string][]byte, windows []byte) error {
 	set := writeset.New()
 	set.Tree(filepath.Join("data", "tz"), tree)
 	set.File(filepath.Join("data", "windowszones.bin"), windows)
+	set.File(filepath.Join("data", "abbreviationzones.bin"), abbreviations)
 	return set.Commit()
 }

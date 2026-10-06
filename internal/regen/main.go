@@ -143,7 +143,7 @@ func jobs(cache string) []job {
 		{name: "normgen"},
 		{name: "aliasgen", args: []string{at(dataZip), at(tzDir)}},
 		{name: "availgen", args: []string{at(dataZip), at(tzDir)}},
-		{name: "tzgen", args: []string{at(tzDir)}},
+		{name: "tzgen", args: []string{at(tzDir), at(sourcesTgz)}},
 		{name: "tzidgen", args: []string{at(tzProvider)}},
 		{name: "temporalgen", args: []string{at(calendar)}},
 		{name: "numbergen", args: []string{pkg("cldr-numbers-full"), at(dataZip)}},
