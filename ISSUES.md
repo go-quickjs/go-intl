@@ -416,7 +416,12 @@ went up a version. A file written before, or under another version, is
 refused (internal/blob/blob_test.go, pairtable_test.go).
 
 **RU-7. regen trusts an unpacked tree and has no timeout.**
-`internal/regen`. Status: open.
+`internal/regen`. Status: fixed. The marker an extraction leaves names the
+archive's sha256 and a digest of every file's path, size and time of
+change; a tree that no longer matches, or another archive, is extracted
+again, which costs a stat a file. Downloads give up after ten minutes, or
+a minute without a response, and a generator after ten minutes
+(internal/regen/main_test.go).
 
 **RU-8. The host zone's last fallback on Linux is not a named divergence.**
 `hostzone_other.go`. ICU falls back to the C library's abbreviations where

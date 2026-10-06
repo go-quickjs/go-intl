@@ -27,12 +27,14 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -180,9 +182,9 @@ func run(cache string, parallel int) error {
 	if err := fetchAll(cache, sources()); err != nil {
 		return err
 	}
-	for name := range cldrPackages {
+	for name, sum := range cldrPackages {
 		archive := filepath.Join(cache, cldrDir, name+"-"+cldrVersion+".tgz")
-		if err := unpack(archive, filepath.Join(cache, cldrDir, name)); err != nil {
+		if err := unpack(archive, sum, filepath.Join(cache, cldrDir, name)); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
 	}
@@ -230,7 +232,7 @@ func fetch(path string, s source) error {
 		return err
 	}
 	fmt.Println("fetching", s.url)
-	resp, err := http.Get(s.url)
+	resp, err := client.Get(s.url)
 	if err != nil {
 		return fmt.Errorf("%s: %w", s.url, err)
 	}
@@ -259,6 +261,21 @@ func fetch(path string, s source) error {
 	return os.Rename(tmp, path)
 }
 
+// client gives up on a server that stops answering, rather than waiting
+// for ever: the largest source is some tens of megabytes.
+var client = &http.Client{
+	Timeout: 10 * time.Minute,
+	Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ResponseHeaderTimeout: time.Minute,
+		TLSHandshakeTimeout:   30 * time.Second,
+	},
+}
+
+// generatorTimeout is how long one generator may take; the slowest takes
+// seconds.
+const generatorTimeout = 10 * time.Minute
+
 func fileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -273,11 +290,16 @@ func fileSHA256(path string) (string, error) {
 }
 
 // unpack extracts an npm package's tarball into dir, as dir/package/...,
-// unless a previous run finished doing so.
-func unpack(archive, dir string) error {
+// unless a previous run extracted this archive, whose sha256 is sum, there
+// and nothing has changed a file since. The marker it leaves says which
+// archive, and each file's path, size and time of change, as a digest;
+// a tree that differs from it, edited or cut short, is extracted again.
+func unpack(archive, sum, dir string) error {
 	done := filepath.Join(dir, ".unpacked")
-	if _, err := os.Stat(done); err == nil {
-		return nil
+	if b, err := os.ReadFile(done); err == nil {
+		if tree, err := treeDigest(dir); err == nil && string(b) == marker(sum, tree) {
+			return nil
+		}
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return err
@@ -327,7 +349,32 @@ func unpack(archive, dir string) error {
 			}
 		}
 	}
-	return os.WriteFile(done, nil, 0o644)
+	tree, err := treeDigest(dir)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(done, []byte(marker(sum, tree)), 0o644)
+}
+
+func marker(sum, tree string) string { return "archive " + sum + "\ntree " + tree + "\n" }
+
+// treeDigest is a digest of the files under dir but the marker: each one's
+// path, size and time of change, in order.
+func treeDigest(dir string) (string, error) {
+	h := sha256.New()
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() == ".unpacked" {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, path)
+		fmt.Fprintf(h, "%s\x00%d\x00%d\n", filepath.ToSlash(rel), info.Size(), info.ModTime().UnixNano())
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil)), err
 }
 
 // generate runs the generators, each once what it waits for is done, as
@@ -374,10 +421,16 @@ func generate(all []job, parallel int) error {
 // took, or what it said when it failed.
 func goRun(name string, args ...string) error {
 	start := time.Now()
-	cmd := exec.Command("go", append([]string{"run", "./internal/" + name}, args...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), generatorTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", append([]string{"run", "./internal/" + name}, args...)...)
+	cmd.WaitDelay = 10 * time.Second
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			err = fmt.Errorf("gave up after %s: %w", generatorTimeout, err)
+		}
 		return fmt.Errorf("%s: %w\n%s", name, err, out.String())
 	}
 	last := strings.TrimSpace(out.String())
