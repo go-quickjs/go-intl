@@ -304,7 +304,7 @@ func (d Duration) defaultLargestUnit() Unit {
 		d.minutes != 0, d.seconds != 0, d.milliseconds != 0, !d.microseconds.isZero(), !d.nanoseconds.isZero()}
 	for i, nonzero := range fields {
 		if nonzero {
-			return Unit(10 - i)
+			return unitTable[i]
 		}
 	}
 	return Nanosecond

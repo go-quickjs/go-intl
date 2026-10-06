@@ -7,7 +7,7 @@ import (
 )
 
 // Duration.Round and Total refuse a unit no constant names, and Total one
-// that is not a unit: SmallestUnit Unit(11) had divided by zero, and
+// that is not a unit: a SmallestUnit past Year had divided by zero, and
 // Total(UnitAuto) answered +Inf, where temporal_rs refuses "auto" as "Auto
 // unit not allowed here" (ISSUES.md API-6).
 func TestDurationUnitOptions(t *testing.T) {
@@ -15,7 +15,7 @@ func TestDurationUnitOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, u := range []Unit{Unit(11), Unit(-5), Unit(99)} {
+	for _, u := range []Unit{Year + 1, Unit(-1), Unit(-5), Unit(99)} {
 		if _, err := d.Round(RoundingOptions{SmallestUnit: u, LargestUnit: NoUnit}, RelativeTo{}); err == nil ||
 			!strings.Contains(err.Error(), "Unit was not a valid unit.") {
 			t.Errorf("Round smallest %d: %v", u, err)

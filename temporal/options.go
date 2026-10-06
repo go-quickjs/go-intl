@@ -9,9 +9,6 @@ import (
 // Temporal's options, as temporal_rs 0.2.3 takes them once the engine has
 // read them: each is its zero value where the option was not given.
 
-// NoUnit is a unit option not given: unset, which is not "auto".
-const NoUnit Unit = -1
-
 // unitTable is Table 21's units, from the largest.
 var unitTable = [10]Unit{Year, Month, Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond}
 
@@ -113,7 +110,7 @@ func (g unitGroup) validate(u, extra Unit) error {
 		return nil
 	}
 	// A value no Unit names, which a Go caller can give where JavaScript
-	// cannot: Unit(11) had divided by zero.
+	// cannot: a unit past Year had divided by zero.
 	if u != NoUnit && (u < UnitAuto || u > Year) {
 		return rangeError("Unit was not a valid unit.")
 	}
@@ -426,6 +423,8 @@ func (r RoundingIncrement) validate(dividend uint64, inclusive bool) error {
 // ToStringRoundingOptions are toString's precision options.
 type ToStringRoundingOptions struct {
 	// Precision is fractionalSecondDigits: PrecisionAuto where not given.
+	// Its zero value is not the default but 0, no fractional digits, as
+	// fractionalSecondDigits: 0 is; start from DefaultToStringOptions.
 	Precision    Precision
 	SmallestUnit Unit // NoUnit where not given
 	RoundingMode RoundingMode

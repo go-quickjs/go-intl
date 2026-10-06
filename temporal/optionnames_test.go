@@ -33,7 +33,7 @@ func TestOptionNames(t *testing.T) {
 		{Precision(9), "9"},
 
 		// No constant names these.
-		{Unit(11), "Unit(11)"}, {Overflow(2), "Overflow(2)"}, {RoundingMode(-1), "RoundingMode(-1)"},
+		{Unit(12), "Unit(12)"}, {Unit(-1), "Unit(-1)"}, {Overflow(2), "Overflow(2)"}, {RoundingMode(-1), "RoundingMode(-1)"},
 		{Precision(10), "Precision(10)"}, {Precision(-3), "Precision(-3)"},
 	} {
 		if got := c.v.String(); got != c.want {

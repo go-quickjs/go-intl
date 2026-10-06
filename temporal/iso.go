@@ -191,11 +191,15 @@ func differenceISODate(one, two ISODate, largest Unit) (DateDuration, error) {
 	return DateDuration{Years: int64(years), Months: int64(months), Weeks: weeks, Days: days}, nil
 }
 
-// A Unit is one of Temporal's units of time, from the largest.
+// A Unit is one of Temporal's units of time, from the smallest, after
+// NoUnit and UnitAuto.
 type Unit int
 
 const (
-	UnitAuto Unit = iota
+	// NoUnit is a unit option not given: unset, which is not "auto". It is
+	// the zero value, so that an option struct's zero value is the default.
+	NoUnit Unit = iota
+	UnitAuto
 	Nanosecond
 	Microsecond
 	Millisecond

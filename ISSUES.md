@@ -285,7 +285,12 @@ temporal_rs refuses it. Status: fixed (TestDurationUnitOptions).
 **API-7. Temporal's zero option structs are errors.** `temporal/options.go`.
 `DifferenceSettings{}` gives "Unit was not part of the date unit group."
 where DESIGN.md has the zero value be the default; NoUnit is −1, so a zero
-Unit means "auto". Status: open.
+Unit means "auto". Status: fixed. NoUnit is now the zero Unit, the rest
+renumbered in the same order, so `DifferenceSettings{}` and
+`RoundingOptions{}` are the defaults. Precision keeps its numbering, which
+go-quickjs converts from fractionalSecondDigits: its zero is 0 digits, as
+`fractionalSecondDigits: 0` is, and the field's doc says to start from
+DefaultToStringOptions (temporal/zero_options_test.go).
 
 **API-8. ParseTables panics on a malformed month.**
 `internal/eastasian/eastasian.go`. Month 13 or 00 indexes out of range; a

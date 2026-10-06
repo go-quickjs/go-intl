@@ -19,10 +19,7 @@ func optionName(typ string, v int, names ...string) string {
 // String is the unit's singular name, "day", or "auto", which ParseUnit
 // reads back.
 func (u Unit) String() string {
-	if u == NoUnit {
-		return "undefined"
-	}
-	return optionName("Unit", int(u), "auto", "nanosecond", "microsecond", "millisecond", "second",
+	return optionName("Unit", int(u), "undefined", "auto", "nanosecond", "microsecond", "millisecond", "second",
 		"minute", "hour", "day", "week", "month", "year")
 }
 
