@@ -301,7 +301,9 @@ Gregorian date (internal/eastasian/eastasian_test.go).
 
 **API-9. LoadZoneRecord hands out read-only memory as a writable slice.**
 `zonerecord.go`. TransitionTypes points into the embedded pack; writing to
-it is a fault recover cannot catch. Status: open.
+it is a fault recover cannot catch. Status: fixed. The record copies the
+types; the transitions were already decoded into a fresh slice
+(zonerecord_test.go).
 
 **API-10. Exported temporal functions take the unexported int128.**
 `temporal`. NewZonedDateTime, TimeZone.OffsetNanosecondsFor and the

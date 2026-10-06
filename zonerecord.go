@@ -12,7 +12,8 @@ type ZoneRecord struct {
 	// saving, in seconds, the first in force before any transition.
 	Types [][2]int
 	// Transitions are each transition's instant, in seconds since 1970, in
-	// order, and TransitionTypes the type each starts.
+	// order, and TransitionTypes the type each starts. The record is the
+	// caller's own, every slice in it a copy.
 	Transitions     []int64
 	TransitionTypes []uint8
 	// FinalRule is the rule the zone ends in, nil for none: ICU's eleven
@@ -31,10 +32,13 @@ func LoadZoneRecord(src Source, name string) (*ZoneRecord, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The transitions' types are the Source's memory, which nothing may
+	// change, and the embedded data's cannot be written: the record has a
+	// copy.
 	r := &ZoneRecord{
 		Name:            z.name,
 		Transitions:     z.trans,
-		TransitionTypes: z.transTypes,
+		TransitionTypes: append([]uint8(nil), z.transTypes...),
 		FinalRaw:        z.finalRaw,
 		FinalYear:       z.finalYear,
 	}
