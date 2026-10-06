@@ -201,6 +201,11 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 		if greg.Available, err = availableFromICU(chain, "gregorian"); err != nil {
 			return fmt.Errorf("%s: %w", e.Name(), err)
 		}
+		patterns, err := dateTimePatternsFromICU(chain, "gregorian")
+		if err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
+		usePatterns(greg, patterns)
 		iso := isoCalendar(*greg, chain)
 		if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, "iso8601"); err != nil {
 			return fmt.Errorf("%s: iso8601: %w", e.Name(), err)
@@ -230,6 +235,11 @@ func run(icu *icusrc.Locales, root string, others []string) error {
 			if c.Available, err = availableFromICU(chain, extras[i].cldr); err != nil {
 				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
 			}
+			patterns, err := dateTimePatternsFromICU(chain, extras[i].cldr)
+			if err != nil {
+				return fmt.Errorf("%s: %s: %w", e.Name(), extras[i].cldr, err)
+			}
+			usePatterns(c, patterns)
 			l.Calendars = append(l.Calendars, datedata.NamedCalendar{
 				Name: extras[i].bcp47, Calendar: *c,
 			})

@@ -173,7 +173,7 @@ Gregorian patterns; ICU resolves it to root's own. `en-GB` indian
 `{hour:"numeric", minute:"2-digit"}` 07:00 is "7:00", Node "07:00"; `da`
 chinese "07.05.09", Node "07:05:09"; `zh-Hans-HK` coptic short
 "4/3/40科普特历", Node "科普特历1740/3/4". 56–181 of 1,900 cases per calendar.
-Status: open.
+Status: fixed (TestCalendarStylePatterns). In every locale Node supports, 95,410 field option sets over seven calendars and 56,870 style sets over eleven now all match Node; 1,866 and 3,173 had differed.
 
 **DT-4. The pattern generator takes availableFormats in the wrong order.**
 Data (`dategen`) and `dtpg.go`. ICU adds them bundle by bundle, the child
