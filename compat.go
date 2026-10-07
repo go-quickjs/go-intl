@@ -46,7 +46,7 @@ import (
 // Compat is the divergences in which to answer as Node does rather than as
 // the standard: a set of the flags below. The zero value is the standard in
 // every one.
-type Compat uint32
+type Compat uint64
 
 const (
 	// NarrowSpace writes a plain space where ICU writes U+202F.
@@ -158,6 +158,10 @@ const (
 	// HostAbbreviations guesses a host zone that nothing names from the C
 	// library's abbreviations and offset, as ICU's uprv_tzname does.
 	HostAbbreviations
+	// DoubleRangeIdentity writes a range whose ends ICU's Formattable holds
+	// equal, the same double, as one number marked approximate, as ICU's
+	// NumberRangeFormatter does.
+	DoubleRangeIdentity
 )
 
 const (
@@ -171,7 +175,7 @@ const (
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
-		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations
+		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -544,6 +548,22 @@ var divergences = []Divergence{
 			"offset, looked up in putil.cpp's OFFSET_ZONE_MAPPINGS, \"EST\" and \"EDT\" at five " +
 			"hours west being US/Eastern; else the standard abbreviation, a zone where ICU has " +
 			"one at that offset and a fixed zone of that name where not. On Windows, Etc/Unknown",
+	},
+	{
+		Name: "DoubleRangeIdentity", Flag: DoubleRangeIdentity,
+		Area: "NumberFormat",
+		What: "a range of two ends that are the same double but not the same number, a BigInt " +
+			"or a numeric string among them",
+		Standard: "FormatNumericRange writes one number marked approximate only where the two " +
+			"ends are written alike: \"0.1\" and \"0.10000000000000000001\" to twenty places " +
+			"are \"0.1–0.10000000000000000001\"",
+		Node: "V8 hands ICU a BigInt or a numeric string as its decimal, and ICU's " +
+			"Formattable holds one that does not fit in an int64 as the double nearest it as " +
+			"well; formatFormattableRange asks Formattable's operator==, which compares those " +
+			"doubles, whether the ends were equal before rounding, and where they were writes " +
+			"the first end marked approximate: \"~0.1\", and 10n ** 30n against 10n ** 30n + 1n " +
+			"\"~1,000,000,000,000,000,000,000,000,000,000\". A double never equals an integer, " +
+			"nor two ends whose signs, exponents or affixes differ",
 	},
 }
 

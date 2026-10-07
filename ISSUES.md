@@ -148,6 +148,20 @@ compact CVE is "-CVE 123万", go-intl "-CVE 1.2M"; `mni-Mtei` writes
 Bengali digits. Found comparing currencies in every locale while fixing
 NF-10. Status: documented (ExampleLocaleMatcher_Resolve). Not JS-visible: a constructor works in the locale it is given, and ECMA-402's ResolveLocale, LocaleMatcher.Resolve over the service's available locales, is what makes "az-Arab" "az", as V8 does; go-quickjs runs it and writes all seven locales as Node does. A Go program calling a constructor directly does not get it, so each constructor, LocaleMatcher.Resolve and the README now say so, and the example shows it.
 
+**NF-21. A range of two ends that are the same double is written in
+full.** `numrange.go`. `formatRange("0.1", "0.10000000000000000001")` to
+twenty places, Node "~0.1"; `formatRange(10n ** 30n, 10n ** 30n + 1n)`,
+Node "~1,000,…,000". V8 hands ICU a BigInt or a numeric string as its
+decimal, ICU's Formattable holds one that does not fit in an int64 as the
+double nearest it too, and formatFormattableRange asks Formattable's
+operator==, which compares those doubles, whether the ends were equal
+before rounding. Found while fixing ApproximateIncrement's ranges in
+go-quickjs. Status: fixed (TestDoubleRangeIdentity): ECMA-402 writes both
+ends, so this is the divergence DoubleRangeIdentity. Compat is a uint64
+now, the thirty-three flags past a uint32. go-quickjs must hand a
+hexadecimal, octal or binary string below 2^53 - 1 over as a double, as
+V8 makes a Number of it, for its Node side to match there too.
+
 ## JavaScript-visible: DateTimeFormat and the calendars
 
 **DT-1. Time styles skip ICU's pattern-generator path.** `skeleton.go`.

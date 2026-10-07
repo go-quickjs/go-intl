@@ -2,6 +2,8 @@ package intl
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -17,6 +19,48 @@ import (
 // run to two characters or more: German "5,00–10,00 €", but English
 // "$5.00 – $10.00", whose dollar sign is one. Anything written twice puts
 // spaces round the range's dash.
+
+// icuSameEnds is whether ICU's Formattable::operator== holds a range's two
+// ends equal, as V8 hands them over: a double -- a Number, or a string
+// that is an infinity -- as itself, and a decimal -- a BigInt, or another
+// numeric string -- as the integer it is where it fits in an int64, else as
+// the double nearest it. An integer never equals a double.
+func icuSameEnds(start, end Decimal) bool {
+	si, sInt := icuInteger(start)
+	ei, eInt := icuInteger(end)
+	if sInt || eInt {
+		return sInt && eInt && si == ei
+	}
+	return icuDouble(start) == icuDouble(end)
+}
+
+// icuInteger is a decimal that fits in an int64 as the integer ICU's
+// Formattable holds it as.
+func icuInteger(d Decimal) (int64, bool) {
+	if d.kind != decimalFinite || d.fromFloat || d.m.fraction != "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(d.m.integer, 10, 64)
+	if err != nil {
+		// Past an int64; -2^63 alone fits only as a negative number.
+		if d.neg && d.m.integer == "9223372036854775808" {
+			return math.MinInt64, true
+		}
+		return 0, false
+	}
+	if d.neg {
+		n = -n
+	}
+	return n, true
+}
+
+// icuDouble is the double ICU's Formattable holds an end as.
+func icuDouble(d Decimal) float64 {
+	if d.fromFloat {
+		return d.float
+	}
+	return d.Float()
+}
 
 // FormatRange writes a range of two numbers.
 func (f *NumberFormat) FormatRange(start, end float64) (string, error) {
@@ -48,6 +92,9 @@ func (f *NumberFormat) FormatDecimalRangeToParts(start, end Decimal) ([]RangePar
 	if start.IsNaN() || end.IsNaN() {
 		return nil, fmt.Errorf("intl: a number range with an end that is not a number")
 	}
+	// Ends ICU holds equal before rounding are written as one number, with
+	// Node's quirks, though they round apart (DoubleRangeIdentity).
+	sameBefore := f.opts.Compat.Has(DoubleRangeIdentity) && icuSameEnds(start, end)
 	// A range's ends are rounded from the double's own decimal with Node's
 	// quirks too. V8 hands ICU a double for a range as for format, but
 	// ICU's range formatter reads each end through a Formattable, whose
@@ -62,7 +109,7 @@ func (f *NumberFormat) FormatDecimalRangeToParts(start, end Decimal) ([]RangePar
 
 	// NumberRangeFormatterImpl::format: ends written alike are one number,
 	// marked approximate, written from the start as given.
-	if innerSame && middleSame && outerSame && a.rounded == b.rounded {
+	if innerSame && middleSame && outerSame && (a.rounded == b.rounded || sameBefore) {
 		return f.rangeParts(f.assemble(f.layers(start, true))), nil
 	}
 
