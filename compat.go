@@ -30,8 +30,9 @@ import (
 // past, the pattern an accounting amount with no sign takes, the offsets a
 // relative time names in words, the digits of a double rounded to an
 // increment, which currencies a currency's own format is used for, the
-// empty items of a list, and the hour cycle keyword a time style is made
-// with. Standard and NodeICU are the two ends.
+// empty items of a list, the hour cycle keyword a time style is made with,
+// what Intl.Locale answers for a keyword with no value, and a text
+// direction no one knows. Standard and NodeICU are the two ends.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -69,9 +70,9 @@ const (
 	// count an era as a field asked for and keep no hour cycle.
 	TemporalFormats
 	// YesValues leaves "yes" out of any Unicode extension keyword, as ICU
-	// does, rather than only where it stands for "true", and answers "yes"
-	// for a keyword with no value where Intl.Locale's getCalendars and the
-	// like give the keyword's value.
+	// does, rather than only where it stands for "true", and, with
+	// TrueKeywords, answers "yes" for a keyword with no value where
+	// Intl.Locale's getCalendars and the like give the keyword's value.
 	YesValues
 	// CurrencyNames names every currency CLDR has a name for, where the
 	// standard names only those Intl.supportedValuesOf lists.
@@ -162,6 +163,14 @@ const (
 	// equal, the same double, as one number marked approximate, as ICU's
 	// NumberRangeFormatter does.
 	DoubleRangeIdentity
+	// TrueKeywords answers a Unicode extension keyword with no value, which
+	// stands for "true", as "true" -- or, with YesValues, ICU's "yes" -- where
+	// Intl.Locale's getCalendars and the like give the keyword's value.
+	TrueKeywords
+	// LeftToRightDirection answers getTextInfo's direction "ltr" for a script
+	// whose direction is unknown, or a locale whose script cannot be found,
+	// as ICU's uloc_isRightToLeft does.
+	LeftToRightDirection
 )
 
 const (
@@ -175,7 +184,8 @@ const (
 		ZoneIdentifiers | CopticEra | ChineseAstronomy | SubdivisionHourCycles | RegionZones |
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
-		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity
+		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity |
+		TrueKeywords | LeftToRightDirection
 )
 
 // Has reports whether Node's behavior is chosen for a divergence.
@@ -564,6 +574,30 @@ var divergences = []Divergence{
 			"the first end marked approximate: \"~0.1\", and 10n ** 30n against 10n ** 30n + 1n " +
 			"\"~1,000,000,000,000,000,000,000,000,000,000\". A double never equals an integer, " +
 			"nor two ends whose signs, exponents or affixes differ",
+	},
+	{
+		Name: "TrueKeywords", Flag: TrueKeywords,
+		Area: "Locale",
+		What: "getCalendars, getCollations, getHourCycles and getNumberingSystems, and the " +
+			"getters Intl.Locale has for them, for a Unicode extension keyword with no value",
+		Standard: "the Intl Locale Info API's CalendarsOfLocale and the like answer the locale's " +
+			"[[Calendar]], which a keyword with no value -- or \"true\", which canonicalizes away " +
+			"-- leaves the empty string: \"en-u-co\" and \"en-u-co-true\" have collation \"\" and " +
+			"getCollations() [\"\"] (test262's preferred-from-unicode-extension-true-empty)",
+		Node: "V8 answers the getters \"true\", and the lists ICU's own spelling of it, " +
+			"[\"yes\"] (with YesValues; [\"true\"] without)",
+	},
+	{
+		Name: "LeftToRightDirection", Flag: LeftToRightDirection,
+		Area: "Locale",
+		What: "getTextInfo's direction where the script's direction is not known: Common, " +
+			"Inherited, Braille, Unknown, a private use or unregistered script, or a locale whose " +
+			"likely script cannot be found",
+		Standard: "the Intl Locale Info API's TextDirectionOfLocale answers undefined: " +
+			"\"und-Zyyy\", \"en-Brai\", \"und-Qaaq\" and \"tlh\" have no direction, and " +
+			"\"ar-Zxxx\" none either (test262's script-metadata-rtl-is-unknown and its fellows)",
+		Node: "ICU's uloc_isRightToLeft answers false for any script it does not mark right to " +
+			"left, and V8 writes that as \"ltr\": all of these are \"ltr\"",
 	},
 }
 

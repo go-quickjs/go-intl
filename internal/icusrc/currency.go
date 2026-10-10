@@ -69,3 +69,23 @@ func RightToLeftScripts() ([]string, error) {
 	}
 	return out, nil
 }
+
+// LeftToRightScripts lists the scripts SCRIPT_PROPS knows to be written left
+// to right: those it has properties for but neither RTL nor the UNKNOWN
+// usage (Brai, Zzzz), and not Common or Inherited (Zyyy, Zinh), whose
+// characters take the direction of the text around them -- the scripts
+// CLDR's scriptMetadata.txt gives "NO" as their RTL field.
+func LeftToRightScripts() ([]string, error) {
+	var out []string
+	for _, m := range scriptProps.FindAllStringSubmatch(uscriptPropsSource, -1) {
+		if strings.Contains(m[1], "RTL") || strings.Contains(m[1], "UNKNOWN") ||
+			m[2] == "Zyyy" || m[2] == "Zinh" {
+			continue
+		}
+		out = append(out, m[2])
+	}
+	if len(out) < 100 {
+		return nil, fmt.Errorf("uscript_props.cpp: only %d left-to-right scripts", len(out))
+	}
+	return out, nil
+}

@@ -179,16 +179,21 @@ func TestYesValues(t *testing.T) {
 			}
 		}
 	}
+}
 
-	// A key with no value, which stands for "true": Intl.Locale's
-	// getCalendars and the like answer "true", as its getters do, and Node
-	// answers ICU's "yes".
+// A key with no value, which stands for "true": Intl.Locale's getCalendars
+// and the like answer the locale's value for it, the empty string (test262's
+// preferred-from-unicode-extension-true-empty); V8 answers "true", and with
+// YesValues ICU's "yes", which is what Node shows.
+func TestTrueKeywords(t *testing.T) {
 	for _, c := range []struct {
 		compat intl.Compat
 		want   string
 	}{
-		{intl.Standard, "true"},
-		{intl.YesValues, "yes"},
+		{intl.Standard, ""},
+		{intl.YesValues, ""},
+		{intl.TrueKeywords, "true"},
+		{intl.TrueKeywords | intl.YesValues, "yes"},
 	} {
 		info, err := intl.NewLocaleInfo(intl.Embedded, intl.LocaleInfoOptions{Compat: c.compat})
 		if err != nil {

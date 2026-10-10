@@ -15,7 +15,9 @@ import (
 // from ICU (intl-objects.cc), one "<key> <value>" line each; and for
 // Intl.Locale, each region's canonical zones ("zone <region> <id>"), the
 // collation types' BCP 47 spellings ("cotype phonebook phonebk") and the
-// scripts ICU writes right to left ("rtl Arab"). Calendars, numbering
+// scripts ICU writes right to left ("rtl Arab") and those it knows to be
+// written left to right ("ltr Latn"); a script in neither has no direction
+// anyone knows. Calendars, numbering
 // systems and units are go-intl's own lists.
 func buildValues(zip string) ([]byte, error) {
 	var lines []string
@@ -68,6 +70,14 @@ func buildValues(zip string) ([]byte, error) {
 	sort.Strings(rtl)
 	for _, script := range rtl {
 		lines = append(lines, "rtl "+script)
+	}
+	ltr, err := icusrc.LeftToRightScripts()
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(ltr)
+	for _, script := range ltr {
+		lines = append(lines, "ltr "+script)
 	}
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }

@@ -34,15 +34,16 @@ func NewLocaleInfo(src Source, opts LocaleInfoOptions) (*LocaleInfo, error) {
 }
 
 // keyword is the value of a Unicode extension keyword a getter answers
-// with, where the locale has one: its type, and for a key with none,
-// which stands for "true", "true", as the locale's getters answer. ICU
-// answers "yes", its own spelling of it (YesValues).
+// with, where the locale has one: its type, and for a key with none, which
+// stands for "true", the empty string, as the locale's [[Calendar]] and the
+// like hold it. V8 answers "true" (TrueKeywords), and ICU's own spelling of
+// it, "yes" (YesValues).
 func (i *LocaleInfo) keyword(l Locale, key string) ([]string, bool) {
 	v, ok := l.Keyword(key)
 	if !ok {
 		return nil, false
 	}
-	if v == "" {
+	if v == "" && i.opts.Compat.Has(TrueKeywords) {
 		v = "true"
 		if i.opts.Compat.Has(YesValues) {
 			v = "yes"
@@ -276,8 +277,59 @@ func (i *LocaleInfo) TimeZones(l Locale) ([]string, bool, error) {
 // substring.
 const langDirections = "root-en-es-pt-zh-ja-ko-de-fr-it-ar+he+fa+ru-nl-pl-th-tr-"
 
-// RightToLeft is getTextInfo's direction: whether the locale's script, or
-// its likely script, runs right to left (uloc_isRightToLeft).
+// scriptVariants maps the ISO 15924 codes of a script's variant forms,
+// which SCRIPT_PROPS has no properties for, to the script: a variant is
+// written in its script's direction.
+var scriptVariants = map[string]string{
+	"Aran": "Arab", "Syre": "Syrc", "Syrj": "Syrc", "Syrn": "Syrc",
+	"Latf": "Latn", "Latg": "Latn", "Cyrs": "Cyrl", "Geok": "Geor", "Hrkt": "Kana",
+}
+
+// Direction is getTextInfo's direction (TextDirectionOfLocale): "rtl" or
+// "ltr" as the locale's script, or else its likely script, is written, and
+// the empty string where no one knows -- a script of no direction of its
+// own, Common, Inherited, Braille or Unknown, one private use or
+// unregistered, or a locale whose likely script cannot be found -- which
+// ECMA-402 answers undefined. ICU answers "ltr" for all of those
+// (LeftToRightDirection), as RightToLeft does.
+func (i *LocaleInfo) Direction(l Locale) (string, error) {
+	if i.opts.Compat.Has(LeftToRightDirection) {
+		rtl, err := i.RightToLeft(l)
+		if err != nil || !rtl {
+			return "ltr", err
+		}
+		return "rtl", nil
+	}
+	script := l.Script
+	if script.IsZero() {
+		full, ok := i.likely.Maximize(l.Data())
+		if !ok || full.Script.IsZero() {
+			return "", nil
+		}
+		script = full.Script
+	}
+	name := script.String()
+	if base, ok := scriptVariants[name]; ok {
+		name = base
+	}
+	b, err := i.src.Open(MarkerValues, DataLocale{})
+	if err != nil {
+		return "", fmt.Errorf("intl: the script directions: %w", err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		switch line {
+		case "rtl " + name:
+			return "rtl", nil
+		case "ltr " + name:
+			return "ltr", nil
+		}
+	}
+	return "", nil
+}
+
+// RightToLeft is getTextInfo's direction as ICU answers it: whether the
+// locale's script, or its likely script, runs right to left
+// (uloc_isRightToLeft). Direction answers as ECMA-402 does.
 func (i *LocaleInfo) RightToLeft(l Locale) (bool, error) {
 	script := l.Script
 	if script.IsZero() {

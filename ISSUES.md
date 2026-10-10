@@ -249,6 +249,20 @@ ICU sorts them by key and value. `art-CS-t-m0-names-names-m0-hwidth-names`:
 Node "art-RS-t-m0-hwidth-names-m0-names-names", go-intl keeps the input
 order. Status: fixed (TestTransformedFieldOrder).
 
+**LO-9. Intl.Locale answers "true" for a keyword with no value, and "ltr"
+for a text direction no one knows.** `localeinfo.go`. test262's newer
+Intl Locale Info tests (preferred-from-unicode-extension-true-empty,
+script-metadata-rtl-is-unknown and its fellows) ask the standard's answers:
+"en-u-co" has collation "" and getCollations() [""], and getTextInfo's
+direction is undefined for Common, Inherited, Braille and Unknown, a
+private use or unregistered script, and a locale whose likely script cannot
+be found. Node v26.10 answers "true" (["yes"] for the lists) and "ltr".
+Status: fixed as two divergences, TrueKeywords (TestTrueKeywords) and
+LeftToRightDirection (TestLeftToRightDirection). LocaleInfo.Direction
+answers as the standard does; the scripts known to be written left to right
+are written to data/values.bin from ICU's SCRIPT_PROPS ("ltr Latn"), beside
+the right-to-left ones it had.
+
 ## JavaScript-visible: time zones
 
 **TZ-1. A custom UTC zone from TZ is named by its offset.** `zone.go`,
