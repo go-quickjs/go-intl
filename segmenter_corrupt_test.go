@@ -2,6 +2,7 @@ package intl
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime/debug"
 	"testing"
@@ -114,5 +115,22 @@ func TestDictionaryOffsetPastTotal(t *testing.T) {
 	put(3, 64)
 	if _, err := decodeBreakDictionary(b); err != nil {
 		t.Errorf("a well-formed header: %v", err)
+	}
+}
+
+// A status group whose count runs past the table is refused rather than
+// read. The count is compared with what is left, never added to the index:
+// on 32 bits a count past 2^31 is negative and idx+n wraps back into the
+// table, which the random changes above would hit only by luck.
+func TestRuleStatusCountPastTable(t *testing.T) {
+	r := &breakRules{statuses: []int32{2, 5, 9, math.MaxInt32, 3}}
+	// A well-formed group: two values after the count, the last of them.
+	if got := r.ruleStatus(0); got != 9 {
+		t.Errorf("a group of two values is %d, want 9", got)
+	}
+	for _, idx := range []int{3, 4, -1, len(r.statuses)} {
+		if got := r.ruleStatus(idx); got != 0 {
+			t.Errorf("status %d of %d is %d, want 0", idx, len(r.statuses), got)
+		}
 	}
 }

@@ -132,8 +132,11 @@ func (r *breakRules) ruleStatus(idx int) int {
 	if idx < 0 || idx >= len(r.statuses) {
 		return 0
 	}
+	// The count is compared with what is left after idx rather than added
+	// to it, as the sections are in decodeBreakRules: a count past 2^31 is
+	// negative on 32 bits, and idx+n would wrap back into the table.
 	n := int(r.statuses[idx])
-	if n < 0 || idx+n >= len(r.statuses) {
+	if n < 0 || n > len(r.statuses)-idx-1 {
 		return 0
 	}
 	return int(r.statuses[idx+n])
