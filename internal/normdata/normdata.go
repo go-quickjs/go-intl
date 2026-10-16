@@ -68,7 +68,7 @@ type Built struct {
 // the rune's four bytes, big-endian, so that their order is the runes'.
 // Building a normalizer decodes nothing.
 type Tables struct {
-	canonical, compatibility blob.Index
+	canonical, compatibility runeIndex
 	classes                  []byte // rune<<8 | class, four bytes each
 	excluded                 []byte // runes, four bytes each
 	compositions             []byte // first, second, to: twelve bytes each
@@ -79,18 +79,65 @@ func runeKey(r rune) string {
 	return string([]byte{byte(r >> 24), byte(r >> 16), byte(r >> 8), byte(r)})
 }
 
+// A runeIndex is an index keyed by a character. Its keys are the rune's
+// four bytes, big-endian, so a key is compared as the number it was
+// written from rather than built back into a string and compared as one,
+// and it holds the first and last character it has a record for, so that a
+// character outside that range -- which the text a normalizer is given is
+// mostly made of -- is answered without searching at all.
+type runeIndex struct {
+	x           blob.Index
+	first, last rune
+}
+
+func newRuneIndex(x blob.Index) runeIndex {
+	// An empty index holds no character: first after last leaves nothing
+	// for the range to let through.
+	t := runeIndex{x: x, first: 1, last: 0}
+	if n := x.Len(); n > 0 {
+		t.first, t.last = keyRune(x, 0), keyRune(x, n-1)
+	}
+	return t
+}
+
+// keyRune is record i's key as the character it was written for. A record
+// a Source corrupted, whose key is not four bytes, reads as a character
+// before every other, so that the search passes over it rather than
+// matching it.
+func keyRune(x blob.Index, i int) rune {
+	k, _ := x.At(i)
+	if len(k) != 4 {
+		return -1
+	}
+	return rune(binary.BigEndian.Uint32(k))
+}
+
+func (t runeIndex) find(r rune) ([]byte, bool) {
+	if r < t.first || r > t.last {
+		return nil, false
+	}
+	n := t.x.Len()
+	i := sort.Search(n, func(i int) bool { return keyRune(t.x, i) >= r })
+	if i < n {
+		if k, v := t.x.At(i); len(k) == 4 && rune(binary.BigEndian.Uint32(k)) == r {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
 func u32(b []byte, i int) uint32 { return binary.LittleEndian.Uint32(b[4*i:]) }
 
 // Decompose finds a character's canonical decomposition.
 func (t *Tables) Decompose(r rune) (string, bool) {
-	v, ok := t.canonical.Find(runeKey(r))
+	v, ok := t.canonical.find(r)
 	return string(v), ok
 }
 
 // DecomposeCompatibility finds a character's compatibility decomposition,
 // which is the canonical one where it has no other.
 func (t *Tables) DecomposeCompatibility(r rune) (string, bool) {
-	if v, ok := t.compatibility.Find(runeKey(r)); ok {
+	if v, ok := t.compatibility.find(r); ok {
 		return string(v), true
 	}
 	return t.Decompose(r)
@@ -187,10 +234,12 @@ func Decode(data []byte) (*Tables, error) {
 		return nil, err
 	}
 	var t Tables
-	for _, index := range []*blob.Index{&t.canonical, &t.compatibility} {
-		if *index, err = blob.ReadIndex(r.Bytes(), Version); err != nil {
+	for _, index := range []*runeIndex{&t.canonical, &t.compatibility} {
+		x, err := blob.ReadIndex(r.Bytes(), Version)
+		if err != nil {
 			return nil, err
 		}
+		*index = newRuneIndex(x)
 	}
 	t.classes, t.excluded, t.compositions, t.combinesBack = r.Bytes(), r.Bytes(), r.Bytes(), r.Bytes()
 	if err := r.Err(); err != nil {
