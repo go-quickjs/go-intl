@@ -2,6 +2,7 @@ package intl
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -56,32 +57,48 @@ func (i *LocaleInfo) keyword(l Locale, key string) ([]string, bool) {
 // variants and extensions kept.
 func withBase(l Locale, d DataLocale) Locale {
 	l.Language, l.Script, l.Region = d.Language, d.Script, d.Region
+	return cloned(l)
+}
+
+// cloned is the locale with slices of its own. Copying a Locale copies the
+// headers of its four slices, so a caller that changed what Maximize or
+// Minimize returned would be writing into the arrays of the locale it
+// passed; what these return is the caller's to change, as what
+// CanonicalizeLocale returns is. A locale with none of the four, which
+// most are, is cloned without allocating.
+func cloned(l Locale) Locale {
+	l.Variants = slices.Clone(l.Variants)
+	l.Attributes = slices.Clone(l.Attributes)
+	l.Keywords = slices.Clone(l.Keywords)
+	l.Extensions = slices.Clone(l.Extensions)
 	return l
 }
 
 // Maximize is Intl.Locale.prototype.maximize: the locale with the likely
 // script and region filled in, "en" as "en-Latn-US". The unknown script
 // "Zzzz" and region "ZZ" count as left out, as UTS #35 has it; under
-// UnknownSubtags a locale that names all three is kept as it is.
+// UnknownSubtags a locale that names all three is kept as it is. What it
+// returns shares no slice with the locale it is given.
 func (i *LocaleInfo) Maximize(l Locale) Locale {
 	d := l.Data()
 	if i.opts.Compat.Has(UnknownSubtags) && !d.Language.IsUnd() && !d.Script.IsZero() && !d.Region.IsZero() {
-		return l
+		return cloned(l)
 	}
 	full, ok := i.likely.Maximize(withoutUnknown(d))
 	if !ok {
-		return l
+		return cloned(l)
 	}
 	return withBase(l, full)
 }
 
 // Minimize is Intl.Locale.prototype.minimize: the shortest form that
 // maximizes to the same locale, "zh-Hant-TW" as "zh-TW". "Zzzz" and "ZZ"
-// count as left out, as they do in ICU as well.
+// count as left out, as they do in ICU as well. What it returns shares no
+// slice with the locale it is given.
 func (i *LocaleInfo) Minimize(l Locale) Locale {
 	short, ok := i.likely.Minimize(withoutUnknown(l.Data()))
 	if !ok {
-		return l
+		return cloned(l)
 	}
 	return withBase(l, short)
 }

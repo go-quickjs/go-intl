@@ -78,3 +78,39 @@ func TestLikelyUnknownSubtags(t *testing.T) {
 		}
 	}
 }
+
+// What Maximize and Minimize return is the caller's own: a Locale is a
+// struct of four slices, so returning a copy of the one given would hand
+// back its arrays, and a caller that changed the answer would change the
+// question. CanonicalizeLocale already clones; these had not.
+func TestMaximizeAndMinimizeCopyTheirInput(t *testing.T) {
+	info, err := intl.NewLocaleInfo(intl.Embedded, intl.LocaleInfoOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every path out of the two: the locale the likely subtags fill in,
+	// one they know nothing of and leave as it is, and the shortest form.
+	for _, c := range []struct {
+		name string
+		tag  string
+		fn   func(intl.Locale) intl.Locale
+	}{
+		{"Maximize", "en-GB-fonipa-u-attr-ca-japanese-rg-gbzzzz-t-de", info.Maximize},
+		{"Maximize", "xyz-GB-fonipa-u-attr-ca-japanese-rg-gbzzzz-t-de", info.Maximize},
+		{"Minimize", "zh-Hant-TW-fonipa-u-attr-ca-chinese-rg-twzzzz-t-de", info.Minimize},
+	} {
+		in, err := intl.ParseLocale(c.tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := in.String()
+		out := c.fn(in)
+		out.Variants[0] = intl.Variant{}
+		out.Attributes[0] = "changed"
+		out.Keywords[0].Value = "changed"
+		out.Extensions[0].Value = "changed"
+		if got := in.String(); got != before {
+			t.Errorf("%s(%s): the locale given reads %s after its answer was changed", c.name, c.tag, got)
+		}
+	}
+}
