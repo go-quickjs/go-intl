@@ -75,7 +75,6 @@ const (
 // their sha256 (SOURCES.md).
 var cldrPackages = map[string]string{
 	"cldr-numbers-full":      "2d17a1453c559a62112caeed52e0bcfe3cb8539c99d239ae7b7ed4d0827679d9",
-	"cldr-misc-full":         "c6ba8384d7ea8701cf86935db0461379231ddd970cc41c249f4a33b9857ded3c",
 	"cldr-units-full":        "754d55f183570c53029a77493302f432fb3e905df35a715f9cb022e2ebcb093c",
 	"cldr-dates-full":        "0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430",
 	"cldr-localenames-full":  "7f2ac7fd3b5d90f56ad127f9ed5ae67b58b3e556818f55530b9f47bb81bcde57",
@@ -147,7 +146,7 @@ func jobs(cache string) []job {
 		{name: "tzidgen", args: []string{at(tzProvider)}},
 		{name: "temporalgen", args: []string{at(calendar)}},
 		{name: "numbergen", args: []string{pkg("cldr-numbers-full"), at(dataZip)}},
-		{name: "listgen", args: []string{pkg("cldr-misc-full")}},
+		{name: "listgen", args: []string{at(dataZip)}},
 		{name: "unitgen", args: []string{pkg("cldr-units-full")}},
 		{name: "reltimegen", args: []string{pkg("cldr-dates-full")}},
 		{name: "namegen", args: []string{pkg("cldr-localenames-full"), pkg("cldr-dates-full")}},
