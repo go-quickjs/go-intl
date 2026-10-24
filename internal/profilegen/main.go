@@ -95,23 +95,24 @@ func main() {
 	dat := flag.String("dat", "", "the common data file built from the sources, for segmentgen")
 	ucd := flag.String("ucd", "", "the Unicode Character Database 17.0.0's directory, for segmentgen")
 	work := flag.String("work", "", "the working directory (default: a temporary one, removed after)")
+	against := flag.String("against", "data", "the data the overlay is of, the intl package's or what another run made")
 	flag.Parse()
 	if *tree == "" || *out == "" || *sources == "" || *export == "" || *dat == "" || *ucd == "" || flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -dat <icudtl.dat> -sources <icu4c-78.3-sources.tgz> -export <icu4x-icuexportdata-78.3.zip> -ucd <ucd-17.0.0 dir> -out <overlay.pack> [-work <dir>]")
 		os.Exit(2)
 	}
 	inputs := map[string]string{"{tree}": *tree, "{dat}": *dat, "{sources}": *sources, "{export}": *export, "{ucd}": *ucd}
-	if err := run(inputs, *out, *work); err != nil {
+	if err := run(inputs, *against, *out, *work); err != nil {
 		fmt.Fprintln(os.Stderr, "profilegen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(inputs map[string]string, out, work string) error {
+func run(inputs map[string]string, against, out, work string) error {
 	if b, err := os.ReadFile("go.mod"); err != nil || !bytes.HasPrefix(b, []byte("module github.com/go-quickjs/go-intl\n")) {
 		return errors.New("run from go-intl's repository root")
 	}
-	base, err := filepath.Abs("data")
+	base, err := filepath.Abs(against)
 	if err != nil {
 		return err
 	}

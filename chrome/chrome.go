@@ -54,17 +54,31 @@ func ForVersion(version string) (Profile, error) {
 	if found == nil {
 		return Profile{}, fmt.Errorf("chrome: no Chrome %s is known", version)
 	}
-	pack, ok := packOf(found[2])
-	if !ok {
+	// The overlay is of the newer Chromes' data, laid over the intl
+	// package's.
+	names := chain()
+	at := -1
+	for i, name := range names {
+		if name == found[2] {
+			at = i
+		}
+	}
+	if at < 0 {
 		return Profile{}, fmt.Errorf("chrome: the data of Chrome %s, %s, is missing", found[0], found[2])
 	}
-	overlay, err := intl.NewPack(pack)
-	if err != nil {
-		return Profile{}, fmt.Errorf("chrome: %s: %w", found[2], err)
-	}
-	src, err := intl.NewOverlay(intl.Embedded, overlay)
-	if err != nil {
-		return Profile{}, fmt.Errorf("chrome: %s: %w", found[2], err)
+	var src intl.Source = intl.Embedded
+	for _, name := range names[:at+1] {
+		pack, ok := packOf(name)
+		if !ok {
+			return Profile{}, fmt.Errorf("chrome: the data %s is missing", name)
+		}
+		overlay, err := intl.NewPack(pack)
+		if err != nil {
+			return Profile{}, fmt.Errorf("chrome: %s: %w", name, err)
+		}
+		if src, err = intl.NewOverlay(src, overlay); err != nil {
+			return Profile{}, fmt.Errorf("chrome: %s: %w", name, err)
+		}
 	}
 	major, err := majorOf(found[0])
 	if err != nil {
