@@ -34,6 +34,10 @@ func TestDisplayNamesBeyondTheCorpus(t *testing.T) {
 		// but "gregory" and "gregorian" differ, so both spellings are stored.
 		{"en", "calendar", "roc", intl.DisplayLong, intl.LanguageDialect, "Minguo Calendar"},
 		{"en", "calendar", "gregory", intl.DisplayLong, intl.LanguageDialect, "Gregorian Calendar"},
+		// ICU's calendar%core is a table of short forms, not a calendar
+		// named "core", which CLDR's JSON had made it: no name, and the code.
+		{"en", "calendar", "core", intl.DisplayLong, intl.LanguageDialect, "core"},
+		{"ja", "calendar", "core", intl.DisplayLong, intl.LanguageDialect, "core"},
 		// A currency's plain name, not the wording that goes beside an amount.
 		{"de", "currency", "USD", intl.DisplayLong, intl.LanguageDialect, "US-Dollar"},
 		{"en", "currency", "USD", intl.DisplayLong, intl.LanguageDialect, "US Dollar"},

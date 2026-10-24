@@ -76,7 +76,6 @@ const (
 var cldrPackages = map[string]string{
 	"cldr-numbers-full":      "2d17a1453c559a62112caeed52e0bcfe3cb8539c99d239ae7b7ed4d0827679d9",
 	"cldr-dates-full":        "0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430",
-	"cldr-localenames-full":  "7f2ac7fd3b5d90f56ad127f9ed5ae67b58b3e556818f55530b9f47bb81bcde57",
 	"cldr-cal-buddhist-full": "3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff",
 	"cldr-cal-chinese-full":  "cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2",
 	"cldr-cal-coptic-full":   "abc83085e46f6d3ee1b39f886f2c81da0f6a7aec11f6988f1644f7638c22ea5c",
@@ -148,7 +147,7 @@ func jobs(cache string) []job {
 		{name: "listgen", args: []string{at(dataZip)}},
 		{name: "unitgen", args: []string{at(dataZip)}},
 		{name: "reltimegen", args: []string{at(dataZip)}},
-		{name: "namegen", args: []string{pkg("cldr-localenames-full"), pkg("cldr-dates-full")}},
+		{name: "namegen", args: []string{at(dataZip)}},
 		{name: "dategen", args: dates},
 		{name: "zonegen", args: []string{at(dataZip), at(tzDir)}, after: []string{"dategen"}},
 		{name: "rbnfgen", args: []string{at(dataZip)}},

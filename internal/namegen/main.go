@@ -1,94 +1,84 @@
 // Command namegen writes the display-name tables the intl package carries.
 //
-// It reads two CLDR packages, neither vendored: SOURCES.md pins both releases
-// and their checksums, and the paths to unpacked copies are given here.
+// It reads ICU's display names, which ICU keeps in three trees of the data
+// archive SOURCES.md pins: the languages, scripts, variants, calendars and
+// the locale pattern in data/lang, the regions in data/region, and the
+// date fields in data/locales, each as ICU resolves it in its tree.
 //
-//	go run ./internal/namegen <cldr-localenames-full/package> <cldr-dates-full/package>
+//	go run ./internal/namegen [-seed pool.bin] icu4c-78.3-data.zip
 //
-// CLDR writes the shorter forms as alternates of the long one -- "GB" is
-// "United Kingdom" and "GB-alt-short" is "UK" -- so the suffix is what sorts a
-// name into its width. A width holds only what differs from the one above it,
-// which is why a lookup walks back rather than each width being complete.
+// -seed numbers the pool's parts after an earlier pool's (datawrite.NewPool).
+//
+// ICU writes the shorter forms in tables of their own beside the long one --
+// "Countries" has GB as "United Kingdom" and "Countries%short" as "UK" -- so
+// the table is what sorts a name into its width. A width holds only what
+// differs from the one above it, which is why a lookup walks back rather
+// than each width being complete.
 package main
 
 import (
-	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
+	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/namedata"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
-type namesFile struct {
-	Main map[string]struct {
-		LocaleDisplayNames struct {
-			Languages   map[string]string `json:"languages"`
-			Territories map[string]string `json:"territories"`
-			Scripts     map[string]string `json:"scripts"`
-			Variants    map[string]string `json:"variants"`
-			Pattern     struct {
-				Locale    string `json:"localePattern"`
-				Separator string `json:"localeSeparator"`
-			} `json:"localeDisplayPattern"`
-			Types map[string]map[string]string `json:"types"`
-		} `json:"localeDisplayNames"`
-	} `json:"main"`
-}
-
-type fieldsFile struct {
-	Main map[string]struct {
-		Dates struct {
-			Fields map[string]struct {
-				DisplayName string `json:"displayName"`
-			} `json:"fields"`
-		} `json:"dates"`
-	} `json:"main"`
-}
-
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr,
-			"usage: go run ./internal/namegen <cldr-localenames-full/package> <cldr-dates-full/package>")
+	seed := flag.String("seed", "", "a pool to number the parts after")
+	flag.Parse()
+	if flag.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/namegen [-seed pool.bin] <icu4c-78.3-data.zip>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2]); err != nil {
+	if err := run(flag.Arg(0), *seed); err != nil {
 		fmt.Fprintln(os.Stderr, "namegen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(namesRoot, datesRoot string) error {
-	main := filepath.Join(namesRoot, "main")
-	entries, err := os.ReadDir(main)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", main, err)
-	}
+// The trees the names are in, in the order EachLocaleIn is given them.
+const (
+	langTree = iota
+	regionTree
+	localesTree
+)
 
-	built := map[string][]byte{}
-	// The locales share one pool, written beside them. ReadDir's order is
-	// sorted, so the pool is the same every run.
-	pool := blob.NewPool(namedata.Version)
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		l, err := read(main, filepath.Join(datesRoot, "main"), e.Name())
+func run(zip, seed string) error {
+	var trees []*icusrc.Locales
+	for _, name := range []string{"lang", "region", "locales"} {
+		t, err := icusrc.OpenTree(zip, name)
 		if err != nil {
-			return fmt.Errorf("%s: %w", e.Name(), err)
+			return err
 		}
-		if l == nil {
-			continue
-		}
-		built[e.Name()] = namedata.Encode(l, pool)
+		defer t.Close()
+		trees = append(trees, t)
 	}
-	if len(built) == 0 {
-		return fmt.Errorf("no locales found under %s", main)
+	fb, err := icusrc.ICUFallback()
+	if err != nil {
+		return err
+	}
+	// The locales share one pool, written beside them. EachLocaleIn visits
+	// the bundles in order, so the pool is the same every run.
+	pool, err := datawrite.NewPool(namedata.Version, seed)
+	if err != nil {
+		return err
+	}
+	built, err := icusrc.EachLocaleIn(trees, fb, func(v []*icusrc.View) ([]byte, error) {
+		l, err := read(v)
+		if err != nil || l == nil {
+			return nil, err
+		}
+		return namedata.Encode(l, pool), nil
+	})
+	if err != nil {
+		return err
 	}
 
 	set := writeset.New()
@@ -103,7 +93,8 @@ func run(namesRoot, datesRoot string) error {
 	return nil
 }
 
-// An alternate is one of CLDR's alternate suffixes and the width it fills.
+// An alternate is one of ICU's tables of a shorter form, by its suffix,
+// and the width it fills.
 type alternate struct {
 	suffix string
 	width  int
@@ -111,101 +102,114 @@ type alternate struct {
 
 // alternates are the suffixes whose names fill a width, in the order they
 // are taken where two fill one. The others, "variant" and "menu" among
-// them, ICU keeps in tables of their own, Languages%variant beside
-// Languages, which its display names never read: Japanese has "hi-Latn"
-// only as a variant, and names it as Hindi in Latin.
+// them, ICU keeps in tables its display names never read: Japanese has
+// "hi-Latn" only as a variant, and names it as Hindi in Latin.
 var alternates = []alternate{
 	{"short", namedata.Short},
 	{"narrow", namedata.Narrow},
 }
 
-func read(main, datesMain, name string) (*namedata.Built, error) {
-	var out namedata.Built
-	any := false
-
-	raw, err := os.ReadFile(filepath.Join(main, name, "languages.json"))
-	if err == nil {
-		var f namesFile
-		if err := json.Unmarshal(raw, &f); err != nil {
-			return nil, fmt.Errorf("languages.json: %w", err)
+// names gathers a kind's names from ICU's table of it and the tables of its
+// shorter forms, keyed as fill takes them: "GB" for the long name and
+// "GB-alt-short" for the short one. A language ICU names a locale of is
+// keyed as the locale is in ICU, "de_AT", and here as BCP 47 writes it.
+func names(v *icusrc.View, path ...string) (map[string]string, bool, error) {
+	out := map[string]string{}
+	found := false
+	for _, suffix := range append([]string{""}, "short", "narrow") {
+		p := append([]string(nil), path...)
+		key := ""
+		if suffix != "" {
+			p[0] += "%" + suffix
+			key = "-alt-" + suffix
 		}
-		if e, ok := f.Main[name]; ok {
-			fill(&out, namedata.Language, e.LocaleDisplayNames.Languages, alternates)
-			any = true
+		t, err := v.Get(p...)
+		if err != nil {
+			return nil, false, err
+		}
+		if t == nil {
+			continue
+		}
+		found = true
+		for _, n := range t.Children {
+			// ICU's name of the root, "root", is no code a name is asked for.
+			if !n.Table && n.Value != "" && n.Key != "root" {
+				out[strings.ReplaceAll(n.Key, "_", "-")+key] = n.Value
+			}
 		}
 	}
-	for file, kind := range map[string]int{
-		"territories.json": namedata.Region,
-		"scripts.json":     namedata.Script,
-		"variants.json":    namedata.Variant,
+	return out, found, nil
+}
+
+func read(v []*icusrc.View) (*namedata.Built, error) {
+	var out namedata.Built
+	any := false
+	for _, k := range []struct {
+		view int
+		kind int
+		path []string
+		bcp  bool
+	}{
+		{langTree, namedata.Language, []string{"Languages"}, false},
+		{regionTree, namedata.Region, []string{"Countries"}, false},
+		{langTree, namedata.Script, []string{"Scripts"}, false},
+		{langTree, namedata.Variant, []string{"Variants"}, false},
+		{langTree, namedata.Calendar, []string{"Types", "calendar"}, true},
 	} {
-		raw, err := os.ReadFile(filepath.Join(main, name, file))
+		source, found, err := names(v[k.view], k.path...)
 		if err != nil {
+			return nil, err
+		}
+		if !found {
 			continue
 		}
-		var f namesFile
-		if err := json.Unmarshal(raw, &f); err != nil {
-			return nil, fmt.Errorf("%s: %w", file, err)
+		if k.bcp {
+			source = withBCP47(source)
 		}
-		e, ok := f.Main[name]
-		if !ok {
-			continue
-		}
-		source := e.LocaleDisplayNames.Territories
-		switch kind {
-		case namedata.Script:
-			source = e.LocaleDisplayNames.Scripts
-		case namedata.Variant:
-			source = e.LocaleDisplayNames.Variants
-		}
-		fill(&out, kind, source, alternates)
+		fill(&out, k.kind, source, alternates)
 		any = true
 	}
 
-	raw, err = os.ReadFile(filepath.Join(main, name, "localeDisplayNames.json"))
-	if err == nil {
-		var f namesFile
-		if err := json.Unmarshal(raw, &f); err != nil {
-			return nil, fmt.Errorf("localeDisplayNames.json: %w", err)
+	pattern, err := v[langTree].Get("localeDisplayPattern")
+	if err != nil {
+		return nil, err
+	}
+	if pattern != nil {
+		if p := pattern.Get("pattern"); p != nil {
+			out.Pattern = p.Value
 		}
-		if e, ok := f.Main[name]; ok {
-			out.Pattern = e.LocaleDisplayNames.Pattern.Locale
-			out.Separator = e.LocaleDisplayNames.Pattern.Separator
-			if calendars, ok := e.LocaleDisplayNames.Types["calendar"]; ok {
-				fill(&out, namedata.Calendar, withBCP47(calendars), alternates)
-			}
-			any = true
+		if p := pattern.Get("separator"); p != nil {
+			out.Separator = p.Value
 		}
+		any = true
 	}
 
-	raw, err = os.ReadFile(filepath.Join(datesMain, name, "dateFields.json"))
-	if err == nil {
-		var f fieldsFile
-		if err := json.Unmarshal(raw, &f); err != nil {
-			return nil, fmt.Errorf("dateFields.json: %w", err)
-		}
-		if e, ok := f.Main[name]; ok {
-			fields := map[string]string{}
-			for key, field := range e.Dates.Fields {
-				if field.DisplayName == "" {
-					continue
-				}
-				// The widths are their own keys here rather than alternates.
-				base, suffix := key, ""
-				if at := strings.LastIndexByte(key, '-'); at >= 0 {
-					if s := key[at+1:]; s == "short" || s == "narrow" {
-						base, suffix = key[:at], s
-					}
-				}
-				if suffix == "" {
-					fields[base] = field.DisplayName
-				} else {
-					fields[base+"-alt-"+suffix] = field.DisplayName
+	fields, err := v[localesTree].Get("fields")
+	if err != nil {
+		return nil, err
+	}
+	if fields != nil {
+		byKey := map[string]string{}
+		for _, field := range fields.Children {
+			dn := field.Get("dn")
+			if dn == nil || dn.Value == "" {
+				continue
+			}
+			// The widths are their own keys here rather than tables.
+			base, suffix := field.Key, ""
+			if at := strings.LastIndexByte(field.Key, '-'); at >= 0 {
+				if s := field.Key[at+1:]; s == "short" || s == "narrow" {
+					base, suffix = field.Key[:at], s
 				}
 			}
-			fill(&out, namedata.DateTimeField, fields, alternates)
-			any = true
+			if suffix == "" {
+				byKey[base] = dn.Value
+			} else {
+				byKey[base+"-alt-"+suffix] = dn.Value
+			}
 		}
+		fill(&out, namedata.DateTimeField, byKey, alternates)
+		any = true
 	}
 
 	if !any {
@@ -214,7 +218,7 @@ func read(main, datesMain, name string) (*namedata.Built, error) {
 	return &out, nil
 }
 
-// fill sorts CLDR's names into the widths, by the alternate suffix each key
+// fill sorts the names into the widths, by the alternate suffix each key
 // carries: a plain name is the long one, and an alternate fills its width
 // where nothing has, the first of alts to that wins. Nothing depends on the
 // order source's keys come in.

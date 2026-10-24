@@ -2,6 +2,7 @@ package icusrc
 
 import (
 	"bytes"
+	"sort"
 	"strings"
 )
 
@@ -20,25 +21,51 @@ import (
 // the locale without the variant, which is what a variant locale without
 // data of its own reads.
 func EachLocale(c *Locales, fb Fallback, build func(*View) ([]byte, error)) (map[string][]byte, error) {
-	out := map[string][]byte{}
-	for _, name := range c.Names() {
-		n, err := c.Get(name)
-		if err != nil {
-			return nil, err
-		}
-		if n == nil || n.Get("%%ALIAS") != nil {
-			continue
-		}
-		file, err := buildOne(c, fb, name, build)
-		if err != nil || file == nil {
+	return EachLocaleIn([]*Locales{c}, fb, func(v []*View) ([]byte, error) { return build(v[0]) })
+}
+
+// EachLocaleIn is EachLocale over several trees, for a data set made of
+// what each holds -- display names, which ICU keeps in the lang tree, the
+// region tree and the locales tree. A locale is a bundle of any of them
+// that none has as an alias, and build has its view in each tree, in the
+// order given.
+func EachLocaleIn(trees []*Locales, fb Fallback, build func([]*View) ([]byte, error)) (map[string][]byte, error) {
+	names := map[string]bool{}
+	for _, c := range trees {
+		for _, name := range c.Names() {
+			n, err := c.Get(name)
 			if err != nil {
 				return nil, err
 			}
+			if n == nil {
+				continue
+			}
+			if n.Get("%%ALIAS") != nil {
+				names[name] = false
+			} else if _, seen := names[name]; !seen {
+				names[name] = true
+			}
+		}
+	}
+	sorted := make([]string, 0, len(names))
+	for name, keep := range names {
+		if keep {
+			sorted = append(sorted, name)
+		}
+	}
+	sort.Strings(sorted)
+
+	out := map[string][]byte{}
+	for _, name := range sorted {
+		file, err := buildOne(trees, fb, name, build)
+		if err != nil {
+			return nil, err
+		}
+		if file == nil {
 			continue
 		}
 		if _, _, _, variant := splitName(name); variant {
-			base := name[:strings.LastIndex(name, "_")]
-			without, err := buildOne(c, fb, base, build)
+			without, err := buildOne(trees, fb, name[:strings.LastIndex(name, "_")], build)
 			if err != nil {
 				return nil, err
 			}
@@ -51,12 +78,16 @@ func EachLocale(c *Locales, fb Fallback, build func(*View) ([]byte, error)) (map
 	return out, nil
 }
 
-func buildOne(c *Locales, fb Fallback, name string, build func(*View) ([]byte, error)) ([]byte, error) {
-	v, err := c.View(name, fb)
-	if err != nil {
-		return nil, err
+func buildOne(trees []*Locales, fb Fallback, name string, build func([]*View) ([]byte, error)) ([]byte, error) {
+	views := make([]*View, len(trees))
+	for i, c := range trees {
+		v, err := c.View(name, fb)
+		if err != nil {
+			return nil, err
+		}
+		views[i] = v
 	}
-	return build(v)
+	return build(views)
 }
 
 // Tag is the BCP 47 tag of an ICU locale name: "und" for the root, hyphens
