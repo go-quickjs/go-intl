@@ -36,19 +36,24 @@ go-quickjs, so consuming it never forces a toolchain upgrade.
 ## Generated files
 
 Do not edit generated files by hand. Everything under `data/`, and
-`data.pack`, is written by a generator under `internal/<name>gen/`.
+`data.pack`, is written by a generator under `internal/<name>gen/`, and
+`chrome/data/` and `chrome/packs.go` by `internal/chromegen`.
 
 Regenerate all of it in one step, from the repository root:
 
 ```sh
-go run ./internal/regen
+go run ./internal/regen   # or: go generate
 ```
 
 `regen` downloads the pinned sources into a cache (`-cache`), checks their
 checksums, runs every generator in parallel (`-j`), zonegen after dategen,
-repacks, and reports whether the result is byte for byte what git holds. A
-change to a generator is done when `regen` reproduces the committed data, or
-the difference is the change. A new upstream input goes into its source
+repacks, rebuilds the chrome package's overlays with chromegen, and reports
+whether the result is byte for byte what git holds. Chrome's eleven ICUs take
+about three minutes once their sources are cached. `-chrome=false` rebuilds
+the intl package's data alone, in seconds; but an overlay is what differs
+from that data, so a change to it is not done until the full run reproduces
+the chrome package's data too. A change to a generator is done when `regen`
+reproduces the committed data, or the difference is the change. A new upstream input goes into its source
 list as well as SOURCES.md.
 
 To run one generator on its own, its doc comment gives its arguments; run it

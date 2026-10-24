@@ -3,23 +3,34 @@
 //
 //	go run ./internal/regen
 //
+// or, as the intl package's go:generate directive runs it, go generate from
+// the repository root.
+//
 // It downloads each source SOURCES.md pins into a cache, checks its sha256,
-// runs every generator with the arguments it takes, and repacks data.pack. A source already in the cache with the
-// right checksum is not downloaded again. Run from the repository root;
-// on a clean checkout it reproduces data/ and data.pack byte for byte,
-// which it reports at the end where git is at hand.
+// runs every generator with the arguments it takes, and repacks data.pack.
+// A source already in the cache with the right checksum is not downloaded
+// again. It then rebuilds the chrome package's data, chrome/data and
+// chrome/packs.go, with chromegen, which fetches each Chrome's ICU sources
+// into the same cache and checks them against their git ids. Run from the
+// repository root; on a clean checkout it reproduces data/, data.pack and
+// the chrome package's data byte for byte, which it reports at the end
+// where git is at hand.
 //
 // Flags:
 //
 //	-cache dir   where the sources are kept (default: the user cache
 //	             directory's go-intl-sources)
 //	-j n         how many generators run at once (default: the CPUs)
+//	-chrome      whether to rebuild the chrome package's data too (default:
+//	             true); -chrome=false rebuilds the intl package's alone, in
+//	             seconds rather than the minutes Chrome's eleven ICUs take
 //
 // The generators that read nothing but what is vendored beside them
 // (localegen, normgen) run too, so the whole of data/ is
 // rebuilt. zonegen reads data/dates, which dategen writes, and so runs after
-// it; packgen runs last. The rest write files of their own and run in
-// parallel.
+// it; packgen runs after them all. The rest write files of their own and run
+// in parallel. chromegen runs last: an overlay is what differs from the
+// intl package's data, which must be current.
 package main
 
 import (
@@ -126,14 +137,15 @@ func main() {
 	}
 	cache := flag.String("cache", defaultCache, "where the upstream sources are kept")
 	parallel := flag.Int("j", runtime.NumCPU(), "how many generators run at once")
+	chrome := flag.Bool("chrome", true, "rebuild the chrome package's data too")
 	flag.Parse()
-	if err := run(*cache, max(*parallel, 1)); err != nil {
+	if err := run(*cache, max(*parallel, 1), *chrome); err != nil {
 		fmt.Fprintln(os.Stderr, "regen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(cache string, parallel int) error {
+func run(cache string, parallel int, chrome bool) error {
 	if b, err := os.ReadFile("go.mod"); err != nil || !bytes.HasPrefix(b, []byte("module github.com/go-quickjs/go-intl\n")) {
 		return errors.New("run from go-intl's repository root")
 	}
@@ -153,7 +165,15 @@ func run(cache string, parallel int) error {
 		return err
 	}
 	fmt.Printf("data regenerated in %s\n", time.Since(start).Round(time.Second))
-	report()
+	paths := []string{"data", "data.pack"}
+	if chrome {
+		if err := goRunFor(chromegenTimeout, "chromegen", "-cache", cache); err != nil {
+			return err
+		}
+		fmt.Printf("the chrome package's data regenerated in %s\n", time.Since(start).Round(time.Second))
+		paths = append(paths, "chrome/data", "chrome/packs.go")
+	}
+	report(paths)
 	return nil
 }
 
@@ -226,8 +246,12 @@ var client = &http.Client{
 }
 
 // generatorTimeout is how long one generator may take; the slowest takes
-// seconds.
-const generatorTimeout = 10 * time.Minute
+// seconds. chromegen runs a dozen generators for each of Chrome's ICUs, and
+// takes minutes once their sources are cached.
+const (
+	generatorTimeout = 10 * time.Minute
+	chromegenTimeout = 2 * time.Hour
+)
 
 func fileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
@@ -373,8 +397,13 @@ func generate(all []job, parallel int) error {
 // goRun runs one generator from the repository root, and says how long it
 // took, or what it said when it failed.
 func goRun(name string, args ...string) error {
+	return goRunFor(generatorTimeout, name, args...)
+}
+
+// goRunFor is goRun with a timeout of its own.
+func goRunFor(timeout time.Duration, name string, args ...string) error {
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), generatorTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", append([]string{"run", "./internal/" + name}, args...)...)
 	cmd.WaitDelay = 10 * time.Second
@@ -382,7 +411,7 @@ func goRun(name string, args ...string) error {
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			err = fmt.Errorf("gave up after %s: %w", generatorTimeout, err)
+			err = fmt.Errorf("gave up after %s: %w", timeout, err)
 		}
 		return fmt.Errorf("%s: %w\n%s", name, err, out.String())
 	}
@@ -394,14 +423,14 @@ func goRun(name string, args ...string) error {
 	return nil
 }
 
-// report says whether what was generated is what the repository holds.
-func report() {
-	out, err := exec.Command("git", "status", "--porcelain", "--", "data", "data.pack").Output()
+// report says whether the paths regenerated are what git holds.
+func report(paths []string) {
+	out, err := exec.Command("git", append([]string{"status", "--porcelain", "--"}, paths...)...).Output()
 	if err != nil {
 		return
 	}
 	if len(bytes.TrimSpace(out)) == 0 {
-		fmt.Println("data/ and data.pack are byte for byte what the repository holds")
+		fmt.Printf("%s are byte for byte what the repository holds\n", strings.Join(paths, ", "))
 		return
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")

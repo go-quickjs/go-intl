@@ -22,7 +22,10 @@
 // each difference is kept once. Chrome's profile reads its overlay laid
 // over the newer ones (chrome/packs.go's chain).
 //
-// Run it from the repository root, after the intl package's own data is
+// ICU 78.3's sources, collation export and Unicode data, which the overlays
+// share with the intl package's data, are in the same cache, where regen
+// fetches them; regen runs chromegen last, and is the way to run it. Run it
+// from the repository root, after the intl package's own data is
 // current: the chain begins at it.
 package main
 
@@ -82,6 +85,14 @@ func run(cache string) error {
 	}
 	if err := json.Unmarshal(b, &pins); err != nil {
 		return fmt.Errorf("pins.json: %w", err)
+	}
+	// ICU 78.3's own inputs, which the overlays share with the intl
+	// package's data, are regen's to fetch; chromegen fetches Chrome's.
+	for _, name := range []string{"icu4c-78.3-sources.tgz", "icu4x-icuexportdata-78.3.zip", "ucd-17.0.0"} {
+		if _, err := os.Stat(filepath.Join(cache, name)); err != nil {
+			return fmt.Errorf("%s is not in the cache %s: run go run ./internal/regen -cache %s, which fetches it and then runs chromegen",
+				name, cache, cache)
+		}
 	}
 	out := filepath.Join("chrome", "data")
 	if err := os.MkdirAll(out, 0o755); err != nil {

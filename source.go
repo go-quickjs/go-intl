@@ -171,7 +171,10 @@ type Source interface {
 // The data directory is embedded packed into one file, data.pack, which
 // internal/packgen writes, so that it is read where it lies: an embed.FS
 // copies a file out on every read, and building a formatter reads a dozen.
+// go generate rebuilds it, and all the rest generated, from the pinned
+// sources (internal/regen).
 //
+//go:generate go run ./internal/regen
 //go:embed data.pack
 var embeddedPack string
 

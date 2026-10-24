@@ -150,7 +150,7 @@ Go 1.24 or later. The data is regenerated in one step, from nothing but the
 pinned upstream sources:
 
 ```sh
-go run ./internal/regen
+go run ./internal/regen   # or: go generate
 ```
 
 It downloads each source [SOURCES.md](SOURCES.md) pins into a cache, checks
@@ -158,6 +158,12 @@ its sha256, runs every generator and repacks the embedded data; on a clean
 checkout it reproduces `data/` and `data.pack` byte for byte, and says so.
 The first run fetches about 85 MB, which the cache keeps unpacked in about
 670 MB, and takes about a minute; later runs reuse the cache and take seconds.
+
+It then rebuilds the `chrome` package's overlays, with the same byte for
+byte check, from each Chrome's ICU sources and the data it built, which it
+fetches into the cache too and checks against their git ids. They take about
+1.9 GB more there, and about three minutes once fetched. `-chrome=false`
+leaves the overlays be.
 
 ## License
 
