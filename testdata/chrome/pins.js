@@ -7,9 +7,13 @@
 // A Chrome's ICU is the chromium/deps/icu commit its DEPS pins; the pin's
 // README.chromium gives its ICU version and the tz data it carries. The
 // recorded build is the newest of the group that Chrome for Testing has a
-// win64 download of: its recordings go in testdata/chrome/<version>.
+// win64 download of: its recordings go in testdata/chrome/<version>. The
+// git ids of its source/data tree and of filters/common.json, the filter a
+// desktop Chrome builds its data through, are what internal/chromegen
+// checks the sources it fetches against.
 //
 //	{"pins": [{"icu": commit, "icuVersion": "78.2", "tz": "2026c",
+//	           "dataTree": id, "filterBlob": id,
 //	           "versions": [...], "recorded": "155.0.8059.84"}, ...]}
 //
 // in the order the pins were taken.
@@ -59,7 +63,17 @@ async function main() {
       const version = readme.match(/^Version:\s*(\S+)/m);
       const tz = readme.match(/latest version is (\d{4}[a-z])/);
       if (!version || !tz) throw new Error(`${m[1]}: README.chromium names no version or tz data`);
-      pin = { icu: m[1], icuVersion: version[1].replace("-", "."), tz: tz[1], versions: [], recorded: null };
+      // The git ids of the sources the data is built from and of the
+      // filter it is built through, which the data's generator checks
+      // what it fetches against.
+      const tree = async (p) => JSON.parse((await get(`https://chromium.googlesource.com/chromium/deps/icu/+/${m[1]}/${p}?format=JSON`)).slice(5));
+      const parent = await tree("filters");
+      const filter = parent.entries.find(e => e.name === "common.json");
+      pin = {
+        icu: m[1], icuVersion: version[1].replace("-", "."), tz: tz[1],
+        dataTree: (await tree("source/data")).id, filterBlob: filter.id,
+        versions: [], recorded: null,
+      };
       pins.push(pin);
     }
     pin.versions.push(v);
