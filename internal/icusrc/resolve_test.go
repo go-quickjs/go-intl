@@ -1,7 +1,6 @@
 package icusrc
 
 import (
-	"archive/zip"
 	"strings"
 	"testing"
 
@@ -12,13 +11,13 @@ import (
 // archive's are.
 func treeOf(t *testing.T, bundles map[string]string) *Locales {
 	t.Helper()
-	c := &Locales{files: map[string]*zip.File{}, cache: map[string]*icutxt.Node{}}
+	c := &Locales{names: map[string]bool{}, cache: map[string]*icutxt.Node{}}
 	for name, src := range bundles {
 		n, err := icutxt.Parse(src)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		c.files[name] = nil
+		c.names[name] = true
 		c.cache[name] = n
 	}
 	return c

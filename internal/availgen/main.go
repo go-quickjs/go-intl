@@ -88,7 +88,9 @@ func openLocales(zip string) (*icusrc.Locales, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.UseTZ(tzDir)
+	if tzDir != "-" {
+		l.UseTZ(tzDir)
+	}
 	return l, nil
 }
 
@@ -242,13 +244,9 @@ func build(zip string) ([]byte, error) {
 		"collator": buildSet(coll, collNames, "", true),
 	}
 
-	b, err := locales.ReadMisc("plurals")
+	plurals, err := locales.Misc("plurals")
 	if err != nil {
 		return nil, err
-	}
-	plurals, err := icutxt.Parse(string(b))
-	if err != nil {
-		return nil, fmt.Errorf("plurals.txt: %w", err)
 	}
 	table := plurals.Get("locales")
 	if table == nil || !table.Table {

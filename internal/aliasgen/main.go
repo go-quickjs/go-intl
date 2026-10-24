@@ -68,17 +68,11 @@ func build(zip, tzDir string) ([]byte, error) {
 		return nil, err
 	}
 	defer icu.Close()
-	icu.UseTZ(tzDir)
+	if tzDir != "-" {
+		icu.UseTZ(tzDir)
+	}
 	misc := func(name string) (*icutxt.Node, error) {
-		b, err := icu.ReadMisc(name)
-		if err != nil {
-			return nil, err
-		}
-		n, err := icutxt.Parse(string(b))
-		if err != nil {
-			return nil, fmt.Errorf("%s.txt: %w", name, err)
-		}
-		return n, nil
+		return icu.Misc(name)
 	}
 	metadata, err := misc("metadata")
 	if err != nil {

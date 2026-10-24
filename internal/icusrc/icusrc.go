@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -90,43 +91,51 @@ func ReadFile(z *zip.ReadCloser, name string) ([]byte, error) {
 }
 
 // Locales reads one tree of ICU's locale bundles -- data/locales/*.txt, or
-// data/zone/*.txt -- from the data archive, each once.
+// data/zone/*.txt -- from an Archive, each once.
 type Locales struct {
-	z     *zip.ReadCloser
+	a     *Archive
+	own   bool   // the archive was opened for the tree, and closes with it
 	tz    string // the time zone update's directory, if given
 	tree  string
-	files map[string]*zip.File
+	names map[string]bool
 	cache map[string]*icutxt.Node
 }
 
-// OpenLocales opens the data archive for its locale bundles.
-func OpenLocales(zipPath string) (*Locales, error) {
-	return OpenTree(zipPath, "locales")
+// OpenLocales opens the data archive, or a tree of sources (OpenArchive),
+// for its locale bundles.
+func OpenLocales(path string) (*Locales, error) {
+	return OpenTree(path, "locales")
 }
 
-// OpenTree opens the data archive for one tree of bundles: "locales", "zone",
-// "region" and so on.
-func OpenTree(zipPath, tree string) (*Locales, error) {
-	z, err := Open(zipPath, DataSHA256)
+// OpenTree opens the data archive, or a tree of sources (OpenArchive), for
+// one tree of bundles: "locales", "zone", "region" and so on.
+func OpenTree(path, tree string) (*Locales, error) {
+	a, err := OpenArchive(path)
 	if err != nil {
 		return nil, err
 	}
-	out := &Locales{z: z, tree: tree, files: map[string]*zip.File{}, cache: map[string]*icutxt.Node{}}
-	for _, f := range z.File {
-		// A tree's bundles are the files at its top; brkitr keeps its rules
-		// and dictionaries' sources in directories beneath.
-		if name, ok := strings.CutPrefix(f.Name, "data/"+tree+"/"); ok && strings.HasSuffix(name, ".txt") &&
-			!strings.Contains(name, "/") {
-			out.files[strings.TrimSuffix(name, ".txt")] = f
+	c := TreeOf(a, tree)
+	c.own = true
+	return c, nil
+}
+
+// TreeOf is one tree of an archive's bundles.
+func TreeOf(a *Archive, tree string) *Locales {
+	c := &Locales{a: a, tree: tree, names: map[string]bool{}, cache: map[string]*icutxt.Node{}}
+	// A tree's bundles are the files at its top; brkitr keeps its rules and
+	// dictionaries' sources in directories beneath.
+	for _, name := range a.Names("data/" + tree) {
+		if stem, ok := strings.CutSuffix(path.Base(name), ".txt"); ok {
+			c.names[stem] = true
 		}
 	}
-	return out, nil
+	return c
 }
 
 // Names lists the tree's bundles, sorted.
 func (c *Locales) Names() []string {
-	out := make([]string, 0, len(c.files))
-	for name := range c.files {
+	out := make([]string, 0, len(c.names))
+	for name := range c.names {
 		out = append(out, name)
 	}
 	sort.Strings(out)
@@ -134,29 +143,45 @@ func (c *Locales) Names() []string {
 }
 
 // ReadTreeFile reads a file of the tree other than a bundle, such as
-// LOCALE_DEPS.json.
+// LOCALE_DEPS.json, which ICU's build reads and does not filter.
 func (c *Locales) ReadTreeFile(name string) ([]byte, error) {
-	return ReadFile(c.z, "data/"+c.tree+"/"+name)
+	return c.a.readRaw("data/" + c.tree + "/" + name)
 }
 
-// UseTZ has ReadMisc read the time zone files from the update in dir rather
+// UseTZ has Misc read the time zone files from the update in dir rather
 // than from the data archive.
 func (c *Locales) UseTZ(dir string) { c.tz = dir }
 
-// ReadMisc reads one of the data archive's non-locale files, data/misc/
-// <name>.txt, or the time zone update's copy of it.
-func (c *Locales) ReadMisc(name string) ([]byte, error) {
+// Misc reads one of the archive's non-locale bundles, data/misc/<name>.txt,
+// or the time zone update's copy of it.
+func (c *Locales) Misc(name string) (*icutxt.Node, error) {
+	if _, ok := TZSHA256[name]; ok && c.tz != "" {
+		b, err := ReadTZ(c.tz, name)
+		if err != nil {
+			return nil, err
+		}
+		n, err := icutxt.Parse(string(b))
+		if err != nil {
+			return nil, fmt.Errorf("%s.txt: %w", name, err)
+		}
+		return n, nil
+	}
+	return c.a.Bundle("data/misc/" + name + ".txt")
+}
+
+// MiscText reads one of the archive's non-locale files as text, as Misc
+// finds it, for a reader that needs what parsing leaves out: the comments
+// zoneinfo64.txt names its zones in. The filter's resource rules are not
+// applied to it.
+func (c *Locales) MiscText(name string) ([]byte, error) {
 	if _, ok := TZSHA256[name]; ok && c.tz != "" {
 		return ReadTZ(c.tz, name)
 	}
-	return ReadFile(c.z, "data/misc/"+name+".txt")
+	return c.a.ReadFile("data/misc/" + name + ".txt")
 }
 
 // Has reports whether the tree has a bundle of this name.
-func (c *Locales) Has(name string) bool {
-	_, ok := c.files[name]
-	return ok
-}
+func (c *Locales) Has(name string) bool { return c.names[name] }
 
 // A Fallback is what ICU's getParentLocaleID consults when a bundle a locale
 // asks for does not exist: CLDR's parent locales, and the script a language
@@ -371,8 +396,13 @@ func splitName(name string) (language, script, region string, variant bool) {
 	return language, script, region, variant
 }
 
-// Close closes the archive.
-func (c *Locales) Close() error { return c.z.Close() }
+// Close closes the archive, if it was opened for the tree.
+func (c *Locales) Close() error {
+	if c.own {
+		return c.a.Close()
+	}
+	return nil
+}
 
 // Get returns one locale's bundle, by ICU's name for it ("zh_Hant"), or nil
 // when ICU has none.
@@ -380,23 +410,13 @@ func (c *Locales) Get(name string) (*icutxt.Node, error) {
 	if n, ok := c.cache[name]; ok {
 		return n, nil
 	}
-	f, ok := c.files[name]
-	if !ok {
+	if !c.names[name] {
 		c.cache[name] = nil
 		return nil, nil
 	}
-	rc, err := f.Open()
+	n, err := c.a.Bundle("data/" + c.tree + "/" + name + ".txt")
 	if err != nil {
 		return nil, err
-	}
-	raw, err := io.ReadAll(rc)
-	rc.Close()
-	if err != nil {
-		return nil, err
-	}
-	n, err := icutxt.Parse(string(raw))
-	if err != nil {
-		return nil, fmt.Errorf("%s.txt: %w", name, err)
 	}
 	c.cache[name] = n
 	return n, nil

@@ -6,6 +6,8 @@
 //
 //	go run ./internal/zonegen [-seed pool.bin] <icu4c-78.3-data.zip> <icu-tz-2026c dir>
 //
+// The data archive may be a tree of sources instead (icusrc.OpenArchive),
+// and the time zone update "-", for a tree that carries its own.
 // -seed numbers the pool's parts after an earlier pool's (datawrite.NewPool).
 //
 // It writes data/zonenames/<locale>.bin for every locale with date data, and
@@ -41,7 +43,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: go run ./internal/zonegen [-seed pool.bin] <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
 		os.Exit(2)
 	}
-	if err := run(flag.Arg(0), flag.Arg(1), *seed); err != nil {
+	tzDir := flag.Arg(1)
+	if tzDir == "-" {
+		tzDir = ""
+	}
+	if err := run(flag.Arg(0), tzDir, *seed); err != nil {
 		fmt.Fprintln(os.Stderr, "zonegen:", err)
 		os.Exit(1)
 	}
@@ -52,7 +58,7 @@ func main() {
 const noInheritance = "∅∅∅"
 
 func run(zipPath, tzDir, seed string) error {
-	archive, err := icusrc.Open(zipPath, icusrc.DataSHA256)
+	archive, err := icusrc.OpenArchive(zipPath)
 	if err != nil {
 		return err
 	}
@@ -61,16 +67,8 @@ func run(zipPath, tzDir, seed string) error {
 	if err != nil {
 		return err
 	}
-	zones, err := icusrc.OpenTree(zipPath, "zone")
-	if err != nil {
-		return err
-	}
-	defer zones.Close()
-	regions, err := icusrc.OpenTree(zipPath, "region")
-	if err != nil {
-		return err
-	}
-	defer regions.Close()
+	zones := icusrc.TreeOf(archive, "zone")
+	regions := icusrc.TreeOf(archive, "region")
 	fb, err := icusrc.ICUFallback()
 	if err != nil {
 		return err

@@ -34,17 +34,13 @@ func main() {
 }
 
 func run(zipPath string) error {
-	z, err := icusrc.Open(zipPath, icusrc.DataSHA256)
+	archive, err := icusrc.OpenArchive(zipPath)
 	if err != nil {
 		return err
 	}
-	defer z.Close()
+	defer archive.Close()
 	read := func(name string) (*icutxt.Node, error) {
-		b, err := icusrc.ReadFile(z, "data/"+name+".txt")
-		if err != nil {
-			return nil, err
-		}
-		return icutxt.Parse(string(b))
+		return archive.Bundle("data/" + name + ".txt")
 	}
 	systems, err := read("misc/numberingSystems")
 	if err != nil {

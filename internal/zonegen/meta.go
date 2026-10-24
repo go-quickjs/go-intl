@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/zip"
 	"fmt"
 	"sort"
 	"strconv"
@@ -14,13 +13,13 @@ import (
 )
 
 // readMeta reads what every locale shares about zones, from ICU's data/misc
-// and, for the zone files, the time zone update.
-func readMeta(archive *zip.ReadCloser, tzDir string) (*zonedata.BuiltMeta, error) {
+// and, for the zone files, the time zone update where one is given.
+func readMeta(archive *icusrc.Archive, tzDir string) (*zonedata.BuiltMeta, error) {
 	read := func(name string) (*icutxt.Node, error) {
-		b, err := icusrc.ReadFile(archive, "data/misc/"+name+".txt")
-		if _, ok := icusrc.TZSHA256[name]; ok {
-			b, err = icusrc.ReadTZ(tzDir, name)
+		if _, ok := icusrc.TZSHA256[name]; !ok || tzDir == "" {
+			return archive.Bundle("data/misc/" + name + ".txt")
 		}
+		b, err := icusrc.ReadTZ(tzDir, name)
 		if err != nil {
 			return nil, err
 		}

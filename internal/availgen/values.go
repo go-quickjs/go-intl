@@ -88,15 +88,7 @@ func readMisc(zip, name string) (*icutxt.Node, error) {
 		return nil, err
 	}
 	defer l.Close()
-	b, err := l.ReadMisc(name)
-	if err != nil {
-		return nil, err
-	}
-	n, err := icutxt.Parse(string(b))
-	if err != nil {
-		return nil, fmt.Errorf("%s.txt: %w", name, err)
-	}
-	return n, nil
+	return l.Misc(name)
 }
 
 // collationValues is AvailableCollations: every collation the collation
@@ -288,7 +280,7 @@ func canonicalZones(zip string, types *icutxt.Node, names []string) (func(string
 		return nil, err
 	}
 	defer l.Close()
-	raw, err := l.ReadMisc("zoneinfo64")
+	raw, err := l.MiscText("zoneinfo64")
 	if err != nil {
 		return nil, err
 	}

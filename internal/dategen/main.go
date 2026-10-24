@@ -339,13 +339,9 @@ func timeData() ([]byte, error) {
 // number and its first day, "236 2019 5 1". Tentative eras, which have no
 // name yet, are left out, as ICU leaves them out unless told otherwise.
 func japaneseEras(icu *icusrc.Locales) ([]byte, error) {
-	b, err := icu.ReadMisc("supplementalData")
+	root, err := icu.Misc("supplementalData")
 	if err != nil {
 		return nil, err
-	}
-	root, err := icutxt.Parse(string(b))
-	if err != nil {
-		return nil, fmt.Errorf("supplementalData.txt: %w", err)
 	}
 	eras := root.Get("calendarData", "japanese", "eras")
 	if eras == nil {
