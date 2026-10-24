@@ -127,7 +127,9 @@ func readTree(icu *icusrc.Locales) (*tree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("icuver.txt: the ICU version %q", v.Value)
 	}
-	t := &tree{isoEras: supplemental.Get("calendarData", "iso8601", "eras") != nil, amPm: amPmMarkers}
+	// An ICU before 78 reckons the ISO 8601 calendar as the Gregorian one,
+	// eras and all; ICU 78's has its own, whose eras need their rules.
+	t := &tree{isoEras: major < 78 || supplemental.Get("calendarData", "iso8601", "eras") != nil, amPm: amPmMarkers}
 	if major < 78 {
 		t.amPm = amPmMarkersBefore78
 	}
