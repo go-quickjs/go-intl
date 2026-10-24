@@ -9,24 +9,28 @@ import (
 	intl "github.com/go-quickjs/go-intl"
 )
 
-// Each divergence's flag chooses Node's side of it alone, and every flag has
-// an entry in Divergences.
+// Each divergence's flag chooses its side of it alone, and every flag has
+// an entry in Divergences: Node's are NodeICU, and a browser's alone, which
+// says what the browser does, is not.
 func TestCompatFlags(t *testing.T) {
-	var all intl.Compat
+	var all, nodes intl.Compat
 	for _, d := range intl.Divergences() {
 		if d.Flag == 0 || all&d.Flag != 0 {
 			t.Errorf("%s: flag %d is zero or another's", d.Name, d.Flag)
 		}
 		all |= d.Flag
-		if !intl.NodeICU.Has(d.Flag) || intl.Standard.Has(d.Flag) {
-			t.Errorf("%s: not in NodeICU, or in Standard", d.Name)
+		if intl.NodeICU.Has(d.Flag) != (d.Chrome == "") || intl.Standard.Has(d.Flag) {
+			t.Errorf("%s: in NodeICU though Chrome's alone, or out of it though Node's, or in Standard", d.Name)
+		}
+		if d.Chrome == "" {
+			nodes |= d.Flag
 		}
 		if d.Flag.String() != d.Name {
 			t.Errorf("%s: String() = %q", d.Name, d.Flag.String())
 		}
 	}
-	if all != intl.NodeICU {
-		t.Errorf("the divergences make %d, NodeICU is %d", all, intl.NodeICU)
+	if nodes != intl.NodeICU {
+		t.Errorf("Node's divergences make %d, NodeICU is %d", nodes, intl.NodeICU)
 	}
 	if got := (intl.NarrowSpace | intl.TwoLetterTags).String(); got != "NarrowSpace|TwoLetterTags" {
 		t.Errorf("String() = %q", got)

@@ -961,6 +961,11 @@ func (f *DateTimeFormat) FormatRangeToParts(start, end time.Time) []RangePart {
 		out = append(out, RangePart{datePartKind(s.letter), s.value, source(from, text.Len())})
 	}
 	flush()
+	if f.opts.Compat.Has(ThinSpace) {
+		for i := range out {
+			out[i].Value = strings.ReplaceAll(out[i].Value, " ", " ")
+		}
+	}
 	if f.opts.Compat.Has(NarrowSpace) {
 		for i := range out {
 			out[i].Value = strings.ReplaceAll(out[i].Value, " ", " ")

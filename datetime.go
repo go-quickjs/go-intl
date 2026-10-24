@@ -894,6 +894,12 @@ func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
 			out[i].Value = strings.ReplaceAll(out[i].Value, "\u202f", " ")
 		}
 	}
+	if f.opts.Compat.Has(ThinSpace) {
+		// Chrome's V8 does the same for ICU 78's thin space.
+		for i := range out {
+			out[i].Value = strings.ReplaceAll(out[i].Value, "\u2009", " ")
+		}
+	}
 	return out
 }
 

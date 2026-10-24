@@ -84,6 +84,32 @@ func TestOtherCalendarsTakeGregorianGlue(t *testing.T) {
 	}
 }
 
+// Chrome's V8, from Chrome 148, writes a plain space wherever ICU 78 writes
+// a thin one, in a date and in a range; the standard profile keeps CLDR's
+// character, and so does Node.
+func TestThinSpaceByProfile(t *testing.T) {
+	when := time.UnixMilli(1704467045000)
+	for _, c := range []struct {
+		compat     intl.Compat
+		date, span string
+	}{
+		{intl.Standard, "2024/1/5\u2009下午3:04", "5/1/2024\u2009–\u20097/1/2024"},
+		{intl.NodeICU, "2024/1/5\u2009下午3:04", "5/1/2024\u2009–\u20097/1/2024"},
+		{intl.NodeICU | intl.ThinSpace, "2024/1/5 下午3:04", "5/1/2024 – 7/1/2024"},
+	} {
+		f := newDateTime(t, "zh-Hant", intl.DateTimeFormatOptions{
+			TimeZone: "UTC", DateStyle: intl.LengthShort, TimeStyle: intl.LengthShort, Compat: c.compat,
+		})
+		if got := f.Format(when); got != c.date {
+			t.Errorf("%v: %+q, want %+q", c.compat, got, c.date)
+		}
+		r := newDateTime(t, "af", intl.DateTimeFormatOptions{TimeZone: "UTC", Compat: c.compat})
+		if got := r.FormatRange(when, when.Add(48*time.Hour)); got != c.span {
+			t.Errorf("%v: range %+q, want %+q", c.compat, got, c.span)
+		}
+	}
+}
+
 // V8 writes a plain space wherever ICU writes a narrow no-break one; the
 // standard profile keeps CLDR's character.
 func TestNarrowNoBreakSpaceByProfile(t *testing.T) {

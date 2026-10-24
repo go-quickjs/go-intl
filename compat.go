@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-// Which behavior to reproduce where Node and the standard disagree.
+// Which behavior to reproduce where Node, or a browser, and the standard
+// disagree.
 //
 // Node, and so ICU4C, differs from ECMA-402 as written in a handful of
-// observable places. A host that cares about conformance wants the standard; a
+// observable places, and a browser in a few more of its own. A host that cares about conformance wants the standard; a
 // host that cares about matching Node wants Node. Both are legitimate, so the
 // choice is made when a formatter is built, and it is not ambient state: two
 // formatters in one program may answer differently.
@@ -32,7 +33,9 @@ import (
 // increment, which currencies a currency's own format is used for, the
 // empty items of a list, the hour cycle keyword a time style is made with,
 // what Intl.Locale answers for a keyword with no value, and a text
-// direction no one knows. Standard and NodeICU are the two ends.
+// direction no one knows. Standard and NodeICU are the two ends. A
+// browser's divergences that Node does not share, ThinSpace, are in neither
+// NodeICU nor Standard: a profile of the browser chooses them.
 //
 // The rule that keeps this honest is that every divergence is a named,
 // documented entry with a test on both sides. It is a short list, not a
@@ -44,9 +47,9 @@ import (
 // past: each is a fix the standard made that Node's temporal_rs predates,
 // and each goes when Node takes it.
 
-// Compat is the divergences in which to answer as Node does rather than as
-// the standard: a set of the flags below. The zero value is the standard in
-// every one.
+// Compat is the divergences in which to answer as Node, or a browser, does
+// rather than as the standard: a set of the flags below. The zero value is
+// the standard in every one.
 type Compat uint64
 
 const (
@@ -171,6 +174,9 @@ const (
 	// whose direction is unknown, or a locale whose script cannot be found,
 	// as ICU's uloc_isRightToLeft does.
 	LeftToRightDirection
+	// ThinSpace writes a plain space where ICU writes U+2009 in a date or a
+	// range of dates, as Chrome's V8 does and Node's does not.
+	ThinSpace
 )
 
 const (
@@ -188,7 +194,8 @@ const (
 		TrueKeywords | LeftToRightDirection
 )
 
-// Has reports whether Node's behavior is chosen for a divergence.
+// Has reports whether Node's, or the browser's, behavior is chosen for a
+// divergence.
 func (c Compat) Has(d Compat) bool { return c&d != 0 }
 
 func (c Compat) String() string {
@@ -599,6 +606,16 @@ var divergences = []Divergence{
 		Node: "ICU's uloc_isRightToLeft answers false for any script it does not mark right to " +
 			"left, and V8 writes that as \"ltr\": all of these are \"ltr\"",
 	},
+	{
+		Name: "ThinSpace", Flag: ThinSpace,
+		Area:     "DateTimeFormat",
+		What:     "the thin space ICU 78 writes between a short date and its time, and around a range's dash",
+		Standard: "CLDR's character, U+2009, as ICU writes it: \"2024/1/5\u2009下午3:04\"",
+		Node:     "the standard's: Node 26's V8 predates the change below",
+		Chrome: "V8 replaces U+2009 with a plain space in everything it formats (ReplaceUnicodeSpaces, " +
+			"\"Revert ICU 78 change\"), \"2024/1/5 下午3:04\", and in a range from Chrome 148, " +
+			"\"5/1/2024 – 7/1/2024\"",
+	},
 }
 
 // A Divergence is one named difference between the profiles.
@@ -613,4 +630,7 @@ type Divergence struct {
 	// Standard and Node say what each side does.
 	Standard string
 	Node     string
+	// Chrome says what Chrome does, where it is not what Node does: a
+	// divergence of the browser's alone, which NodeICU leaves out.
+	Chrome string
 }
