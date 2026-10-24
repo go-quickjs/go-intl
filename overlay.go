@@ -1,11 +1,10 @@
 package intl
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
-	"sort"
-	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datapack"
@@ -58,18 +57,19 @@ func NewOverlay(base, overlay Source) (Source, error) {
 	if err != nil {
 		return nil, fmt.Errorf("intl: an overlay without its %s: %w", overlayManifest, err)
 	}
-	lines := strings.Split(string(manifest), "\n")
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	if len(lines) == 0 || lines[0] != overlayHeader {
+	// The removed files are read where the manifest lies, a line each.
+	header, removed, _ := bytes.Cut(manifest, []byte("\n"))
+	if string(header) != overlayHeader {
 		return nil, fmt.Errorf("intl: %s does not begin %q", overlayManifest, overlayHeader)
 	}
-	removed := lines[1:]
-	for i, name := range removed {
-		if name == "" || i > 0 && removed[i-1] >= name {
+	var last []byte
+	for rest := removed; len(rest) > 0; {
+		var name []byte
+		name, rest, _ = bytes.Cut(rest, []byte("\n"))
+		if len(name) == 0 || last != nil && bytes.Compare(last, name) >= 0 {
 			return nil, fmt.Errorf("intl: %s's removed files are not sorted and distinct at %q", overlayManifest, name)
 		}
+		last = name
 	}
 	return &overlaySource{base: b, top: top, removed: removed}, nil
 }
@@ -83,7 +83,9 @@ type fileSource interface {
 
 type overlaySource struct {
 	base, top fileSource
-	removed   []string // sorted
+	// removed is the manifest's removed files, sorted lines, each ended by
+	// a newline but perhaps the last.
+	removed []byte
 }
 
 func (s *overlaySource) Open(m Marker, d DataLocale) ([]byte, error) {
@@ -106,9 +108,29 @@ func (s *overlaySource) readFile(name string) ([]byte, error) {
 	return s.base.readFile(name)
 }
 
+// removes reports whether the manifest names the file, searching its
+// sorted lines where they lie: each step takes the line around the middle
+// of what is left.
 func (s *overlaySource) removes(name string) bool {
-	i := sort.SearchStrings(s.removed, name)
-	return i < len(s.removed) && s.removed[i] == name
+	b := s.removed
+	lo, hi := 0, len(b) // both at the start of a line, or hi at the end
+	for lo < hi {
+		mid := lo + (hi-lo)/2
+		start := lo + bytes.LastIndexByte(b[lo:mid], '\n') + 1
+		end := hi
+		if i := bytes.IndexByte(b[start:hi], '\n'); i >= 0 {
+			end = start + i
+		}
+		switch line := b[start:end]; {
+		case string(line) == name:
+			return true
+		case string(line) < name:
+			lo = end + 1
+		default:
+			hi = start
+		}
+	}
+	return false
 }
 
 // openPool opens a shared pool: the overlay's, read over the base's where

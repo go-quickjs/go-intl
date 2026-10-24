@@ -21,6 +21,7 @@ package chrome
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	intl "github.com/go-quickjs/go-intl"
@@ -41,17 +42,23 @@ type Profile struct {
 // "155.0.8059.84", or the start of one, "155" or "155.0.8059", which names
 // the newest version known that it starts.
 func ForVersion(version string) (Profile, error) {
-	var found []string
-	for _, line := range strings.Split(strings.TrimSpace(versions), "\n") {
-		f := strings.Fields(line)
-		if len(f) != 3 {
+	// versions.txt is read where it lies, a line at a time: the version,
+	// the ICU pin and the overlay, separated by spaces.
+	var found [3]string
+	prefix := version + "."
+	for rest := strings.TrimSpace(versions); rest != ""; {
+		var line string
+		line, rest, _ = strings.Cut(rest, "\n")
+		v, after, ok := strings.Cut(line, " ")
+		pin, overlay, ok2 := strings.Cut(after, " ")
+		if !ok || !ok2 || v == "" || pin == "" || overlay == "" || strings.Contains(overlay, " ") {
 			return Profile{}, fmt.Errorf("chrome: versions.txt: %q", line)
 		}
-		if (f[0] == version || strings.HasPrefix(f[0], version+".")) && (found == nil || newer(f[0], found[0])) {
-			found = f
+		if (v == version || strings.HasPrefix(v, prefix)) && (found[0] == "" || newer(v, found[0])) {
+			found = [3]string{v, pin, overlay}
 		}
 	}
-	if found == nil {
+	if found[0] == "" {
 		return Profile{}, fmt.Errorf("chrome: no Chrome %s is known", version)
 	}
 	// The overlay is of the newer Chromes' data, laid over the intl
@@ -87,23 +94,25 @@ func ForVersion(version string) (Profile, error) {
 	return Profile{Version: found[0], ICU: found[1], Source: src, Compat: compatOf(major, found[1])}, nil
 }
 
-// newer reports whether version a comes after b.
+// newer reports whether version a comes after b, number by number.
 func newer(a, b string) bool {
-	x, y := strings.Split(a, "."), strings.Split(b, ".")
-	for i := 0; i < len(x) && i < len(y); i++ {
-		var m, n int
-		fmt.Sscan(x[i], &m)
-		fmt.Sscan(y[i], &n)
+	for a != "" && b != "" {
+		var x, y string
+		x, a, _ = strings.Cut(a, ".")
+		y, b, _ = strings.Cut(b, ".")
+		m, _ := strconv.Atoi(x)
+		n, _ := strconv.Atoi(y)
 		if m != n {
 			return m > n
 		}
 	}
-	return len(x) > len(y)
+	return a != ""
 }
 
 func majorOf(version string) (int, error) {
-	var major int
-	if _, err := fmt.Sscanf(version, "%d.", &major); err != nil {
+	first, _, _ := strings.Cut(version, ".")
+	major, err := strconv.Atoi(first)
+	if err != nil {
 		return 0, fmt.Errorf("chrome: the version %q", version)
 	}
 	return major, nil

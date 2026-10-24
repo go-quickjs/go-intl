@@ -84,6 +84,52 @@ func TestOverlayFiles(t *testing.T) {
 	}
 }
 
+// The removed files are searched where the manifest lies: each of them is
+// found, the first, the last and those between, whether or not the last
+// line ends with a newline, and nothing else is, before, after or between
+// them -- nor a name that is only the start of one. Searching allocates
+// nothing.
+func TestOverlayRemoves(t *testing.T) {
+	removed := []string{"a.bin", "dates/de.bin", "dates/en.bin", "dates/en_GB.bin", "numbers/fr.bin", "z.bin"}
+	absent := []string{"", "0.bin", "a", "b.bin", "dates/de", "dates/en_AU.bin", "dates/es.bin", "numbers/fr.bin2", "zz.bin"}
+	for _, ending := range []string{"\n", ""} {
+		manifest := overlayHeader + "\n"
+		for i, name := range removed {
+			manifest += name
+			if i < len(removed)-1 {
+				manifest += "\n"
+			}
+		}
+		manifest += ending
+		s := overlayOf(t, NewFS(fstest.MapFS{}), NewFS(fstest.MapFS{overlayManifest: {Data: []byte(manifest)}})).(*overlaySource)
+		for _, name := range removed {
+			if !s.removes(name) {
+				t.Errorf("ending %q: %s is not removed", ending, name)
+			}
+		}
+		for _, name := range absent {
+			if s.removes(name) {
+				t.Errorf("ending %q: %s is removed", ending, name)
+			}
+		}
+		if allocs := testing.AllocsPerRun(20, func() {
+			for _, name := range removed {
+				s.removes(name)
+			}
+			for _, name := range absent {
+				s.removes(name)
+			}
+		}); allocs != 0 {
+			t.Errorf("ending %q: searching made %v allocations", ending, allocs)
+		}
+	}
+	// An overlay that removes nothing removes nothing.
+	s := overlayOf(t, NewFS(fstest.MapFS{}), NewFS(fstest.MapFS{overlayManifest: {Data: []byte(overlayHeader + "\n")}})).(*overlaySource)
+	if s.removes("a.bin") || s.removes("") {
+		t.Error("an empty manifest removes a file")
+	}
+}
+
 // A pool an overlay extends is read over the base's, and one it leaves be
 // is the base's, through any number of overlays.
 func TestOverlayPools(t *testing.T) {
