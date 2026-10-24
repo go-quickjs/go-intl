@@ -52,6 +52,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 type pin struct {
@@ -102,10 +104,6 @@ func run(cache string) error {
 				name, cache, cache)
 		}
 	}
-	out := filepath.Join("chrome", "data")
-	if err := os.MkdirAll(out, 0o755); err != nil {
-		return err
-	}
 	var versions []string
 	// An overlay is named by the sources and the filter, which the data is
 	// built from; a pin that shares them builds the same data.
@@ -124,9 +122,12 @@ func run(cache string) error {
 			versions = append(versions, v+" "+p.ICU+" "+name)
 		}
 	}
-	// Newest first, each of the data the one before it made.
+	// Newest first, each of the data the one before it made. Each pack is
+	// written in its working directory, and the chrome package's data is
+	// replaced as one set once every pack is made (internal/writeset).
 	against := "data"
 	var chain []string
+	files := map[string][]byte{}
 	for i := len(firsts) - 1; i >= 0; i-- {
 		p := firsts[i]
 		name := overlayName(p)
@@ -140,34 +141,31 @@ func run(cache string) error {
 		}
 		fmt.Printf("chromegen: ICU %s at %s, overlay %s\n", p.ICUVersion, short(p.ICU), name)
 		work := filepath.Join(cache, "chromium-icu", "work", name)
+		pack := filepath.Join(work, "overlay.pack")
 		cmd := exec.Command("go", "run", "./internal/profilegen", "-tree", tree,
 			"-sources", filepath.Join(cache, "icu4c-78.3-sources.tgz"),
 			"-export", filepath.Join(cache, "icu4x-icuexportdata-78.3.zip"),
 			"-dat", dat, "-ucd", filepath.Join(cache, "ucd-17.0.0"),
-			"-against", against, "-out", filepath.Join(out, name+".pack"), "-work", work)
+			"-against", against, "-out", pack, "-work", work)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("%s: profilegen: %w", p.ICU, err)
 		}
+		b, err := os.ReadFile(pack)
+		if err != nil {
+			return err
+		}
+		files[name+".pack"] = b
 		against = filepath.Join(work, "data")
 		chain = append(chain, name)
 	}
-	// What a previous run wrote for sources no pin names any more goes.
-	entries, err := os.ReadDir(out)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if stem, ok := strings.CutSuffix(e.Name(), ".pack"); ok && made[stem] == "" {
-			if err := os.Remove(filepath.Join(out, e.Name())); err != nil {
-				return err
-			}
-		}
-	}
-	if err := os.WriteFile(filepath.Join(out, "versions.txt"), []byte(strings.Join(versions, "\n")+"\n"), 0o644); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join("chrome", "packs.go"), packsGo(chain), 0o644)
+	// chrome/data is the set's whole: a pack of sources no pin names any
+	// more goes.
+	files["versions.txt"] = []byte(strings.Join(versions, "\n") + "\n")
+	set := writeset.New()
+	set.Tree(filepath.Join("chrome", "data"), files)
+	set.File(filepath.Join("chrome", "packs.go"), packsGo(chain))
+	return set.Commit()
 }
 
 // packsGo is the chrome package's embedding of its data: versions.txt, and

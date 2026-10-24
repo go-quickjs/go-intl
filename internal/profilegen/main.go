@@ -89,7 +89,7 @@ var steps = []step{
 
 func main() {
 	tree := flag.String("tree", "", "the data sources to make the overlay from")
-	out := flag.String("out", "", "the overlay pack to write")
+	out := flag.String("out", "", "the overlay pack to write, a working file of chromegen's, which replaces the chrome package's data as one set")
 	sources := flag.String("sources", "", "ICU 78.3's sources, for tzgen and collgen")
 	export := flag.String("export", "", "ICU4X's export of ICU 78.3's collations, for collgen")
 	dat := flag.String("dat", "", "the common data file built from the sources, for segmentgen")
