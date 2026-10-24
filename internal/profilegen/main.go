@@ -53,8 +53,9 @@ var pools = map[string]byte{
 }
 
 // A step is one generator's run: its arguments, with {tree} the sources,
-// {base} the package's data, {sources} ICU 78.3's sources and {export} its
-// collation export, and the pool it seeds, if it has one.
+// {dat} the data built from them, {base} the package's data, {sources} ICU
+// 78.3's sources, {export} its collation export and {ucd} the Unicode
+// Character Database, and the pool it seeds, if it has one.
 type step struct {
 	name string
 	pool string
@@ -79,6 +80,8 @@ var steps = []step{
 	// The collations are ICU 78.3's export, of the locales and types the
 	// tree's filter keeps.
 	{"collgen", "", []string{"{export}", "{tree}", "{sources}"}},
+	// The break rules and dictionaries, compiled, from the data built.
+	{"segmentgen", "", []string{"{dat}", "{tree}", "{ucd}"}},
 	// The zones' offsets, from the tree's own time zone files; the zones a
 	// host's abbreviations stand for are ICU 78.3's.
 	{"tzgen", "", []string{"{tree}", "{sources}"}},
@@ -89,19 +92,22 @@ func main() {
 	out := flag.String("out", "", "the overlay pack to write")
 	sources := flag.String("sources", "", "ICU 78.3's sources, for tzgen and collgen")
 	export := flag.String("export", "", "ICU4X's export of ICU 78.3's collations, for collgen")
+	dat := flag.String("dat", "", "the common data file built from the sources, for segmentgen")
+	ucd := flag.String("ucd", "", "the Unicode Character Database 17.0.0's directory, for segmentgen")
 	work := flag.String("work", "", "the working directory (default: a temporary one, removed after)")
 	flag.Parse()
-	if *tree == "" || *out == "" || *sources == "" || *export == "" || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -sources <icu4c-78.3-sources.tgz> -export <icu4x-icuexportdata-78.3.zip> -out <overlay.pack> [-work <dir>]")
+	if *tree == "" || *out == "" || *sources == "" || *export == "" || *dat == "" || *ucd == "" || flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -dat <icudtl.dat> -sources <icu4c-78.3-sources.tgz> -export <icu4x-icuexportdata-78.3.zip> -ucd <ucd-17.0.0 dir> -out <overlay.pack> [-work <dir>]")
 		os.Exit(2)
 	}
-	if err := run(*tree, *sources, *export, *out, *work); err != nil {
+	inputs := map[string]string{"{tree}": *tree, "{dat}": *dat, "{sources}": *sources, "{export}": *export, "{ucd}": *ucd}
+	if err := run(inputs, *out, *work); err != nil {
 		fmt.Fprintln(os.Stderr, "profilegen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(tree, sources, export, out, work string) error {
+func run(inputs map[string]string, out, work string) error {
 	if b, err := os.ReadFile("go.mod"); err != nil || !bytes.HasPrefix(b, []byte("module github.com/go-quickjs/go-intl\n")) {
 		return errors.New("run from go-intl's repository root")
 	}
@@ -109,15 +115,15 @@ func run(tree, sources, export, out, work string) error {
 	if err != nil {
 		return err
 	}
-	if tree, err = filepath.Abs(tree); err != nil {
-		return err
+	replace := []string{"{base}", base}
+	for k, v := range inputs {
+		abs, err := filepath.Abs(v)
+		if err != nil {
+			return err
+		}
+		replace = append(replace, k, abs)
 	}
-	if sources, err = filepath.Abs(sources); err != nil {
-		return err
-	}
-	if export, err = filepath.Abs(export); err != nil {
-		return err
-	}
+	replacer := strings.NewReplacer(replace...)
 	if work == "" {
 		if work, err = os.MkdirTemp("", "profilegen-"); err != nil {
 			return err
@@ -151,7 +157,7 @@ func run(tree, sources, export, out, work string) error {
 			args = append(args, "-seed", filepath.Join(base, s.pool))
 		}
 		for _, a := range s.args {
-			args = append(args, strings.NewReplacer("{tree}", tree, "{base}", base, "{sources}", sources, "{export}", export).Replace(a))
+			args = append(args, replacer.Replace(a))
 		}
 		cmd := exec.Command(filepath.Join(bin, s.name+exeSuffix()), args...)
 		cmd.Dir = work

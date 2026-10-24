@@ -6,11 +6,12 @@
 //
 // The Chromes and their ICU are testdata/chrome/pins.json (pins.js). For
 // each distinct pair of ICU sources and data filter it fetches Chromium's
-// source/data at the pin and filters/common.json, the filter a desktop
-// Chrome builds its data through, into the cache, checks each against the
-// git id pins.json gives it -- the sources' tree id computed from the
-// archive as git computes it, so that the archive need not be byte for
-// byte stable -- and runs profilegen over them, writing
+// source/data at the pin, filters/common.json, the filter a desktop Chrome
+// builds its data through, and common/icudtl.dat, the data it built, into
+// the cache, checks each against the git id pins.json gives it -- the
+// sources' tree id computed from the archive as git computes it, so that
+// the archive need not be byte for byte stable -- and runs profilegen over
+// them, writing
 // chrome/data/<tree>-<filter>.pack. chrome/data/versions.txt then names
 // each Chrome's overlay: a line each, the version, the ICU pin and the
 // overlay.
@@ -46,6 +47,7 @@ type pin struct {
 	ICUVersion string   `json:"icuVersion"`
 	DataTree   string   `json:"dataTree"`
 	FilterBlob string   `json:"filterBlob"`
+	DatBlob    string   `json:"datBlob"`
 	Versions   []string `json:"versions"`
 }
 
@@ -80,12 +82,21 @@ func run(cache string) error {
 		return err
 	}
 	var versions []string
-	made := map[string]bool{}
+	// An overlay is named by the sources and the filter, which the data is
+	// built from; a pin that shares them builds the same data.
+	made := map[string]string{}
 	for _, p := range pins.Pins {
 		name := short(p.DataTree) + "-" + short(p.FilterBlob)
-		if !made[name] {
-			made[name] = true
+		if dat, ok := made[name]; ok && dat != p.DatBlob {
+			return fmt.Errorf("%s: the data %s, though another pin builds %s from %s", p.ICU, short(p.DatBlob), short(dat), name)
+		}
+		if made[name] == "" {
+			made[name] = p.DatBlob
 			tree, err := fetchTree(cache, p)
+			if err != nil {
+				return fmt.Errorf("%s: %w", p.ICU, err)
+			}
+			dat, err := fetchDat(cache, p)
 			if err != nil {
 				return fmt.Errorf("%s: %w", p.ICU, err)
 			}
@@ -93,6 +104,7 @@ func run(cache string) error {
 			cmd := exec.Command("go", "run", "./internal/profilegen", "-tree", tree,
 				"-sources", filepath.Join(cache, "icu4c-78.3-sources.tgz"),
 				"-export", filepath.Join(cache, "icu4x-icuexportdata-78.3.zip"),
+				"-dat", dat, "-ucd", filepath.Join(cache, "ucd-17.0.0"),
 				"-out", filepath.Join(out, name+".pack"), "-work", filepath.Join(cache, "chromium-icu", "work"))
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			if err := cmd.Run(); err != nil {
@@ -109,7 +121,7 @@ func run(cache string) error {
 		return err
 	}
 	for _, e := range entries {
-		if stem, ok := strings.CutSuffix(e.Name(), ".pack"); ok && !made[stem] {
+		if stem, ok := strings.CutSuffix(e.Name(), ".pack"); ok && made[stem] == "" {
 			if err := os.Remove(filepath.Join(out, e.Name())); err != nil {
 				return err
 			}
@@ -124,7 +136,7 @@ func run(cache string) error {
 // packsGo is the chrome package's embedding of its data: versions.txt, and
 // each overlay as a string, read where it lies, as the intl package's own
 // data is, found by name.
-func packsGo(made map[string]bool) []byte {
+func packsGo(made map[string]string) []byte {
 	names := make([]string, 0, len(made))
 	for name := range made {
 		names = append(names, name)
@@ -186,6 +198,30 @@ func fetchTree(cache string, p pin) (string, error) {
 		return "", err
 	}
 	return dir, os.WriteFile(done, []byte(want), 0o644)
+}
+
+// fetchDat is the file a pin's common/icudtl.dat is kept in, checked
+// against its git id.
+func fetchDat(cache string, p pin) (string, error) {
+	file := filepath.Join(cache, "chromium-icu", "icudtl-"+short(p.DatBlob)+".dat")
+	if b, err := os.ReadFile(file); err == nil && hex.EncodeToString(object("blob", b)) == p.DatBlob {
+		return file, nil
+	}
+	encoded, err := get(gitiles + "+/" + p.ICU + "/common/icudtl.dat?format=TEXT")
+	if err != nil {
+		return "", err
+	}
+	dat, err := base64.StdEncoding.DecodeString(string(encoded))
+	if err != nil {
+		return "", fmt.Errorf("common/icudtl.dat: %w", err)
+	}
+	if id := hex.EncodeToString(object("blob", dat)); id != p.DatBlob {
+		return "", fmt.Errorf("common/icudtl.dat is the git blob %s, pins.json says %s", id, p.DatBlob)
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return "", err
+	}
+	return file, os.WriteFile(file, dat, 0o644)
 }
 
 func get(url string) ([]byte, error) {

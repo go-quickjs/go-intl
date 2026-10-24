@@ -8,12 +8,13 @@
 // README.chromium gives its ICU version and the tz data it carries. The
 // recorded build is the newest of the group that Chrome for Testing has a
 // win64 download of: its recordings go in testdata/chrome/<version>. The
-// git ids of its source/data tree and of filters/common.json, the filter a
-// desktop Chrome builds its data through, are what internal/chromegen
-// checks the sources it fetches against.
+// git ids of its source/data tree, of filters/common.json, the filter a
+// desktop Chrome builds its data through, and of common/icudtl.dat, the
+// data it built, are what internal/chromegen checks the sources it fetches
+// against.
 //
 //	{"pins": [{"icu": commit, "icuVersion": "78.2", "tz": "2026c",
-//	           "dataTree": id, "filterBlob": id,
+//	           "dataTree": id, "filterBlob": id, "datBlob": id,
 //	           "versions": [...], "recorded": "155.0.8059.84"}, ...]}
 //
 // in the order the pins were taken.
@@ -69,9 +70,10 @@ async function main() {
       const tree = async (p) => JSON.parse((await get(`https://chromium.googlesource.com/chromium/deps/icu/+/${m[1]}/${p}?format=JSON`)).slice(5));
       const parent = await tree("filters");
       const filter = parent.entries.find(e => e.name === "common.json");
+      const dat = (await tree("common")).entries.find(e => e.name === "icudtl.dat");
       pin = {
         icu: m[1], icuVersion: version[1].replace("-", "."), tz: tz[1],
-        dataTree: (await tree("source/data")).id, filterBlob: filter.id,
+        dataTree: (await tree("source/data")).id, filterBlob: filter.id, datBlob: dat.id,
         versions: [], recorded: null,
       };
       pins.push(pin);

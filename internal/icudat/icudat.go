@@ -70,6 +70,11 @@ func ReadSourceFile(sources, name string) ([]byte, error) {
 	}
 }
 
+// Parse splits a common data file that is not the source release's, such
+// as the icudtl.dat a Chrome carries, into its items, "icudt78l/brkitr/
+// word.brk". What the file is is the caller's to have checked.
+func Parse(dat []byte) (Dat, error) { return parseDat(dat) }
+
 // parseDat splits a common data file: its header, then a table of contents
 // of name and data offsets from the table's start.
 func parseDat(dat []byte) (Dat, error) {

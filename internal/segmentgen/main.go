@@ -15,7 +15,16 @@
 //	    burmesedict.bin, cjdict.bin
 //
 // Each is ICU's item of that name, .brk or .dict, without ICU's data
-// header: the RBBIDataHeader, or the dictionary's indexes, first.
+// header: the RBBIDataHeader, or the dictionary's indexes, first. They are
+// the items the brkitr bundles name, below, for the Segmenter's
+// granularities and the root's dictionaries.
+//
+// For a browser's profile, the first argument is instead the common data
+// file the browser carries, a Chrome's icudtl.dat, and the second its tree
+// of ICU's sources (icusrc.OpenArchive): Chromium patches the word rules
+// and the dictionaries, and its build leaves out what its filter does,
+// word_POSIX.brk and the en_US_POSIX bundle among them. ICU 74's Finnish
+// and Swedish name word_fi_sv.brk.
 //
 // data/brkitr/boundaries.bin has which rules each bundle of ICU's brkitr
 // tree names for the Segmenter's three granularities, and which dictionary
@@ -42,12 +51,11 @@
 package main
 
 import (
-	"archive/zip"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -56,7 +64,6 @@ import (
 	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/icudat"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
-	"github.com/go-quickjs/go-intl/internal/icutxt"
 	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
@@ -68,15 +75,9 @@ var ucdSHA256 = map[string]string{
 	"DerivedGeneralCategory.txt": "d62e5bab70ca74f099343f71224fa051cb1fdd61a1ab45c0488c44cfc0b6102e",
 }
 
-// items are the compiled rules and dictionaries copied from icudt78l.dat.
-var items = []string{
-	"char.brk", "word.brk", "word_POSIX.brk", "sent.brk", "sent_el.brk",
-	"thaidict.dict", "laodict.dict", "khmerdict.dict", "burmesedict.dict", "cjdict.dict",
-}
-
 func main() {
 	if len(os.Args) != 4 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/segmentgen <icu4c-78.3-sources.tgz> <icu4c-78.3-data.zip> <ucd-17.0.0 dir>")
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/segmentgen <icu4c-78.3-sources.tgz | icudtl.dat> <icu4c-78.3-data.zip | tree> <ucd-17.0.0 dir>")
 		os.Exit(2)
 	}
 	files, err := build(os.Args[1], os.Args[2], os.Args[3])
@@ -90,16 +91,32 @@ func main() {
 	}
 }
 
-func build(sources, dataZip, ucdDir string) (map[string][]byte, error) {
-	dat, err := icudat.Read(sources)
+func build(sources, dataPath, ucdDir string) (map[string][]byte, error) {
+	dat, err := readDat(sources)
 	if err != nil {
 		return nil, err
 	}
-	files := map[string][]byte{}
-	for _, name := range items {
-		b, ok := dat["icudt78l/brkitr/"+name]
+	// The items are named under the data's package, "icudt78l/".
+	prefix := ""
+	for name := range dat {
+		if p, ok := strings.CutSuffix(name, "/brkitr/root.res"); ok {
+			prefix = p + "/brkitr/"
+		}
+	}
+	if prefix == "" {
+		return nil, fmt.Errorf("%s has no brkitr/root.res", sources)
+	}
+	boundaries, err := readBoundaries(dataPath)
+	if err != nil {
+		return nil, err
+	}
+	files := map[string][]byte{"boundaries.bin": boundaries}
+	for _, line := range strings.Split(strings.TrimSpace(string(boundaries)), "\n") {
+		f := strings.Fields(line)
+		name := f[len(f)-1]
+		b, ok := dat[prefix+name]
 		if !ok {
-			return nil, fmt.Errorf("icudt78l.dat has no brkitr/%s", name)
+			return nil, fmt.Errorf("%q names brkitr/%s, which %s does not have", line, name, sources)
 		}
 		body, err := icudat.StripHeader(b)
 		if err != nil {
@@ -107,11 +124,6 @@ func build(sources, dataZip, ucdDir string) (map[string][]byte, error) {
 		}
 		files[strings.TrimSuffix(name, filepath.Ext(name))+".bin"] = body
 	}
-	boundaries, err := readBoundaries(dataZip)
-	if err != nil {
-		return nil, err
-	}
-	files["boundaries.bin"] = boundaries
 	sets, err := buildSets(ucdDir)
 	if err != nil {
 		return nil, err
@@ -120,29 +132,38 @@ func build(sources, dataZip, ucdDir string) (map[string][]byte, error) {
 	return files, nil
 }
 
-// readBoundaries reads which rules each brkitr bundle names, and which
-// dictionary the root names for each script.
-func readBoundaries(dataZip string) ([]byte, error) {
-	z, err := icusrc.Open(dataZip, icusrc.DataSHA256)
+// readDat reads the compiled data: icudt78l.dat out of ICU's source
+// release, or a common data file as it stands.
+func readDat(sources string) (icudat.Dat, error) {
+	if filepath.Ext(sources) != ".dat" {
+		return icudat.Read(sources)
+	}
+	b, err := os.ReadFile(sources)
 	if err != nil {
 		return nil, err
 	}
-	defer z.Close()
+	return icudat.Parse(b)
+}
+
+// readBoundaries reads which rules each brkitr bundle names, and which
+// dictionary the root names for each script, as the data's filter leaves
+// the bundles.
+func readBoundaries(dataPath string) ([]byte, error) {
+	a, err := icusrc.OpenArchive(dataPath)
+	if err != nil {
+		return nil, err
+	}
+	defer a.Close()
 	var lines []string
-	for _, f := range z.File {
-		dir, name := filepath.ToSlash(filepath.Dir(f.Name)), filepath.Base(f.Name)
-		if dir != "data/brkitr" || !strings.HasSuffix(name, ".txt") {
+	for _, file := range a.Names("data/brkitr") {
+		bundle, ok := strings.CutSuffix(path.Base(file), ".txt")
+		if !ok {
 			continue
 		}
-		b, err := readZip(f)
+		n, err := a.Bundle(file)
 		if err != nil {
 			return nil, err
 		}
-		n, err := icutxt.Parse(strings.TrimPrefix(string(b), string(rune(0xfeff))))
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", f.Name, err)
-		}
-		bundle := strings.TrimSuffix(name, ".txt")
 		if b := n.Get("boundaries"); b != nil {
 			for _, c := range b.Children {
 				kind, _, _ := strings.Cut(c.Key, ":")
@@ -166,15 +187,6 @@ func readBoundaries(dataZip string) ([]byte, error) {
 	}
 	sort.Strings(lines)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
-}
-
-func readZip(f *zip.File) ([]byte, error) {
-	r, err := f.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	return io.ReadAll(r)
 }
 
 // A ucdProperty is a property's values by code point.
