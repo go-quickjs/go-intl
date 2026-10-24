@@ -74,6 +74,7 @@ var steps = []step{
 	{"aliasgen", "", []string{"{tree}", "-"}},
 	{"availgen", "", []string{"{tree}", "-"}},
 	{"rbnfgen", "", []string{"{tree}"}},
+	{"pluralgen", "", []string{"{tree}"}},
 	// The zones' offsets, from the tree's own time zone files; the zones a
 	// host's abbreviations stand for are ICU 78.3's.
 	{"tzgen", "", []string{"{tree}", "{sources}"}},

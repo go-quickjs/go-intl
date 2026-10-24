@@ -16,7 +16,7 @@
 //	-j n         how many generators run at once (default: the CPUs)
 //
 // The generators that read nothing but what is vendored beside them
-// (localegen, pluralgen, normgen) run too, so the whole of data/ is
+// (localegen, normgen) run too, so the whole of data/ is
 // rebuilt. zonegen reads data/dates, which dategen writes, and so runs after
 // it; packgen runs last. The rest write files of their own and run in
 // parallel.
@@ -98,7 +98,7 @@ func jobs(cache string) []job {
 	at := func(p string) string { return filepath.Join(cache, filepath.FromSlash(p)) }
 	return []job{
 		{name: "localegen"},
-		{name: "pluralgen"},
+		{name: "pluralgen", args: []string{at(dataZip)}},
 		{name: "normgen"},
 		{name: "aliasgen", args: []string{at(dataZip), at(tzDir)}},
 		{name: "availgen", args: []string{at(dataZip), at(tzDir)}},
