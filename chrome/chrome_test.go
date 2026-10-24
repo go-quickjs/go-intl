@@ -1,8 +1,10 @@
 package chrome_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	intl "github.com/go-quickjs/go-intl"
 	"github.com/go-quickjs/go-intl/chrome"
@@ -52,6 +54,40 @@ func TestCompat(t *testing.T) {
 		}
 		if p.Compat&c.has != c.has || p.Compat&c.not != 0 {
 			t.Errorf("Chrome %s answers in %v", c.version, p.Compat)
+		}
+	}
+}
+
+// Where each profile's Segmenter begins words, as its Chrome does
+// (testdata/chrome): Chromium's word rules break at a full stop between
+// letters, and its Khmer engine reads its own dictionary with its own
+// thresholds (KhmerCombining).
+func TestSegmenterProfiles(t *testing.T) {
+	for _, c := range []struct {
+		version, text, want string
+	}{
+		{"155", "someone@example.com", "[0 7 8 15 16]"},
+		{"142", "someone@example.com", "[0 7 8 15 16]"},
+		{"155", "\u17c9\u0303\u17ac\u17cf\u0300\u178c\u179d\u1794\u17b6\u1791\u17b0\u179e\u17ac\ufe0f\u0300\u17ca\u17b9\u17be\u17b3\u179b", "[0 2 7]"},
+	} {
+		p, err := chrome.ForVersion(c.version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		loc, err := intl.ParseLocale("en")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := intl.NewSegmenterFrom(p.Source, loc, intl.SegmenterOptions{Granularity: intl.GranularityWord, Compat: p.Compat})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var starts []int
+		for _, seg := range s.Segment(utf16.Encode([]rune(c.text))).All() {
+			starts = append(starts, seg.Index)
+		}
+		if got := fmt.Sprint(starts); got != c.want {
+			t.Errorf("Chrome %s %+q: %s, want %s", c.version, c.text, got, c.want)
 		}
 	}
 }

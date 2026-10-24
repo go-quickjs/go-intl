@@ -119,6 +119,8 @@ var browserFrom = []struct {
 	first int
 }{
 	{intl.ThinSpace, 148},
+	// Every pin patches the Khmer break engine (khmer-dictbe.patch).
+	{intl.KhmerCombining, 0},
 }
 
 // noISOEraRules are the ICU pins whose data gives the ISO 8601 calendar no

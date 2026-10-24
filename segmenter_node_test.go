@@ -39,7 +39,7 @@ func TestSegmenterMatchesNode(t *testing.T) {
 				}
 				g := map[string]intl.Granularity{"grapheme": intl.GranularityGrapheme,
 					"word": intl.GranularityWord, "sentence": intl.GranularitySentence}[granularity]
-				if seg, err = intl.NewSegmenterFrom(r.src, h.resolve(intl.ServiceSegmenter, loc), intl.SegmenterOptions{Granularity: g}); err != nil {
+				if seg, err = intl.NewSegmenterFrom(r.src, h.resolve(intl.ServiceSegmenter, loc), intl.SegmenterOptions{Granularity: g, Compat: r.compatFor(intl.NodeICU)}); err != nil {
 					t.Fatal(err)
 				}
 				segmenters[key] = seg

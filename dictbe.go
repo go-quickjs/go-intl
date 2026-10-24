@@ -81,7 +81,7 @@ var scriptCodes = map[string]string{
 	"Han": "Hani", "Hiragana": "Hira", "Katakana": "Kana", "Hangul": "Hang",
 }
 
-func loadBreakEngines(src Source, norm *Normalizer) (*breakEngines, error) {
+func loadBreakEngines(src Source, norm *Normalizer, compat Compat) (*breakEngines, error) {
 	b, err := src.Open(Marker("brkitr/sets"), DataLocale{})
 	if err != nil {
 		return nil, fmt.Errorf("intl: the break engines' sets: %w", err)
@@ -143,28 +143,36 @@ func loadBreakEngines(src Source, norm *Normalizer) (*breakEngines, error) {
 	}
 	if err := add("Thai", func(d *breakDictionary) breakEngine {
 		return &southeastAsianEngine{dict: d, set: sets["thai"], marks: space(sets["thaimarks"]),
-			endWord:   sets["thai"].without(0x0e31, 0x0e31).without(0x0e40, 0x0e44),
-			beginWord: codeRanges{{0x0e01, 0x0e2e}, {0x0e40, 0x0e44}},
-			suffixes:  true, minSpanInCodePoints: true}
+			endWord:     sets["thai"].without(0x0e31, 0x0e31).without(0x0e40, 0x0e44),
+			beginWord:   codeRanges{{0x0e01, 0x0e2e}, {0x0e40, 0x0e44}},
+			rootCombine: seaRootCombine, prefixCombine: seaPrefixCombine,
+			suffixes: true, minSpanInCodePoints: true}
 	}); err != nil {
 		return nil, err
 	}
 	if err := add("Laoo", func(d *breakDictionary) breakEngine {
 		return &southeastAsianEngine{dict: d, set: sets["lao"], marks: space(sets["laomarks"]),
-			endWord:   sets["lao"].without(0x0ec0, 0x0ec4),
-			beginWord: codeRanges{{0x0e81, 0x0eae}, {0x0ec0, 0x0ec4}, {0x0edc, 0x0edd}}}
+			endWord:     sets["lao"].without(0x0ec0, 0x0ec4),
+			beginWord:   codeRanges{{0x0e81, 0x0eae}, {0x0ec0, 0x0ec4}, {0x0edc, 0x0edd}},
+			rootCombine: seaRootCombine, prefixCombine: seaPrefixCombine}
 	}); err != nil {
 		return nil, err
 	}
 	if err := add("Mymr", func(d *breakDictionary) breakEngine {
 		return &southeastAsianEngine{dict: d, set: sets["myanmar"], marks: space(sets["myanmarmarks"]),
-			endWord: sets["myanmar"], beginWord: codeRanges{{0x1000, 0x102a}}}
+			endWord: sets["myanmar"], beginWord: codeRanges{{0x1000, 0x102a}},
+			rootCombine: seaRootCombine, prefixCombine: seaPrefixCombine}
 	}); err != nil {
 		return nil, err
 	}
 	if err := add("Khmr", func(d *breakDictionary) breakEngine {
+		root, prefix := seaRootCombine, seaPrefixCombine
+		if compat.Has(KhmerCombining) {
+			root, prefix = khmerChromiumRootCombine, khmerChromiumPrefixCombine
+		}
 		return &southeastAsianEngine{dict: d, set: sets["khmer"], marks: space(sets["khmermarks"]),
-			endWord: sets["khmer"].without(0x17d2, 0x17d2), beginWord: codeRanges{{0x1780, 0x17b3}}}
+			endWord: sets["khmer"].without(0x17d2, 0x17d2), beginWord: codeRanges{{0x1780, 0x17b3}},
+			rootCombine: root, prefixCombine: prefix}
 	}); err != nil {
 		return nil, err
 	}
@@ -239,15 +247,22 @@ type southeastAsianEngine struct {
 	// minSpanInCodePoints is Thai's: two words' worth of characters is
 	// counted in code points, where the others count code units.
 	minSpanInCodePoints bool
+	// rootCombine and prefixCombine are the engine's thresholds: a non-word
+	// joins a word before it of fewer code points than rootCombine, where
+	// it shares fewer than prefixCombine with a dictionary word.
+	rootCombine, prefixCombine int
 }
 
 const (
-	seaLookahead          = 3
-	seaRootCombine        = 3
-	seaPrefixCombine      = 3
-	seaMinWordSpan        = 4
-	thaiPaiyannoi    rune = 0x0e2f
-	thaiMaiyamok     rune = 0x0e46
+	seaLookahead     = 3
+	seaRootCombine   = 3
+	seaPrefixCombine = 3
+	// Chromium's khmer-dictbe.patch's (KhmerCombining).
+	khmerChromiumRootCombine        = 10
+	khmerChromiumPrefixCombine      = 5
+	seaMinWordSpan                  = 4
+	thaiPaiyannoi              rune = 0x0e2f
+	thaiMaiyamok               rune = 0x0e46
 )
 
 func (e *southeastAsianEngine) handles(c rune) bool { return e.set.contains(c) }
@@ -341,10 +356,10 @@ func (e *southeastAsianEngine) divide(t *utext, rangeStart, rangeEnd int, breaks
 		// A non-word after a short word, not much like a dictionary word
 		// itself, is joined to it, up to where a word may begin.
 		var uc rune
-		if t.index() < rangeEnd && cpWordLength < seaRootCombine {
+		if t.index() < rangeEnd && cpWordLength < e.rootCombine {
 			wn := &words[wordsFound%seaLookahead]
 			if wn.candidates(t, e.dict, rangeEnd) <= 0 &&
-				(cuWordLength == 0 || wn.prefix < seaPrefixCombine) {
+				(cuWordLength == 0 || wn.prefix < e.prefixCombine) {
 				remaining := rangeEnd - (current + cuWordLength)
 				chars := 0
 				for {

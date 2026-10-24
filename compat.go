@@ -34,8 +34,8 @@ import (
 // empty items of a list, the hour cycle keyword a time style is made with,
 // what Intl.Locale answers for a keyword with no value, and a text
 // direction no one knows. Standard and NodeICU are the two ends. A
-// browser's divergences that Node does not share, ThinSpace, ISOMonthNames
-// and AmeteMihretExtendedYear, are in neither
+// browser's divergences that Node does not share, ThinSpace, ISOMonthNames,
+// AmeteMihretExtendedYear and KhmerCombining, are in neither
 // NodeICU nor Standard: a profile of the browser chooses them.
 //
 // The rule that keeps this honest is that every divergence is a named,
@@ -185,6 +185,9 @@ const (
 	// extended year, and so its week-based year, in Amete Mihret years, as
 	// ICU before 78 does.
 	AmeteMihretExtendedYear
+	// KhmerCombining joins a non-word to a longer Khmer dictionary word
+	// before it, as Chromium's patched Khmer break engine does.
+	KhmerCombining
 )
 
 const (
@@ -643,6 +646,17 @@ var divergences = []Divergence{
 		Node: "the standard's",
 		Chrome: "Chrome before 148, over ICU 77 and before, whose EthiopicAmeteAlemCalendar keeps the " +
 			"extended year it counts weeks in as the Amete Mihret one: \"\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 1962\"",
+	},
+	{
+		Name: "KhmerCombining", Flag: KhmerCombining,
+		Area: "Segmenter",
+		What: "when the Khmer dictionary engine joins a run that is no word to the word before it",
+		Standard: "ICU's KhmerBreakEngine, as Node runs it: after a word of fewer than 3 code points, " +
+			"and where the run shares fewer than 3 with a dictionary word",
+		Node: "the standard's",
+		Chrome: "Chromium's khmer-dictbe.patch raises the two to 10 and 5, so that a run joins a " +
+			"longer word: over ICU's dictionary, \"\u17ad\u178c\u1785\u17b9\u17bd\u17ca\u17ce\u17b6\u17c6\u17ce" +
+			"\u17cf\u17b9\u17bf\u179d\u17c2\u178d\u17a9\u1796\" breaks into words at 0, 1, 13 and 15, where ICU breaks at 2 too",
 	},
 }
 

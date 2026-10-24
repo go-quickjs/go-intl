@@ -24,6 +24,9 @@ const (
 // SegmenterOptions are Intl.Segmenter's options.
 type SegmenterOptions struct {
 	Granularity Granularity
+	// Compat chooses the divergences to answer in; the zero value is the
+	// standard in every one.
+	Compat Compat
 }
 
 // A Segmenter breaks text in one locale. It never changes after it is
@@ -80,7 +83,7 @@ func NewSegmenterFrom(src Source, loc Locale, opts SegmenterOptions) (*Segmenter
 		if err != nil {
 			return nil, err
 		}
-		if s.engines, err = loadBreakEngines(src, norm); err != nil {
+		if s.engines, err = loadBreakEngines(src, norm, opts.Compat); err != nil {
 			return nil, err
 		}
 	}
