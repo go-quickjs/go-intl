@@ -9,14 +9,13 @@
 //
 // -seed numbers the pool's parts after an earlier pool's (datawrite.NewPool).
 //
-// Which calendar a locale reckons in by default is a property of its region
-// rather than its language, and CLDR's calendarPreferenceData says so. That
-// file is vendored beside this command and written out as its own table.
+// What is a property of a region rather than a locale -- the calendars it
+// reckons in, its hour cycles and its weeks -- is the archive's
+// misc/supplementalData.txt, and the day periods' rules are its
+// misc/dayPeriods.txt; each is written out as its own table.
 package main
 
 import (
-	_ "embed"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -33,18 +32,6 @@ import (
 	"github.com/go-quickjs/go-intl/internal/layout"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
-
-//go:embed calendarPreferenceData.json
-var calendarPreferenceJSON []byte
-
-//go:embed dayPeriods.json
-var dayPeriodsJSON []byte
-
-//go:embed weekData.json
-var weekDataJSON []byte
-
-//go:embed timeData.json
-var timeDataJSON []byte
 
 // appendFields are ICU's names for the append items, by pattern-generator
 // field. The fields with no append item of their own are empty.
@@ -107,6 +94,10 @@ var amPmMarkersBefore78 = [datedata.Widths][]string{
 type tree struct {
 	isoEras bool
 	amPm    [datedata.Widths][]string
+	// supplemental is misc/supplementalData.txt.
+	supplemental *icutxt.Node
+	// periods are the day-period rules by locale tag (periodRules).
+	periods map[string][]datedata.PeriodRule
 }
 
 // readTree reads it. The ICU version is the sources' misc/icuver.txt.
@@ -129,9 +120,13 @@ func readTree(icu *icusrc.Locales) (*tree, error) {
 	}
 	// An ICU before 78 reckons the ISO 8601 calendar as the Gregorian one,
 	// eras and all; ICU 78's has its own, whose eras need their rules.
-	t := &tree{isoEras: major < 78 || supplemental.Get("calendarData", "iso8601", "eras") != nil, amPm: amPmMarkers}
+	t := &tree{isoEras: major < 78 || supplemental.Get("calendarData", "iso8601", "eras") != nil, amPm: amPmMarkers,
+		supplemental: supplemental}
 	if major < 78 {
 		t.amPm = amPmMarkersBefore78
+	}
+	if t.periods, err = readPeriodRules(icu); err != nil {
+		return nil, err
 	}
 	return t, nil
 }
@@ -186,7 +181,7 @@ func run(icu *icusrc.Locales, seed string) error {
 		return err
 	}
 
-	prefs, err := calendarPreferences()
+	prefs, err := calendarPreferences(t.supplemental)
 	if err != nil {
 		return err
 	}
@@ -194,11 +189,11 @@ func run(icu *icusrc.Locales, seed string) error {
 	if err != nil {
 		return err
 	}
-	hours, err := timeData()
+	hours, err := timeData(t.supplemental)
 	if err != nil {
 		return err
 	}
-	week, err := weekData()
+	week, err := weekData(t.supplemental)
 	if err != nil {
 		return err
 	}
@@ -239,7 +234,7 @@ func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, t *tree
 	if err != nil {
 		return nil, err
 	}
-	l := &datedata.Locale{PeriodRules: periodRules(icusrc.Tag(name))}
+	l := &datedata.Locale{PeriodRules: t.periodRules(icusrc.Tag(name))}
 	if l.FieldNames, err = readFieldNames(v); err != nil {
 		return nil, err
 	}
@@ -273,11 +268,22 @@ func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, t *tree
 	}
 	l.Calendars = append(l.Calendars, datedata.NamedCalendar{Name: "gregory", Calendar: *greg})
 	iso := isoCalendar(*greg, chain, t.isoEras)
-	if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, "iso8601"); err != nil {
-		return nil, fmt.Errorf("iso8601: %w", err)
+	// Data before ICU 76's, CLDR 46's, has no ISO 8601 calendar. ICU reads
+	// the Gregorian one's names and styles for it (CalendarData's
+	// fallback), but its pattern generator and its intervals read the
+	// calendar ures_getFunctionalEquivalent finds, the locale's default:
+	// Persian's skeletons in Persian.
+	formats := "iso8601"
+	if !hasCalendar(chain, "iso8601") {
+		formats = defaultCalendar(chain)
 	}
-	if iso.Available, err = availableFromICU(chain, "iso8601"); err != nil {
-		return nil, fmt.Errorf("iso8601: %w", err)
+	if formats != "gregorian" {
+		if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, formats); err != nil {
+			return nil, fmt.Errorf("iso8601: %w", err)
+		}
+		if iso.Available, err = availableFromICU(chain, formats); err != nil {
+			return nil, fmt.Errorf("iso8601: %w", err)
+		}
 	}
 	for _, e := range extras {
 		c, err := calendar(e.icu)
@@ -290,37 +296,49 @@ func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, t *tree
 	return l, nil
 }
 
+// defaultCalendar is the calendar a locale defaults to: the first
+// calendar/default up its chain, the root's "gregorian" last.
+func defaultCalendar(chain []*icutxt.Node) string {
+	for _, n := range chain {
+		if d := n.Get("calendar", "default"); d != nil && d.Value != "" {
+			return d.Value
+		}
+	}
+	return "gregorian"
+}
+
+// hasCalendar reports whether a bundle of the chain has the calendar.
+func hasCalendar(chain []*icutxt.Node, cal string) bool {
+	for _, n := range chain {
+		if n.Get("calendar", cal) != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // calendarPreferences writes the calendars each region reckons in, most
 // preferred first, as lines of "region calendar...", sorted by region: the
 // first is the one it defaults to, and the whole list is what
-// Intl.Locale.prototype.getCalendars answers.
-func calendarPreferences() ([]byte, error) {
-	var res struct {
-		Supplemental struct {
-			CalendarPreferenceData map[string][]string `json:"calendarPreferenceData"`
-		} `json:"supplemental"`
+// Intl.Locale.prototype.getCalendars answers. They are supplementalData.txt's
+// calendarPreferenceData.
+func calendarPreferences(supplemental *icutxt.Node) ([]byte, error) {
+	data := supplemental.Get("calendarPreferenceData")
+	if data == nil || len(data.Children) == 0 {
+		return nil, fmt.Errorf("supplementalData.txt has no calendarPreferenceData")
 	}
-	if err := json.Unmarshal(calendarPreferenceJSON, &res); err != nil {
-		return nil, fmt.Errorf("calendarPreferenceData.json: %w", err)
-	}
-	if len(res.Supplemental.CalendarPreferenceData) == 0 {
-		return nil, fmt.Errorf("calendarPreferenceData.json names no regions")
-	}
-	regions := make([]string, 0, len(res.Supplemental.CalendarPreferenceData))
-	for region := range res.Supplemental.CalendarPreferenceData {
-		regions = append(regions, region)
-	}
-	sort.Strings(regions)
-
-	var b strings.Builder
-	for _, region := range regions {
-		list := res.Supplemental.CalendarPreferenceData[region]
+	var lines []string
+	for _, region := range data.Children {
+		list := texts(region)
+		if len(list) == 0 && region.Value != "" {
+			list = []string{region.Value}
+		}
 		if len(list) == 0 {
 			continue
 		}
 		names := make([]string, len(list))
 		for i, name := range list {
-			// CLDR writes some calendars' names in full where BCP-47
+			// ICU writes some calendars' names in full where BCP-47
 			// shortens them, and the short ones are what ECMA-402 uses.
 			switch name {
 			case "gregorian":
@@ -330,9 +348,10 @@ func calendarPreferences() ([]byte, error) {
 			}
 			names[i] = name
 		}
-		fmt.Fprintf(&b, "%s %s\n", region, strings.Join(names, " "))
+		lines = append(lines, region.Key+" "+strings.Join(names, " "))
 	}
-	return []byte(b.String()), nil
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
 // readFieldNames reads what a locale calls each field.
@@ -353,33 +372,26 @@ func readFieldNames(v *icusrc.View) ([datedata.Fields]string, error) {
 	return out, nil
 }
 
-// timeData writes CLDR's hour-cycle preferences, which are a property of a
+// timeData writes the hour-cycle preferences, which are a property of a
 // region, or of a language in a region, as an index (blob.Index) read where
 // it lies: by "de_AT" or "AT", the preferred cycle, a space and the allowed
-// ones separated by commas, as CLDR spells them ("H H,hB").
-func timeData() ([]byte, error) {
-	var res struct {
-		Supplemental struct {
-			TimeData map[string]struct {
-				Allowed   string `json:"_allowed"`
-				Preferred string `json:"_preferred"`
-			} `json:"timeData"`
-		} `json:"supplemental"`
+// ones separated by commas, as CLDR spells them ("H H,hB"). They are
+// supplementalData.txt's timeData.
+func timeData(supplemental *icutxt.Node) ([]byte, error) {
+	data := supplemental.Get("timeData")
+	if data == nil || len(data.Children) == 0 {
+		return nil, fmt.Errorf("supplementalData.txt has no timeData")
 	}
-	if err := json.Unmarshal(timeDataJSON, &res); err != nil {
-		return nil, fmt.Errorf("timeData.json: %w", err)
-	}
-	keys := make([]string, 0, len(res.Supplemental.TimeData))
-	for key := range res.Supplemental.TimeData {
-		keys = append(keys, key)
-	}
-	// An index (blob.Index), looked up where it lies: the key, "de_AT" or
-	// "AT", then the preferred hour format and the allowed ones, "H H,hB".
 	records := map[string][]byte{}
-	for _, key := range keys {
-		d := res.Supplemental.TimeData[key]
-		records[strings.ReplaceAll(key, "-", "_")] = []byte(d.Preferred + " " +
-			strings.Join(strings.Fields(d.Allowed), ","))
+	for _, key := range data.Children {
+		preferred, allowed := key.Get("preferred"), texts(key.Get("allowed"))
+		if a := key.Get("allowed"); a != nil && len(allowed) == 0 && a.Value != "" {
+			allowed = []string{a.Value}
+		}
+		if preferred == nil || len(allowed) == 0 {
+			return nil, fmt.Errorf("supplementalData.txt: timeData %s", key.Key)
+		}
+		records[key.Key] = []byte(preferred.Value + " " + strings.Join(allowed, ","))
 	}
 	return blob.BuildIndex(layout.TimeData, records)
 }
@@ -439,102 +451,115 @@ func ummAlQura() ([]byte, error) {
 	return []byte(out.String()), nil
 }
 
-// weekData writes CLDR's week conventions, which are a property of a
-// region: one line each, the field, the region and the value, sorted. The
-// days are numbered from Sunday, zero. "001" is the world's.
-func weekData() ([]byte, error) {
-	var res struct {
-		Supplemental struct {
-			WeekData struct {
-				MinDays      map[string]string `json:"minDays"`
-				FirstDay     map[string]string `json:"firstDay"`
-				WeekendStart map[string]string `json:"weekendStart"`
-				WeekendEnd   map[string]string `json:"weekendEnd"`
-			} `json:"weekData"`
-		} `json:"supplemental"`
+// weekData writes the week conventions, which are a property of a region:
+// one line each, the field, the region and the value, sorted. The days are
+// numbered from Sunday, zero. "001" is the world's. They are
+// supplementalData.txt's weekData, ICU's six numbers for each region: the
+// first day and the minimal days of the first week, then the day and time
+// the weekend begins and the day and time it ends, the days counted from
+// Sunday, one.
+func weekData(supplemental *icutxt.Node) ([]byte, error) {
+	data := supplemental.Get("weekData")
+	if data == nil || len(data.Children) == 0 {
+		return nil, fmt.Errorf("supplementalData.txt has no weekData")
 	}
-	if err := json.Unmarshal(weekDataJSON, &res); err != nil {
-		return nil, fmt.Errorf("weekData.json: %w", err)
+	read := func(region *icutxt.Node) ([4]int, error) {
+		if len(region.Values) != 6 {
+			return [4]int{}, fmt.Errorf("supplementalData.txt: weekData %s has %d numbers", region.Key, len(region.Values))
+		}
+		var n [6]int
+		for i, v := range region.Values {
+			var err error
+			if n[i], err = strconv.Atoi(v); err != nil {
+				return [4]int{}, fmt.Errorf("supplementalData.txt: weekData %s: %w", region.Key, err)
+			}
+		}
+		return [4]int{n[0] - 1, n[1], n[2] - 1, n[4] - 1}, nil
 	}
-	days := map[string]int{"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
+	world := data.Get("001")
+	if world == nil {
+		return nil, fmt.Errorf("supplementalData.txt has no weekData for 001")
+	}
+	def, err := read(world)
+	if err != nil {
+		return nil, err
+	}
+	fields := [4]string{"firstDay", "minDays", "weekendStart", "weekendEnd"}
 	var lines []string
-	w := res.Supplemental.WeekData
-	for _, f := range []struct {
-		name   string
-		values map[string]string
-		isDay  bool
-	}{
-		{"firstDay", w.FirstDay, true}, {"minDays", w.MinDays, false},
-		{"weekendStart", w.WeekendStart, true}, {"weekendEnd", w.WeekendEnd, true},
-	} {
-		for region, v := range f.values {
-			// CLDR adds variants such as "GB-alt-variant", which ICU leaves out.
-			if strings.Contains(region, "-") {
-				continue
+	for _, region := range data.Children {
+		// ICU adds variants such as "GB_alt_variant", which no region is.
+		if strings.Contains(region.Key, "_") {
+			continue
+		}
+		v, err := read(region)
+		if err != nil {
+			return nil, err
+		}
+		// A region is written where it differs from the world.
+		for i, name := range fields {
+			if v[i] != def[i] || region.Key == "001" {
+				lines = append(lines, name+" "+region.Key+" "+strconv.Itoa(v[i]))
 			}
-			if f.isDay {
-				d, ok := days[v]
-				if !ok {
-					return nil, fmt.Errorf("weekData.json: %s %s is %q", f.name, region, v)
-				}
-				v = strconv.Itoa(d)
-			}
-			lines = append(lines, f.name+" "+region+" "+v)
 		}
 	}
 	sort.Strings(lines)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
-// periodRuleSets are CLDR's day-period rules, read once.
-var periodRuleSets = func() map[string]map[string]map[string]string {
-	var res struct {
-		Supplemental struct {
-			DayPeriodRuleSet map[string]map[string]map[string]string `json:"dayPeriodRuleSet"`
-		} `json:"supplemental"`
+// readPeriodRules reads ICU's day-period rules, misc/dayPeriods.txt's
+// "locales" and "rules", the rules each locale formats with, by its tag.
+func readPeriodRules(icu *icusrc.Locales) (map[string][]datedata.PeriodRule, error) {
+	file, err := icu.Misc("dayPeriods")
+	if err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(dayPeriodsJSON, &res); err != nil {
-		panic("dategen: dayPeriods.json: " + err.Error())
+	locales, rules := file.Get("locales"), file.Get("rules")
+	if locales == nil || rules == nil {
+		return nil, fmt.Errorf("dayPeriods.txt has no locales or rules")
 	}
-	return res.Supplemental.DayPeriodRuleSet
-}()
-
-// periodRules returns the rules that say which part of the day an hour falls
-// in. CLDR keeps them per language rather than per locale, so a locale with no
-// rules of its own takes its language's.
-func periodRules(name string) []datedata.PeriodRule {
-	set, ok := periodRuleSets[name]
-	if !ok {
-		language, _, _ := strings.Cut(name, "-")
-		if set, ok = periodRuleSets[language]; !ok {
-			return nil
+	out := map[string][]datedata.PeriodRule{}
+	for _, l := range locales.Children {
+		set := rules.Get(l.Value)
+		if set == nil {
+			return nil, fmt.Errorf("dayPeriods.txt: %s's set %s is missing", l.Key, l.Value)
 		}
-	}
-	out := make([]datedata.PeriodRule, 0, len(set))
-	for id, rule := range set {
-		r := datedata.PeriodRule{ID: id}
-		if at, ok := rule["_at"]; ok {
-			r.At, r.Point = minutes(at), true
-		} else {
-			from, hasFrom := rule["_from"]
-			before, hasBefore := rule["_before"]
-			if !hasFrom || !hasBefore {
-				continue
+		list := make([]datedata.PeriodRule, 0, len(set.Children))
+		for _, rule := range set.Children {
+			r := datedata.PeriodRule{ID: rule.Key}
+			if at := rule.Get("at"); at != nil {
+				r.At, r.Point = minutes(at.Value), true
+			} else {
+				from, before := rule.Get("from"), rule.Get("before")
+				if from == nil || before == nil {
+					continue
+				}
+				r.From, r.Before = minutes(from.Value), minutes(before.Value)
 			}
-			r.From, r.Before = minutes(from), minutes(before)
+			list = append(list, r)
 		}
-		out = append(out, r)
+		// The ranges come first so that a language naming both a range
+		// over midnight and the moment itself is written with the range,
+		// which is what ICU does.
+		sort.Slice(list, func(i, j int) bool {
+			if list[i].Point != list[j].Point {
+				return !list[i].Point
+			}
+			return list[i].ID < list[j].ID
+		})
+		out[icusrc.Tag(l.Key)] = list
 	}
-	// The ranges come first so that a language naming both a range over
-	// midnight and the moment itself is written with the range, which is what
-	// ICU does.
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Point != out[j].Point {
-			return !out[i].Point
-		}
-		return out[i].ID < out[j].ID
-	})
-	return out
+	return out, nil
+}
+
+// periodRules returns the rules that say which part of the day an hour
+// falls in. ICU keeps them per language rather than per locale, so a
+// locale with no rules of its own takes its language's.
+func (t *tree) periodRules(name string) []datedata.PeriodRule {
+	if set, ok := t.periods[name]; ok {
+		return set
+	}
+	language, _, _ := strings.Cut(name, "-")
+	return t.periods[language]
 }
 
 // minutes reads a time of day as minutes past midnight. CLDR writes the end of

@@ -80,8 +80,8 @@ The upstream inputs:
 
 | Source | Feeds |
 |---|---|
-| ICU's data sources (`icu4c-*-data.zip`) | every locale's data -- numbers, currencies, dates, zones, units, names, lists, relative times -- and the collation tree and what the export drops from tailorings |
-| CLDR's supplemental data (`cldr-core`), vendored | plurals, likely subtags, week and time data |
+| ICU's data sources (`icu4c-*-data.zip`) | every locale's data -- numbers, currencies, dates, zones, units, names, lists, relative times -- and the collation tree and what the export drops from tailorings; plurals, calendar preferences, week and time data, day periods, numbering systems and currencies' digits and regions |
+| CLDR's supplemental data (`cldr-core`), vendored | likely subtags and parent locales |
 | `icuexportdata` (tagged release) | UCA and collation tailorings; later properties, casemap |
 | Unicode Character Database | normalization |
 | IANA tzdb | zone rules |

@@ -17,9 +17,11 @@ import (
 // asked for. An empty bundle (af_ZA), which is there so that ICU lists the
 // locale as installed, is a locale like any other, whose file is its
 // parent's and is named in same.bin. A bundle with a variant
-// (ja_JP_TRADITIONAL) is kept only where its file differs from the one of
+// (ca_ES_VALENCIA) is kept only where its file differs from the one of
 // the locale without the variant, which is what a variant locale without
-// data of its own reads.
+// data of its own reads. One whose variant BCP 47 cannot spell -- ICU 74's
+// ja_JP_TRADITIONAL, which only ICU's own locale names reach -- is never
+// asked for, and is left out.
 func EachLocale(c *Locales, fb Fallback, build func(*View) ([]byte, error)) (map[string][]byte, error) {
 	return EachLocaleIn([]*Locales{c}, fb, func(v []*View) ([]byte, error) { return build(v[0]) })
 }
@@ -65,6 +67,9 @@ func EachLocaleIn(trees []*Locales, fb Fallback, build func([]*View) ([]byte, er
 			continue
 		}
 		if _, _, _, variant := splitName(name); variant {
+			if !bcp47Variant(name[strings.LastIndex(name, "_")+1:]) {
+				continue
+			}
 			without, err := buildOne(trees, fb, name[:strings.LastIndex(name, "_")], build)
 			if err != nil {
 				return nil, err
@@ -76,6 +81,17 @@ func EachLocaleIn(trees []*Locales, fb Fallback, build func([]*View) ([]byte, er
 		out[Tag(name)] = file
 	}
 	return out, nil
+}
+
+// bcp47Variant reports whether a variant is one a BCP 47 tag can name: five
+// to eight letters or digits, or four beginning with a digit.
+func bcp47Variant(v string) bool {
+	for _, c := range v {
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9') {
+			return false
+		}
+	}
+	return 5 <= len(v) && len(v) <= 8 || len(v) == 4 && '0' <= v[0] && v[0] <= '9'
 }
 
 func buildOne(trees []*Locales, fb Fallback, name string, build func([]*View) ([]byte, error)) ([]byte, error) {

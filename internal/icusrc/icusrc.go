@@ -126,10 +126,18 @@ func TreeOf(a *Archive, tree string) *Locales {
 	// dictionaries' sources in directories beneath.
 	for _, name := range a.Names("data/" + tree) {
 		if stem, ok := strings.CutSuffix(path.Base(name), ".txt"); ok {
-			c.names[stem] = true
+			if cat, _ := category(name); cat == tree+"_tree" {
+				c.names[stem] = true
+			}
 		}
 	}
 	return c
+}
+
+// Supplemental reads the tree's bundle that is no locale's, as the filter
+// leaves it: curr/supplementalData.txt, the currencies' regions and digits.
+func (c *Locales) Supplemental() (*icutxt.Node, error) {
+	return c.a.Bundle("data/" + c.tree + "/supplementalData.txt")
 }
 
 // Names lists the tree's bundles, sorted.

@@ -20,8 +20,6 @@
 package main
 
 import (
-	_ "embed"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -37,12 +35,6 @@ import (
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
-//go:embed numberingSystems.json
-var numberingSystemsJSON []byte
-
-//go:embed currencyData.json
-var currencyDataJSON []byte
-
 func main() {
 	seed := flag.String("seed", "", "a pool to number the parts after")
 	flag.Parse()
@@ -54,15 +46,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "numbergen:", err)
 		os.Exit(1)
 	}
-}
-
-type numberingSystems struct {
-	Supplemental struct {
-		NumberingSystems map[string]struct {
-			Type   string `json:"_type"`
-			Digits string `json:"_digits"`
-		} `json:"numberingSystems"`
-	} `json:"supplemental"`
 }
 
 func run(icuData, seed string) error {
@@ -80,15 +63,13 @@ func run(icuData, seed string) error {
 	if err != nil {
 		return err
 	}
-	var systems numberingSystems
-	if err := json.Unmarshal(numberingSystemsJSON, &systems); err != nil {
-		return fmt.Errorf("reading numberingSystems.json: %w", err)
+	digits, err := numericSystems(icu)
+	if err != nil {
+		return err
 	}
-	digits := map[string]string{}
-	for name, s := range systems.Supplemental.NumberingSystems {
-		if s.Type == "numeric" {
-			digits[name] = s.Digits
-		}
+	currencies, err := curr.Supplemental()
+	if err != nil {
+		return err
 	}
 
 	// Everything is built before anything is written, so a failure partway
@@ -140,11 +121,11 @@ func run(icuData, seed string) error {
 		return err
 	}
 
-	fractions, err := currencyDigitsTable()
+	fractions, err := currencyDigitsTable(currencies)
 	if err != nil {
 		return err
 	}
-	regions, err := currencyRegionsTable()
+	regions, err := currencyRegionsTable(currencies)
 	if err != nil {
 		return err
 	}
@@ -534,80 +515,82 @@ func element(n *icutxt.Node, i int) string {
 	return ""
 }
 
-// currencyDigits reads how many decimals each currency is written with. It is
-// supplemental rather than per-locale: the yen has none anywhere.
-type currencyData struct {
-	Supplemental struct {
-		CurrencyData struct {
-			Fractions map[string]struct {
-				Digits string `json:"_digits"`
-			} `json:"fractions"`
-			// Region is each region's currencies, the current first.
-			Region map[string][]map[string]struct {
-				Tender string `json:"_tender"`
-			} `json:"region"`
-		} `json:"currencyData"`
-	} `json:"supplemental"`
+// numericSystems is the digits of each numbering system that has its own,
+// misc/numberingSystems.txt's systems that are not algorithmic.
+func numericSystems(icu *icusrc.Locales) (map[string]string, error) {
+	file, err := icu.Misc("numberingSystems")
+	if err != nil {
+		return nil, err
+	}
+	systems := file.Get("numberingSystems")
+	if systems == nil {
+		return nil, fmt.Errorf("numberingSystems.txt has no numberingSystems")
+	}
+	digits := map[string]string{}
+	for _, s := range systems.Children {
+		algorithmic, desc := s.Get("algorithmic"), s.Get("desc")
+		if algorithmic == nil || desc == nil {
+			return nil, fmt.Errorf("numberingSystems.txt: %s", s.Key)
+		}
+		if algorithmic.Value == "0" {
+			digits[s.Key] = desc.Value
+		}
+	}
+	return digits, nil
 }
 
 // CurrencyDigits is written as its own table, since it does not vary by
-// locale. It is a sorted list of "CODE:digits" so the reader can search it.
-func currencyDigitsTable() ([]byte, error) {
-	var data currencyData
-	if err := json.Unmarshal(currencyDataJSON, &data); err != nil {
-		return nil, fmt.Errorf("reading currencyData.json: %w", err)
+// locale: the yen has none anywhere. It is a sorted list of "CODE:digits"
+// so the reader can search it, from curr/supplementalData.txt's
+// CurrencyMeta, whose first number is the digits.
+func currencyDigitsTable(currencies *icutxt.Node) ([]byte, error) {
+	meta := currencies.Get("CurrencyMeta")
+	if meta == nil {
+		return nil, fmt.Errorf("curr/supplementalData.txt has no CurrencyMeta")
 	}
-	fractions := data.Supplemental.CurrencyData.Fractions
-	codes := make([]string, 0, len(fractions))
-	for code := range fractions {
-		codes = append(codes, code)
-	}
-	sort.Strings(codes)
-	var b strings.Builder
-	for _, code := range codes {
-		digits := fractions[code].Digits
-		if digits == "" {
-			continue
+	var lines []string
+	for _, c := range meta.Children {
+		if len(c.Values) == 0 {
+			return nil, fmt.Errorf("curr/supplementalData.txt: CurrencyMeta %s", c.Key)
 		}
-		fmt.Fprintf(&b, "%s:%s\n", code, digits)
+		lines = append(lines, c.Key+":"+c.Values[0])
 	}
-	return []byte(b.String()), nil
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
 // currencyRegionsTable is each region's currency, as ICU's ucurr_forLocale
 // takes it: the first of the region's currencies that is legal tender, or
-// the first of them where none is. It is a sorted list of "REGION:CODE".
-func currencyRegionsTable() ([]byte, error) {
-	var data currencyData
-	if err := json.Unmarshal(currencyDataJSON, &data); err != nil {
-		return nil, fmt.Errorf("reading currencyData.json: %w", err)
+// the first of them where none is. It is a sorted list of "REGION:CODE",
+// from curr/supplementalData.txt's CurrencyMap, which lists a region's
+// currencies the current first.
+func currencyRegionsTable(currencies *icutxt.Node) ([]byte, error) {
+	regions := currencies.Get("CurrencyMap")
+	if regions == nil {
+		return nil, fmt.Errorf("curr/supplementalData.txt has no CurrencyMap")
 	}
-	regions := data.Supplemental.CurrencyData.Region
-	names := make([]string, 0, len(regions))
-	for name := range regions {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	var b strings.Builder
-	for _, name := range names {
+	var lines []string
+	for _, region := range regions.Children {
 		code := ""
-	entries:
-		for _, entry := range regions[name] {
-			for c, attrs := range entry {
-				if code == "" {
-					code = c
-				}
-				if attrs.Tender != "false" {
-					code = c
-					break entries
-				}
+		for _, entry := range region.Children {
+			id := entry.Get("id")
+			if id == nil {
+				return nil, fmt.Errorf("curr/supplementalData.txt: CurrencyMap %s", region.Key)
+			}
+			if code == "" {
+				code = id.Value
+			}
+			if tender := entry.Get("tender"); tender == nil || tender.Value != "false" {
+				code = id.Value
+				break
 			}
 		}
 		if code != "" {
-			fmt.Fprintf(&b, "%s:%s\n", name, code)
+			lines = append(lines, region.Key+":"+code)
 		}
 	}
-	return []byte(b.String()), nil
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 
 // currencyUnitPatterns are the patterns that join an amount to a currency's

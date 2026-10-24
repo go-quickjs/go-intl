@@ -79,11 +79,16 @@ func (a *Archive) Close() error {
 }
 
 // category is the data build tool's category of a file of the sources,
-// "data/locales/en.txt" being in "locales_tree", and the file's stem.
+// "data/locales/en.txt" being in "locales_tree", and the file's stem. The
+// currencies' supplemental data, curr/supplementalData.txt, is no locale's
+// and has a category of its own.
 func category(name string) (cat, stem string) {
 	dir, file := path.Split(strings.TrimPrefix(name, "data/"))
 	dir = strings.TrimSuffix(dir, "/")
 	stem = strings.TrimSuffix(file, path.Ext(file))
+	if dir == "curr" && stem == "supplementalData" {
+		return "curr_supplemental", stem
+	}
 	switch dir {
 	case "locales", "curr", "lang", "region", "zone", "unit", "coll", "brkitr", "rbnf":
 		return dir + "_tree", stem
