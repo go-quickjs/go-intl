@@ -45,7 +45,9 @@ type CountedText struct {
 }
 
 // Name returns the spelled-out name for a plural category, falling back to
-// "other" as CLDR's own lookup does.
+// "other" and then to the display name, as ICU's ucurr_getPluralName does:
+// a locale's bundle has no plural names for a currency whose name does not
+// change with the count, German's "Euro".
 func (c Currency) Name(count string) string {
 	var other string
 	for _, n := range c.Names {
@@ -55,6 +57,9 @@ func (c Currency) Name(count string) string {
 		if n.Count == "other" {
 			other = n.Text
 		}
+	}
+	if other == "" {
+		return c.DisplayName
 	}
 	return other
 }

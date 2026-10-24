@@ -39,6 +39,9 @@ func (c *Locales) View(name string, fb Fallback) (*View, error) {
 	return &View{name: name, chain: chain, c: c, fb: fb}, nil
 }
 
+// Name is the locale's ICU name, "zh_Hant_HK".
+func (v *View) Name() string { return v.name }
+
 // Get returns the resource at path, or nil where neither the locale nor its
 // fallback has one. A table comes back merged: each of its keys that any
 // bundle of the chain has, in the order the most specific bundle that has

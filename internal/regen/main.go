@@ -74,7 +74,6 @@ const (
 // cldrPackages are the CLDR packages the generators read, from npm, with
 // their sha256 (SOURCES.md).
 var cldrPackages = map[string]string{
-	"cldr-numbers-full":      "2d17a1453c559a62112caeed52e0bcfe3cb8539c99d239ae7b7ed4d0827679d9",
 	"cldr-dates-full":        "0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430",
 	"cldr-cal-buddhist-full": "3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff",
 	"cldr-cal-chinese-full":  "cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2",
@@ -143,7 +142,7 @@ func jobs(cache string) []job {
 		{name: "tzgen", args: []string{at(tzDir), at(sourcesTgz)}},
 		{name: "tzidgen", args: []string{at(tzProvider)}},
 		{name: "temporalgen", args: []string{at(calendar)}},
-		{name: "numbergen", args: []string{pkg("cldr-numbers-full"), at(dataZip)}},
+		{name: "numbergen", args: []string{at(dataZip)}},
 		{name: "listgen", args: []string{at(dataZip)}},
 		{name: "unitgen", args: []string{at(dataZip)}},
 		{name: "reltimegen", args: []string{at(dataZip)}},
