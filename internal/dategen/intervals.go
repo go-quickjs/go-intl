@@ -93,7 +93,7 @@ func patternCalendar(icu *icusrc.Locales, fb icusrc.Fallback, icuName string) (s
 		return "gregory", nil
 	}
 	for _, x := range extras {
-		if x.cldr == functional {
+		if x.icu == functional {
 			return x.bcp47, nil
 		}
 	}

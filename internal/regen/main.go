@@ -4,8 +4,7 @@
 //	go run ./internal/regen
 //
 // It downloads each source SOURCES.md pins into a cache, checks its sha256,
-// unpacks the CLDR packages, runs every generator with the arguments it
-// takes, and repacks data.pack. A source already in the cache with the
+// runs every generator with the arguments it takes, and repacks data.pack. A source already in the cache with the
 // right checksum is not downloaded again. Run from the repository root;
 // on a clean checkout it reproduces data/ and data.pack byte for byte,
 // which it reports at the end where git is at hand.
@@ -52,11 +51,10 @@ type source struct {
 }
 
 const (
-	cldrVersion = "48.2.0"
-	icuRelease  = "https://github.com/unicode-org/icu/releases/download/release-78.3/"
-	tzUpdate    = "https://raw.githubusercontent.com/unicode-org/icu-data/main/tzdata/icunew/2026c/44/"
-	ucd         = "https://www.unicode.org/Public/17.0.0/ucd/"
-	crates      = "https://static.crates.io/crates/"
+	icuRelease = "https://github.com/unicode-org/icu/releases/download/release-78.3/"
+	tzUpdate   = "https://raw.githubusercontent.com/unicode-org/icu-data/main/tzdata/icunew/2026c/44/"
+	ucd        = "https://www.unicode.org/Public/17.0.0/ucd/"
+	crates     = "https://static.crates.io/crates/"
 )
 
 // The cache's layout, which the generators' arguments name.
@@ -66,35 +64,9 @@ const (
 	exportZip  = "icu4x-icuexportdata-78.3.zip"
 	tzDir      = "icu-tz-2026c"
 	ucdDir     = "ucd-17.0.0"
-	cldrDir    = "cldr-" + cldrVersion
 	calendar   = "icu_calendar-2.2.1.crate"
 	tzProvider = "timezone_provider-0.2.3.crate"
 )
-
-// cldrPackages are the CLDR packages the generators read, from npm, with
-// their sha256 (SOURCES.md).
-var cldrPackages = map[string]string{
-	"cldr-dates-full":        "0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430",
-	"cldr-cal-buddhist-full": "3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff",
-	"cldr-cal-chinese-full":  "cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2",
-	"cldr-cal-coptic-full":   "abc83085e46f6d3ee1b39f886f2c81da0f6a7aec11f6988f1644f7638c22ea5c",
-	"cldr-cal-dangi-full":    "67171aaa6fe075c0ba3c86c67788a26c8b6f5f595d5fb76276a0fbaddc722e73",
-	"cldr-cal-ethiopic-full": "0c31d3c862f91bc7495a757e6e845fa0077b29f942d7e19d6715ce694c3a3126",
-	"cldr-cal-hebrew-full":   "b06b8f2834564e843a3bda0410b9cc6152b010a54e08fda34d3530892a0d3e7f",
-	"cldr-cal-indian-full":   "13dce446625868d858199117d88cbeee3e15fb520994dbf33f94dbf28cb3ea03",
-	"cldr-cal-islamic-full":  "ea139d42f68105a135d72e49eed1eb84d6e6970173b35e83924412c12022b885",
-	"cldr-cal-japanese-full": "05d2e6709e87349ee8dfbe733b93b2e8a8da375164d838b9aa01fc5d759ec49b",
-	"cldr-cal-persian-full":  "937af05a2e84a3a38e9fd6880888c622ff14db6577fc254d71a91d2e0442f41f",
-	"cldr-cal-roc-full":      "c90f6e4b718d1384f11a1b005101f26e6b6573e08274584ce84a51f3e4530983",
-}
-
-// calendarPackages are the CLDR packages dategen reads beside the dates.
-var calendarPackages = []string{
-	"cldr-cal-buddhist-full", "cldr-cal-chinese-full", "cldr-cal-coptic-full",
-	"cldr-cal-dangi-full", "cldr-cal-ethiopic-full", "cldr-cal-hebrew-full",
-	"cldr-cal-indian-full", "cldr-cal-islamic-full", "cldr-cal-japanese-full",
-	"cldr-cal-persian-full", "cldr-cal-roc-full",
-}
 
 func sources() []source {
 	s := []source{
@@ -112,10 +84,6 @@ func sources() []source {
 		{calendar, crates + "icu_calendar/" + calendar, "a2b2acc6263f494f1df50685b53ff8e57869e47d5c6fe39c23d518ae9a4f3e45"},
 		{tzProvider, crates + "timezone_provider/" + tzProvider, "c48f9b04628a2b813051e4dfe97c65281e49625eabd09ec343190e31e399a8c2"},
 	}
-	for name, sum := range cldrPackages {
-		file := name + "-" + cldrVersion + ".tgz"
-		s = append(s, source{cldrDir + "/" + file, "https://registry.npmjs.org/" + name + "/-/" + file, sum})
-	}
 	return s
 }
 
@@ -128,11 +96,6 @@ type job struct {
 
 func jobs(cache string) []job {
 	at := func(p string) string { return filepath.Join(cache, filepath.FromSlash(p)) }
-	pkg := func(name string) string { return at(cldrDir + "/" + name + "/package") }
-	dates := []string{"-icu", at(dataZip), pkg("cldr-dates-full")}
-	for _, c := range calendarPackages {
-		dates = append(dates, pkg(c))
-	}
 	return []job{
 		{name: "localegen"},
 		{name: "pluralgen"},
@@ -147,7 +110,7 @@ func jobs(cache string) []job {
 		{name: "unitgen", args: []string{at(dataZip)}},
 		{name: "reltimegen", args: []string{at(dataZip)}},
 		{name: "namegen", args: []string{at(dataZip)}},
-		{name: "dategen", args: dates},
+		{name: "dategen", args: []string{at(dataZip)}},
 		{name: "zonegen", args: []string{at(dataZip), at(tzDir)}, after: []string{"dategen"}},
 		{name: "rbnfgen", args: []string{at(dataZip)}},
 		{name: "collgen", args: []string{at(exportZip), at(dataZip), at(sourcesTgz)}},
@@ -177,12 +140,6 @@ func run(cache string, parallel int) error {
 	start := time.Now()
 	if err := fetchAll(cache, sources()); err != nil {
 		return err
-	}
-	for name, sum := range cldrPackages {
-		archive := filepath.Join(cache, cldrDir, name+"-"+cldrVersion+".tgz")
-		if err := unpack(archive, sum, filepath.Join(cache, cldrDir, name)); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
 	}
 	fmt.Printf("sources ready in %s (%s)\n", cache, time.Since(start).Round(time.Second))
 	if err := os.MkdirAll("data", 0o755); err != nil {

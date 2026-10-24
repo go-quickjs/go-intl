@@ -76,22 +76,28 @@ been violated. This one rule is the difference between a library and a memo pad.
 
 ## Data sources
 
-The upstream inputs, which are what ICU4X's `provider/source` takes plus two
-it does not:
+The upstream inputs:
 
 | Source | Feeds |
 |---|---|
-| `unicode-org/cldr-json` releases | numbers, dates, units, names, plurals, zones |
+| ICU's data sources (`icu4c-*-data.zip`) | every locale's data -- numbers, currencies, dates, zones, units, names, lists, relative times -- and the collation tree and what the export drops from tailorings |
+| CLDR's supplemental data (`cldr-core`), vendored | plurals, likely subtags, week and time data |
 | `icuexportdata` (tagged release) | UCA and collation tailorings; later properties, casemap |
-| ICU's data sources (`icu4c-*-data.zip`) | the collation tree and what the export drops from tailorings |
 | Unicode Character Database | normalization |
 | IANA tzdb | zone rules |
 | ICU's compiled data (`icudt78l.dat`) | the break rules and dictionaries, as ICU compiles them |
 
-`icuexportdata` is produced by ICU4C tooling, so this does not fully escape
-ICU4C - but it is a versioned, tagged, declarative export of *rules and tables*,
-not a scrape of a running engine's formatted output. That distinction is the
-whole point.
+A locale's data is read from ICU's resource bundle sources, the `.txt` files
+ICU converts from CLDR, rather than from CLDR's JSON: each locale holds only
+what differs from the locale it falls back to, and `internal/icusrc` resolves
+it as ICU's `ures_open` does, aliases included. That is what Node's ICU reads,
+and it is what a browser's ICU is filtered and patched in, file by file and
+entry by entry, which CLDR's resolved JSON cannot express.
+
+`icuexportdata` and the bundle sources are produced by ICU4C tooling, so
+this does not fully escape ICU4C - but they are versioned, tagged,
+declarative *rules and tables*, not a scrape of a running engine's formatted
+output. That distinction is the whole point.
 
 Every source is pinned, and the pins are anchored to **ICU 78.3** as Node
 26.10.0 ships it - CLDR 48.2.0, tz 2026c and Unicode 17.0. Generating from a

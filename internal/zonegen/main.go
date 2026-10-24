@@ -4,7 +4,9 @@
 // data/misc for what every locale shares -- metaZones.txt, timezoneTypes.txt
 // and zoneinfo64.txt.
 //
-//	go run ./internal/zonegen <icu4c-78.3-data.zip>
+//	go run ./internal/zonegen [-seed pool.bin] <icu4c-78.3-data.zip> <icu-tz-2026c dir>
+//
+// -seed numbers the pool's parts after an earlier pool's (datawrite.NewPool).
 //
 // It writes data/zonenames/<locale>.bin for every locale with date data, and
 // data/metazones.bin. The locales are resolved as ICU's resource bundles
@@ -18,13 +20,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
 	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/icutxt"
@@ -33,11 +35,13 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/zonegen <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
+	seed := flag.String("seed", "", "a pool to number the parts after")
+	flag.Parse()
+	if flag.NArg() != 2 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/zonegen [-seed pool.bin] <icu4c-78.3-data.zip> <icu-tz-2026c dir>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2]); err != nil {
+	if err := run(flag.Arg(0), flag.Arg(1), *seed); err != nil {
 		fmt.Fprintln(os.Stderr, "zonegen:", err)
 		os.Exit(1)
 	}
@@ -47,7 +51,7 @@ func main() {
 // empty, which stops its parents' value from showing through.
 const noInheritance = "∅∅∅"
 
-func run(zipPath, tzDir string) error {
+func run(zipPath, tzDir, seed string) error {
 	archive, err := icusrc.Open(zipPath, icusrc.DataSHA256)
 	if err != nil {
 		return err
@@ -92,7 +96,10 @@ func run(zipPath, tzDir string) error {
 	built := map[string][]byte{}
 	// The locales share one pool of names, written beside them, in the
 	// sorted order Tags gives, so the pool is the same every run.
-	pool := blob.NewPool(zonedata.Version)
+	pool, err := datawrite.NewPool(zonedata.Version, seed)
+	if err != nil {
+		return err
+	}
 	for _, tag := range dates {
 		name := strings.ReplaceAll(tag, "-", "_")
 		if tag == "und" {

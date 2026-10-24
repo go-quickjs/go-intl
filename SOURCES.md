@@ -30,7 +30,7 @@ authority.
 | Source | Pin | Feeds | Confirmed |
 |---|---|---|---|
 | ICU | 78.3 | the anchor; the golden corpus oracle | yes, from node |
-| CLDR (`cldr-json`) | **48.2.0** | numbers, dates, units, names, plurals, zones | yes, by the corpus |
+| CLDR | **48**, as ICU 78.3's data sources carry it; `cldr-core` **48.2.0**'s supplemental files, vendored | every locale's data, through ICU's sources; plurals, likely subtags, week and time data | yes, by the corpus |
 | Unicode (UCD) | 17.0.0 | normalization | yes, from node |
 | IANA tzdb | 2026c, as ICU's `zoneinfo64` | zone rules (`tzgen`) | yes, from node |
 | `icuexportdata` | `icu4x-icuexportdata-78.3.zip` | UCA and tailorings (`collgen`); later properties, case, dictionaries | yes |
@@ -41,9 +41,10 @@ authority.
 | Temporal's crates | `temporal_rs` 0.2.3, `temporal_capi` 0.2.3, `ixdtf` 0.6.4, `timezone_provider` 0.2.3, `zoneinfo64` 0.3.0, `icu_calendar` 2.2.1, `calendrical_calculations` 0.2.4, `icu_calendar_data` 2.2.0, `icu_locale_core` 2.2.0 | the `temporal` package: Temporal's calendars, arithmetic, parsing and zones; Temporal's zone names (`tzidgen`) | yes, from node's `deps/crates/Cargo.lock` at v26.10.0 |
 | V8 | as Node v26.10.0 vendors it, `deps/v8` | the `date` package: Date's offset cache, parser and strings, ported; no data | yes, from node |
 
-CLDR is fetched **per component from npm**, not as the 79 MB `json-full.zip`
-the release page offers. `cldr-core` is 200 KB and carries all of the
-supplemental data, so a generator takes only the package it reads:
+CLDR's per-locale data is read through ICU's resource bundle sources in the
+data archive, which ICU converts from CLDR; CLDR's JSON packages for it are
+not read. The supplemental files a generator needs, a few tens of kilobytes
+each, are vendored beside it from `cldr-core`:
 
 ```sh
 curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
@@ -52,31 +53,9 @@ curl -sLO https://registry.npmjs.org/cldr-core/-/cldr-core-48.2.0.tgz
 | Package | Version | sha256 | Used by |
 |---|---|---|---|
 | `cldr-core` | 48.2.0 | `5310e0c7a06c1feb83dc8e54c8584bbe0b9c2ea8320172a18d541986b124585d` | `localegen`, `numbergen`, `pluralgen` (plurals, ordinals and plural ranges, vendored), `dategen` (time data and week data, vendored) |
-| `cldr-dates-full` | 48.2.0 | `0256f1cefeca14f7d515be4872dda48fcdd7e75381430f25aafd0143eae5b430` | `dategen` |
-| `cldr-cal-buddhist-full` | 48.2.0 | `3429cb832bef99a978863f11a6afd8b36f5ce981ab18c51481648cef479400ff` | `dategen` |
-| `cldr-cal-persian-full` | 48.2.0 | `937af05a2e84a3a38e9fd6880888c622ff14db6577fc254d71a91d2e0442f41f` | `dategen` |
-| `cldr-cal-coptic-full` | 48.2.0 | `abc83085e46f6d3ee1b39f886f2c81da0f6a7aec11f6988f1644f7638c22ea5c` | `dategen` |
-| `cldr-cal-ethiopic-full` | 48.2.0 | `0c31d3c862f91bc7495a757e6e845fa0077b29f942d7e19d6715ce694c3a3126` | `dategen` (Ethiopic and Amete Alem) |
-| `cldr-cal-indian-full` | 48.2.0 | `13dce446625868d858199117d88cbeee3e15fb520994dbf33f94dbf28cb3ea03` | `dategen` |
-| `cldr-cal-islamic-full` | 48.2.0 | `ea139d42f68105a135d72e49eed1eb84d6e6970173b35e83924412c12022b885` | `dategen` (civil and tabular so far) |
-| `cldr-cal-roc-full` | 48.2.0 | `c90f6e4b718d1384f11a1b005101f26e6b6573e08274584ce84a51f3e4530983` | `dategen` |
-| `cldr-cal-hebrew-full` | 48.2.0 | `b06b8f2834564e843a3bda0410b9cc6152b010a54e08fda34d3530892a0d3e7f` | `dategen` |
-| `cldr-cal-japanese-full` | 48.2.0 | `05d2e6709e87349ee8dfbe733b93b2e8a8da375164d838b9aa01fc5d759ec49b` | `dategen`; the eras' start dates come from ICU's `misc/supplementalData.txt` |
-| `cldr-cal-chinese-full` | 48.2.0 | `cf6acfa7725a6cbd4fe9504169d2d978a204731730db8b367dacff89e77fcbf2` | `dategen` |
-| `cldr-cal-dangi-full` | 48.2.0 | `67171aaa6fe075c0ba3c86c67788a26c8b6f5f595d5fb76276a0fbaddc722e73` | `dategen` |
-
-`dategen` finds each package by its directory's name, `cldr-cal-<name>-full`,
-so the packages are unpacked under those names and given in any order.
-
-**What is vendored and what is not.** A supplemental file of a few tens of
-kilobytes is vendored beside the generator that reads it, so that generator
-runs with nothing to fetch. A per-locale package is not: `cldr-numbers-full` is
-37 MB unpacked, so `numbergen` takes the path to an unpacked copy and this file
-is what pins which copy.
 
 Other URLs:
 
-- `https://github.com/unicode-org/cldr-json/releases/download/{tag}/cldr-{tag}-json-full.zip`
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4x-icuexportdata-78.3.zip`
   — sha256 `eb63a12439f3fd9199886808275900229a5638fb0ee88d3c3c528eca7b811e60`, 5.6 MB
 - `https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-data.zip`
@@ -103,8 +82,6 @@ Other URLs:
   search collations and Korean's `searchjl` -- and takes its table whole:
   `coll/<locale>.res`, `collations/<type>/%%CollationBin`, its UTrie2
   rebuilt as a code point trie and checked against it at every code point.
-  `numbergen` reads `locales/en_US_POSIX.txt` from the data archive for
-  en_US_POSIX's number patterns and marks, which cldr-json does not carry.
 - `segmentgen` reads `icu/source/data/in/icudt78l.dat` from the sources
   archive (checksum below), the prebuilt ICU data Node's full-icu carries,
   for the compiled break rules (`brkitr/*.brk`) and dictionaries
@@ -291,18 +268,21 @@ Node: 779,392 normalizations, no differences.
 
 ## Where cldr-json is not all of CLDR
 
-CLDR's root uses locale-relative aliases: this value is whatever the *asking*
-locale has at that other path. cldr-json resolves such an alias as if it
-pointed at the root's own value, or leaves the path out. ICU's resource
-bundle sources keep the aliases, and ICU resolves them as CLDR means. Every
-place go-intl has met this is read from those sources, from the pinned data
-archive, through `internal/icusrc`:
+The locale data was once read from CLDR's JSON, and these are where that
+differed from ICU, before all of it moved to ICU's sources. CLDR's root uses
+locale-relative aliases: this value is whatever the *asking* locale has at
+that other path. cldr-json resolves such an alias as if it pointed at the
+root's own value, or leaves the path out. ICU's resource bundle sources keep
+the aliases, and ICU resolves them as CLDR means:
 
 | What | cldr-json | ICU, and so go-intl |
 |---|---|---|
 | a numbering system a locale does not use | missing | the locale's own few fields, then the root's entry, then the locale's Latin data |
 | a calendar's date-time atTime glue | the root's for other calendars; the locale's own plain glue where it overrides only that | the first bundle up the chain that has one, else the Gregorian one |
 | zone names | each locale resolved by CLDR's inheritance | merged field by field along ICU's chain; a locale with no zone bundle falls back by ICU's resource rules and ICU's own default scripts, so `sr-Cyrl-ME` reads the Latin `sr_Latn_ME` |
+| currency names | the same, so `sr-Cyrl-ME`'s are Cyrillic | its currency bundle falls back to `sr_Latn_ME`, Latin |
+| ICU's tables of other forms, `calendar%core` | flattened into names: a calendar called "core" | tables, which no name is read from |
+| the locales | every CLDR locale, ICU's or not | ICU's bundles: 118 locales only CLDR's JSON carries, which no service has available, are not written |
 
 ## The space before AM and PM
 
