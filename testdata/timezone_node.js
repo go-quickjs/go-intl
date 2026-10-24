@@ -81,24 +81,28 @@ for (const input of [...inputs].sort()) {
   lines.push(JSON.stringify(["id", input, resolved]));
 }
 
-const start = Temporal.Instant.from("1800-01-01T00:00:00Z");
-const end = Temporal.Instant.from("2100-01-01T00:00:00Z").epochMilliseconds;
-for (const n of names) {
-  let z;
-  try {
-    z = start.toZonedDateTimeISO(n);
-  } catch (e) {
-    lines.push(JSON.stringify(["zone", n, null, []]));
-    continue;
+// The offsets are Temporal's, which a browser that predates it has not
+// (Chrome before 144): there the names alone are recorded.
+if (typeof Temporal !== "undefined") {
+  const start = Temporal.Instant.from("1800-01-01T00:00:00Z");
+  const end = Temporal.Instant.from("2100-01-01T00:00:00Z").epochMilliseconds;
+  for (const n of names) {
+    let z;
+    try {
+      z = start.toZonedDateTimeISO(n);
+    } catch (e) {
+      lines.push(JSON.stringify(["zone", n, null, []]));
+      continue;
+    }
+    const offset = z.offsetNanoseconds / 1e9;
+    const trans = [];
+    for (;;) {
+      z = z.getTimeZoneTransition("next");
+      if (z === null || z.epochMilliseconds >= end) break;
+      trans.push(z.epochMilliseconds, z.offsetNanoseconds / 1e9);
+    }
+    lines.push(JSON.stringify(["zone", n, offset, trans]));
   }
-  const offset = z.offsetNanoseconds / 1e9;
-  const trans = [];
-  for (;;) {
-    z = z.getTimeZoneTransition("next");
-    if (z === null || z.epochMilliseconds >= end) break;
-    trans.push(z.epochMilliseconds, z.offsetNanoseconds / 1e9);
-  }
-  lines.push(JSON.stringify(["zone", n, offset, trans]));
 }
 
 fs.writeFileSync(path.join(__dirname, "timezone_node.txt.gz"), zlib.gzipSync(lines.join("\n") + "\n", { level: 9 }));
