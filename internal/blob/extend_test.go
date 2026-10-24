@@ -94,6 +94,22 @@ func TestPoolExtension(t *testing.T) {
 		t.Error("an extension of a pool that was not seeded")
 	}
 
+	// What a seeded pool writes in full gives back its extension, and a
+	// pool that does not begin with the base's parts gives none.
+	full, err := ReadShared(seeded.Bytes(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, err := ExtensionOf(baseShared, full, 3); err != nil || string(again) != string(ext) {
+		t.Errorf("ExtensionOf = %v, %v; want the extension", again, err)
+	}
+	unlike := NewPool(3)
+	poolOf(unlike, "Heure moyenne de Greenwich")
+	unlikeShared, _ := ReadShared(unlike.Bytes(), 3)
+	if _, err := ExtensionOf(unlikeShared, full, 3); err == nil {
+		t.Error("ExtensionOf a pool over another base")
+	}
+
 	// A table whose parts are in the extension finds them.
 	w := NewPooledWriter(3, again)
 	w.SharedTable([]string{"Irish Time", "Greenwich Mean Time"}, func(key string, w *Writer) { w.Uint(len(key)) })

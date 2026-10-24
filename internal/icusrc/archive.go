@@ -67,6 +67,9 @@ func OpenArchive(name string) (*Archive, error) {
 	return a, nil
 }
 
+// Filtered reports whether the archive is read through a data filter.
+func (a *Archive) Filtered() bool { return a.filter != nil }
+
 // Close closes the archive.
 func (a *Archive) Close() error {
 	if a.zip != nil {

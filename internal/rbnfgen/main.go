@@ -10,7 +10,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -77,9 +79,16 @@ func run(zipPath string) error {
 		names = append(names, g)
 	}
 	sort.Strings(names)
+	missing := map[string]bool{}
 	for _, name := range names {
 		locale, kind, _ := strings.Cut(name, "/")
 		bundle, err := read("rbnf/" + locale)
+		if errors.Is(err, fs.ErrNotExist) && archive.Filtered() {
+			// A browser's data filter can leave a rules bundle out, root's
+			// among them: the systems whose rules it holds have none.
+			missing[name] = true
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -89,6 +98,14 @@ func run(zipPath string) error {
 		}
 		d.Groups = append(d.Groups, rbnfdata.Group{Name: name, Rules: rules.Values})
 	}
+
+	kept := d.Systems[:0]
+	for _, s := range d.Systems {
+		if !missing[s.Group] {
+			kept = append(kept, s)
+		}
+	}
+	d.Systems = kept
 
 	if err := writeset.WriteFile(filepath.Join("data", "rbnf.bin"), rbnfdata.Encode(&d)); err != nil {
 		return err

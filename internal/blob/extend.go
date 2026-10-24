@@ -73,6 +73,31 @@ func (p *Pool) Extension() ([]byte, error) {
 	return out, nil
 }
 
+// ExtensionOf is the extension of base that a pool written from a pool
+// seeded with it holds: its parts after base's, which must be base's
+// parts, as SeedPool numbers them, before them.
+func ExtensionOf(base, full Shared, version byte) ([]byte, error) {
+	n := base.Len()
+	if full.Len() < n {
+		return nil, fmt.Errorf("blob: a pool of %d parts over a base of %d", full.Len(), n)
+	}
+	for i := 0; i < n; i++ {
+		part, _ := full.part(i)
+		if b, _ := base.part(i); string(b) != string(part) {
+			return nil, fmt.Errorf("blob: part %d is not the base's", i)
+		}
+	}
+	// The pool of the parts after base's alone, seeded as if with base.
+	p := NewPool(version)
+	p.parts = make([]string, n, full.Len())
+	for i := n; i < full.Len(); i++ {
+		part, _ := full.part(i)
+		p.parts = append(p.parts, string(part))
+	}
+	p.baseCount, p.baseLen, p.seeded = n, base.dataLen(), true
+	return p.Extension()
+}
+
 // IsExtension reports whether b is a pool extension rather than a pool.
 func IsExtension(b []byte) bool {
 	return len(b) >= 5 && binary.LittleEndian.Uint32(b[1:]) == extensionMark
