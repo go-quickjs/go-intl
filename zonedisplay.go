@@ -34,6 +34,9 @@ func TimeZoneDisplayName(src Source, loc Locale, tz *TimeZone, daylight bool, no
 		offset += tz.z.dstSavings(ms)
 	}
 	text := gmtOffset(offset, zones.locale.GMTFormat, zones.locale.HourFormat, false)
+	if offset == 0 && zones.locale.GMTZeroFormat != "" {
+		text = zones.locale.GMTZeroFormat
+	}
 	// TimeZoneFormat writes the offset in the locale's default digits.
 	if numbers, err := loadNumbers(src, loc); err == nil {
 		if chosen, _, err := selectNumberingSystem(src, numbers, loc, ""); err == nil {

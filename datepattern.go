@@ -386,9 +386,13 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 }
 
 // offsetText writes a zone as its distance from UTC, localized GMT format.
-// Zero is written like any other offset, "GMT+0": ICU keeps the locale's
-// "GMT" for reading, not for writing.
+// Zero is written like any other offset, "GMT+0": ICU 78 keeps the locale's
+// "GMT" for reading, not for writing. An ICU before it wrote "GMT", whose
+// data carries it (zonedata.Built.GMTZeroFormat).
 func (f *DateTimeFormat) offsetText(seconds int, short bool) string {
+	if seconds == 0 && f.zones.locale.GMTZeroFormat != "" {
+		return f.zones.locale.GMTZeroFormat
+	}
 	return gmtOffset(seconds, f.zones.locale.GMTFormat, f.zones.locale.HourFormat, short)
 }
 

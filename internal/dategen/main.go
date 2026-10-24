@@ -87,9 +87,52 @@ var widthNames = [datedata.Widths]string{"wide", "abbreviated", "narrow", "short
 // contextNames are ICU's names for the two contexts, in storage order.
 var contextNames = [datedata.Contexts]string{"format", "stand-alone"}
 
-// amPmMarkers are ICU's arrays of the two halves of the day, by width; the
-// short width has none.
-var amPmMarkers = [datedata.Widths]string{"AmPmMarkers", "AmPmMarkersAbbr", "AmPmMarkersNarrow", ""}
+// amPmMarkers are ICU's arrays of the two halves of the day, by width, each
+// the first of the arrays named that the calendar has; the short width has
+// none. ICU 78's DateFormatSymbols reads each width's own; ICU before it
+// read only AmPmMarkers, falling back to AmPmMarkersAbbr, for every width
+// but the narrow.
+var amPmMarkers = [datedata.Widths][]string{
+	{"AmPmMarkers"}, {"AmPmMarkersAbbr"}, {"AmPmMarkersNarrow"}, nil,
+}
+
+var amPmMarkersBefore78 = [datedata.Widths][]string{
+	{"AmPmMarkers", "AmPmMarkersAbbr"}, {"AmPmMarkers", "AmPmMarkersAbbr"},
+	{"AmPmMarkersNarrow", "AmPmMarkersAbbr"}, nil,
+}
+
+// A tree is what dategen reads of the sources as a whole, which decides how
+// it reads each locale: whether the ISO 8601 calendar has era rules, and
+// which arrays the halves of the day are read from.
+type tree struct {
+	isoEras bool
+	amPm    [datedata.Widths][]string
+}
+
+// readTree reads it. The ICU version is the sources' misc/icuver.txt.
+func readTree(icu *icusrc.Locales) (*tree, error) {
+	supplemental, err := icu.Misc("supplementalData")
+	if err != nil {
+		return nil, err
+	}
+	version, err := icu.Misc("icuver")
+	if err != nil {
+		return nil, err
+	}
+	v := version.Get("ICUVersion")
+	if v == nil {
+		return nil, fmt.Errorf("icuver.txt names no ICUVersion")
+	}
+	major, err := strconv.Atoi(strings.Split(v.Value, ".")[0])
+	if err != nil {
+		return nil, fmt.Errorf("icuver.txt: the ICU version %q", v.Value)
+	}
+	t := &tree{isoEras: supplemental.Get("calendarData", "iso8601", "eras") != nil, amPm: amPmMarkers}
+	if major < 78 {
+		t.amPm = amPmMarkersBefore78
+	}
+	return t, nil
+}
 
 // eraWidths are ICU's era name sets, in storage order: the short width
 // writes the narrow names.
@@ -126,13 +169,12 @@ func run(icu *icusrc.Locales, seed string) error {
 	if err != nil {
 		return err
 	}
-	supplemental, err := icu.Misc("supplementalData")
+	t, err := readTree(icu)
 	if err != nil {
 		return err
 	}
-	isoEras := supplemental.Get("calendarData", "iso8601", "eras") != nil
 	built, err := icusrc.EachLocale(icu, fb, func(v *icusrc.View) ([]byte, error) {
-		l, err := readLocale(icu, fb, v, isoEras)
+		l, err := readLocale(icu, fb, v, t)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", v.Name(), err)
 		}
@@ -189,7 +231,7 @@ func run(icu *icusrc.Locales, seed string) error {
 // readLocale builds one locale's dates: the Gregorian calendar, the others
 // in extras' order, and the ISO calendar last, whose eras depend on whether
 // the supplemental data gives it era rules (isoCalendar).
-func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, isoEras bool) (*datedata.Locale, error) {
+func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, t *tree) (*datedata.Locale, error) {
 	name := v.Name()
 	chain, err := icu.Resolve(name, fb)
 	if err != nil {
@@ -203,7 +245,7 @@ func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, isoEras
 		return nil, err
 	}
 	calendar := func(cal string) (*datedata.Calendar, error) {
-		c, err := readCalendar(v, cal)
+		c, err := readCalendar(v, cal, t)
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +270,7 @@ func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, isoEras
 		return nil, err
 	}
 	l.Calendars = append(l.Calendars, datedata.NamedCalendar{Name: "gregory", Calendar: *greg})
-	iso := isoCalendar(*greg, chain, isoEras)
+	iso := isoCalendar(*greg, chain, t.isoEras)
 	if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, "iso8601"); err != nil {
 		return nil, fmt.Errorf("iso8601: %w", err)
 	}
@@ -511,7 +553,7 @@ func minutes(s string) int {
 //
 // What a calendar does not have, ICU's CalendarData reads from the
 // locale's Gregorian calendar, as CLDR's root aliases it there.
-func readCalendar(v *icusrc.View, cal string) (*datedata.Calendar, error) {
+func readCalendar(v *icusrc.View, cal string, t *tree) (*datedata.Calendar, error) {
 	get := func(path ...string) (*icutxt.Node, error) {
 		n, err := v.Get(append([]string{"calendar", cal}, path...)...)
 		if n != nil || err != nil || cal == "gregorian" {
@@ -543,13 +585,14 @@ func readCalendar(v *icusrc.View, cal string) (*datedata.Calendar, error) {
 		}
 	}
 	for w := 0; w < datedata.Widths; w++ {
-		if amPmMarkers[w] != "" {
-			marks, err := get(amPmMarkers[w])
+		for _, name := range t.amPm[w] {
+			marks, err := get(name)
 			if err != nil {
 				return nil, err
 			}
 			if m := texts(marks); len(m) == 2 {
 				c.AM[w], c.PM[w] = m[0], m[1]
+				break
 			}
 		}
 		// The finer parts of the day are kept too, for the patterns that

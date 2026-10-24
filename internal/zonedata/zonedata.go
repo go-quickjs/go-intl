@@ -19,7 +19,7 @@ import (
 )
 
 // Version is the encoding's version.
-const Version = 4
+const Version = 5
 
 // A Names is what a locale calls one metazone or zone.
 //
@@ -52,6 +52,10 @@ type Built struct {
 	// itself, "+HH:mm;-HH:mm".
 	GMTFormat  string
 	HourFormat string
+	// GMTZeroFormat is what an ICU before 78 writes for an offset of zero,
+	// "GMT", in place of GMTFormat around it; ICU 78 writes zero like any
+	// other offset, and has it empty.
+	GMTZeroFormat string
 	// RegionFormat names a zone by where it is, "{0} Time", and
 	// FallbackFormat qualifies a metazone's name by a place in it,
 	// "{1} ({0})".
@@ -90,6 +94,7 @@ type RegionEntry struct {
 type Locale struct {
 	GMTFormat      string
 	HourFormat     string
+	GMTZeroFormat  string
 	RegionFormat   string
 	FallbackFormat string
 
@@ -133,6 +138,7 @@ func Encode(l *Built, pool *blob.Pool) []byte {
 	b := blob.NewPooledWriter(Version, pool)
 	b.SharedString(l.GMTFormat)
 	b.SharedString(l.HourFormat)
+	b.SharedString(l.GMTZeroFormat)
 	b.SharedString(l.RegionFormat)
 	b.SharedString(l.FallbackFormat)
 	metazones := map[string]Names{}
@@ -197,6 +203,7 @@ func Decode(data []byte, pool blob.Shared) (*Locale, error) {
 	var l Locale
 	l.GMTFormat = r.SharedString()
 	l.HourFormat = r.SharedString()
+	l.GMTZeroFormat = r.SharedString()
 	l.RegionFormat = r.SharedString()
 	l.FallbackFormat = r.SharedString()
 	l.metazones = r.SharedTable()

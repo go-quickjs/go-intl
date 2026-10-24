@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/go-quickjs/go-intl/internal/datawrite"
@@ -84,6 +85,22 @@ func run(zipPath, tzDir, seed string) error {
 
 	// The locales are the date data's, each written once with what it
 	// shares with another named in its same.bin.
+	// An ICU before 78 writes an offset of zero as the locale's GMT zero
+	// format, which ICU 78 keeps for reading only.
+	version, err := archive.Bundle("data/misc/icuver.txt")
+	if err != nil {
+		return err
+	}
+	v := version.Get("ICUVersion")
+	if v == nil {
+		return fmt.Errorf("icuver.txt names no ICUVersion")
+	}
+	major, err := strconv.Atoi(strings.Split(v.Value, ".")[0])
+	if err != nil {
+		return fmt.Errorf("icuver.txt: the ICU version %q", v.Value)
+	}
+	zeroFormat := major < 78
+
 	dates, err := datawrite.Tags(filepath.Join("data", "dates"))
 	if err != nil {
 		return err
@@ -103,7 +120,7 @@ func run(zipPath, tzDir, seed string) error {
 		if tag == "und" {
 			name = "root"
 		}
-		l, err := readLocale(zones, regions, fb, name, codes)
+		l, err := readLocale(zones, regions, fb, name, codes, zeroFormat)
 		if err != nil {
 			return fmt.Errorf("%s: %w", tag, err)
 		}
@@ -130,7 +147,7 @@ func run(zipPath, tzDir, seed string) error {
 
 // readLocale merges what a locale's zone and region bundles say, as ICU's
 // TimeZoneNames and LocaleDisplayNames read them.
-func readLocale(zones, regions *icusrc.Locales, fb icusrc.Fallback, name string, codes map[string]bool) (*zonedata.Built, error) {
+func readLocale(zones, regions *icusrc.Locales, fb icusrc.Fallback, name string, codes map[string]bool, zeroFormat bool) (*zonedata.Built, error) {
 	chain, err := zones.Resolve(name, fb)
 	if err != nil {
 		return nil, err
@@ -150,10 +167,14 @@ func readLocale(zones, regions *icusrc.Locales, fb icusrc.Fallback, name string,
 		return ""
 	}
 	l := &zonedata.Built{
-		GMTFormat:      first("gmtFormat"),
-		HourFormat:     first("hourFormat"),
+		GMTFormat:  first("gmtFormat"),
+		HourFormat: first("hourFormat"),
+
 		RegionFormat:   first("regionFormat"),
 		FallbackFormat: first("fallbackFormat"),
+	}
+	if zeroFormat {
+		l.GMTZeroFormat = first("gmtZeroFormat")
 	}
 
 	// Every zone and metazone any bundle in the chain names, each merged
