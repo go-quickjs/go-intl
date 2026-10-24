@@ -13,9 +13,10 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { dataLocales } = require("./datalocales.js");
 
 const tags = new Set();
-const all = fs.readdirSync(path.join(__dirname, "..", "data", "dates")).map(f => f.replace(/\.bin$/, ""));
+const all = dataLocales(path.join(__dirname, "..", "data", "dates"));
 for (const t of Intl.DateTimeFormat.supportedLocalesOf(all)) {
   tags.add(t);
   tags.add(t.split("-")[0]);

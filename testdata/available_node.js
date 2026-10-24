@@ -13,6 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { dataLocales } = require("./datalocales.js");
 const { execFileSync } = require("child_process");
 
 const zip = process.argv[2];
@@ -27,7 +28,7 @@ for (const m of listing.matchAll(/data\/(?:locales|coll|lang|region|unit|curr|zo
 }
 const plurals = execFileSync("unzip", ["-p", zip, "data/misc/plurals.txt"], { maxBuffer: 1 << 26 }).toString();
 for (const m of plurals.matchAll(/^        ([a-z]{2,3}(?:_[A-Za-z0-9]+)*)\{"set/gm)) names.add(m[1]);
-for (const f of fs.readdirSync(path.join(__dirname, "..", "data", "dates"))) names.add(f.replace(/\.bin$/, ""));
+for (const t of dataLocales(path.join(__dirname, "..", "data", "dates"))) names.add(t);
 
 const candidates = new Set();
 for (const name of names) {

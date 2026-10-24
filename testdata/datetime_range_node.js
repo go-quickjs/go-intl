@@ -12,10 +12,10 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { dataLocales } = require("./datalocales.js");
 
 const here = __dirname;
-const locales = fs.readdirSync(path.join(here, "..", "data", "dates"))
-  .map(f => f.replace(/\.bin$/, "")).sort();
+const locales = dataLocales(path.join(here, "..", "data", "dates"));
 
 const configs = [
   {}, { dateStyle: "full" }, { dateStyle: "long" }, { dateStyle: "medium" }, { dateStyle: "short" },
