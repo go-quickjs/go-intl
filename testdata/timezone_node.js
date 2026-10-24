@@ -22,13 +22,26 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
+// A zone's file is named for it in lowercase, and begins with its name as
+// ICU spells it (internal/tzdata): the version byte, then the name's length
+// as a uvarint, then the name.
 const dir = path.join(__dirname, "..", "data", "tz");
+const nameOf = (file) => {
+  const b = fs.readFileSync(file);
+  let n = 0, at = 1;
+  for (let shift = 0; ; shift += 7) {
+    const c = b[at++];
+    n += (c & 0x7f) * 2 ** shift;
+    if (c < 0x80) break;
+  }
+  return b.subarray(at, at + n).toString("utf8");
+};
 const names = [];
 (function walk(prefix) {
   for (const e of fs.readdirSync(path.join(dir, prefix), { withFileTypes: true })) {
     const name = prefix ? prefix + "/" + e.name : e.name;
     if (e.isDirectory()) walk(name);
-    else names.push(name.replace(/\.bin$/, ""));
+    else names.push(nameOf(path.join(dir, name)));
   }
 })("");
 names.sort();
@@ -56,6 +69,8 @@ for (const n of [
   "zulu", "Universal", "Greenwich", "Etc/Greenwich", "Etc/Zulu", "Etc/UCT", "etc/utc", "UTC",
   "Asia/Kolkata", "Europe/Kyiv", "America/Nuuk", "Pacific/Kanton", "Asia/Yangon", "America/Ciudad_Juarez",
   "Europe/Kiev", "Asia/Calcutta", "Asia/Rangoon", "America/Godthab", "Pacific/Enderbury",
+  // A name zoneinfo64 has, for a zone that is no zone, which has no file.
+  "Factory", "FACTORY", "factory",
 ]) inputs.add(n);
 
 for (const input of [...inputs].sort()) {
