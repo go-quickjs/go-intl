@@ -52,6 +52,11 @@ func ICUFallback() (Fallback, error) {
 		return Fallback{}, err
 	}
 	return Fallback{
+		// ICU's default locale is the host's, which the recordings, Node's
+		// and the browsers', all run as en_US. A tree that has a bundle for
+		// every locale's language never reaches it; a browser's filtered
+		// trees do.
+		Default: "en_US",
 		Parent: func(name string) (string, bool) {
 			p, ok := parents[name]
 			return p, ok

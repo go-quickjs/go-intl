@@ -189,6 +189,10 @@ func (c *Locales) Has(name string) bool { return c.names[name] }
 type Fallback struct {
 	Parent        func(name string) (string, bool)
 	DefaultScript func(language, region string) string
+	// Default is ICU's default locale, "en_US", whose bundles ures_open
+	// reads for a locale that has none of its own or its parents' in a
+	// tree, before the root's; "" reads the root's.
+	Default string
 }
 
 // Resolve is the whole of what ICU's ures_open reads for a locale, the most
@@ -198,15 +202,7 @@ type Fallback struct {
 // why "sr_Cyrl_ME", which has no bundle of its own, reads "sr_Cyrl" and not
 // "sr_Latn".
 func (c *Locales) Resolve(name string, fb Fallback) ([]*icutxt.Node, error) {
-	orig := name
-	for i := 0; !c.Has(name) && i < 16; i++ {
-		next, ok := fb.parent(name, orig)
-		if !ok {
-			name = "root"
-			break
-		}
-		name = next
-	}
+	name = c.first(name, fb)
 	var out []*icutxt.Node
 	for i := 0; name != "" && i < 16; i++ {
 		n, err := c.Get(name)
@@ -245,18 +241,44 @@ func (c *Locales) Resolve(name string, fb Fallback) ([]*icutxt.Node, error) {
 	return out, nil
 }
 
+// first is the bundle ures_open finds first for a locale: its own, or the
+// first its fallback reaches before the root; where there is none, the
+// default locale's, which entryOpen chains in with U_USING_DEFAULT_WARNING;
+// and else the root.
+func (c *Locales) first(name string, fb Fallback) string {
+	if found, ok := c.existing(name, fb); ok {
+		return found
+	}
+	if fb.Default != "" && name != "root" && name != fb.Default {
+		if found, ok := c.existing(fb.Default, fb); ok {
+			return found
+		}
+	}
+	return "root"
+}
+
+// existing is findFirstExisting: the locale's bundle or the first its
+// fallback reaches, short of the root.
+func (c *Locales) existing(name string, fb Fallback) (string, bool) {
+	orig := name
+	for i := 0; i < 16; i++ {
+		if c.Has(name) {
+			return name, true
+		}
+		next, ok := fb.parent(name, orig)
+		if !ok {
+			return "", false
+		}
+		name = next
+	}
+	return "", false
+}
+
 // Bundle is the name of the bundle ICU's ures_open reads first for a
 // locale: the locale's own if the tree has it, else the one fallback finds,
 // with an alias followed. It is "root" for a locale that finds none.
 func (c *Locales) Bundle(name string, fb Fallback) string {
-	orig := name
-	for i := 0; !c.Has(name) && i < 16; i++ {
-		next, ok := fb.parent(name, orig)
-		if !ok {
-			return "root"
-		}
-		name = next
-	}
+	name = c.first(name, fb)
 	for i := 0; i < 16; i++ {
 		n, err := c.Get(name)
 		if err != nil || n == nil {

@@ -170,14 +170,18 @@ func icuName(d DataLocale) string {
 // exists, found by ICU's fallback, then along its aliases and its parents or
 // its truncations to the root.
 func (x *icuTree) resolve(name string) []string {
-	orig := name
-	for i := 0; !x.has(name) && i < maxChain; i++ {
-		next, ok := x.missingParent(name, orig)
-		if !ok {
-			name = "root"
-			break
+	if found, ok := x.existing(name); ok {
+		name = found
+	} else if def, ok := x.fallbackValue("default"); ok && name != "root" && name != def {
+		// No bundle of the locale's, nor of a locale it falls back to: ICU
+		// reads the default locale's (entryOpen, U_USING_DEFAULT_WARNING),
+		// and else the root's.
+		name = "root"
+		if found, ok := x.existing(def); ok {
+			name = found
 		}
-		name = next
+	} else {
+		name = "root"
 	}
 	var out []string
 	for i := 0; name != "" && i < maxChain; i++ {
@@ -200,6 +204,23 @@ func (x *icuTree) resolve(name string) []string {
 		name = next
 	}
 	return out
+}
+
+// existing is findFirstExisting: the locale's bundle, or the first one its
+// fallback reaches short of the root.
+func (x *icuTree) existing(name string) (string, bool) {
+	orig := name
+	for i := 0; i < maxChain; i++ {
+		if x.has(name) {
+			return name, true
+		}
+		next, ok := x.missingParent(name, orig)
+		if !ok {
+			return "", false
+		}
+		name = next
+	}
+	return "", false
 }
 
 // missingParent is ICU's getParentLocaleID for a bundle that does not exist:

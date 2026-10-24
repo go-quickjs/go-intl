@@ -285,8 +285,10 @@ var indexTrees = []string{"locales", "unit", "curr", "lang", "region", "zone", "
 // ("icuparent en_150", en_001). ICU opens an alias bundle as the one it
 // names and, for one that does not exist, drops a default script, so
 // "sr-ME" is Serbian in Latin, "zh-TW" traditional Chinese and "az-Arab",
-// which ICU has no data for, the root. They are indexes so that a formatter
-// resolving its locale looks up what it needs where it lies.
+// which ICU has no data for, the root. It also holds ICU's default locale
+// ("default", en_US), whose bundles ICU reads for a locale a tree has none
+// for, before the root's. They are indexes so that a formatter resolving its
+// locale looks up what it needs where it lies.
 func buildIndex(zip string) (map[string][]byte, error) {
 	files := map[string]map[string][]byte{}
 	for _, tree := range indexTrees {
@@ -325,6 +327,13 @@ func buildIndex(zip string) (map[string][]byte, error) {
 	}
 	for k, v := range parents {
 		tables["icuparent "+k] = []byte(v)
+	}
+	// And the default locale, whose bundles a locale with none in a tree
+	// reads before the root's.
+	if fb, err := icusrc.ICUFallback(); err != nil {
+		return nil, err
+	} else if fb.Default != "" {
+		tables["default"] = []byte(fb.Default)
 	}
 	files["icufallback.bin"] = tables
 	built := map[string][]byte{}
