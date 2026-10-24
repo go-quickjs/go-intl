@@ -52,8 +52,9 @@ var pools = map[string]byte{
 	"zonenamesshared.bin": zonedata.Version,
 }
 
-// A step is one generator's run: its arguments, with {tree} the sources and
-// {base} the package's data, and the pool it seeds, if it has one.
+// A step is one generator's run: its arguments, with {tree} the sources,
+// {base} the package's data, {sources} ICU 78.3's sources and {export} its
+// collation export, and the pool it seeds, if it has one.
 type step struct {
 	name string
 	pool string
@@ -75,6 +76,9 @@ var steps = []step{
 	{"availgen", "", []string{"{tree}", "-"}},
 	{"rbnfgen", "", []string{"{tree}"}},
 	{"pluralgen", "", []string{"{tree}"}},
+	// The collations are ICU 78.3's export, of the locales and types the
+	// tree's filter keeps.
+	{"collgen", "", []string{"{export}", "{tree}", "{sources}"}},
 	// The zones' offsets, from the tree's own time zone files; the zones a
 	// host's abbreviations stand for are ICU 78.3's.
 	{"tzgen", "", []string{"{tree}", "{sources}"}},
@@ -83,20 +87,21 @@ var steps = []step{
 func main() {
 	tree := flag.String("tree", "", "the data sources to make the overlay from")
 	out := flag.String("out", "", "the overlay pack to write")
-	sources := flag.String("sources", "", "ICU 78.3's sources, for tzgen")
+	sources := flag.String("sources", "", "ICU 78.3's sources, for tzgen and collgen")
+	export := flag.String("export", "", "ICU4X's export of ICU 78.3's collations, for collgen")
 	work := flag.String("work", "", "the working directory (default: a temporary one, removed after)")
 	flag.Parse()
-	if *tree == "" || *out == "" || *sources == "" || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -sources <icu4c-78.3-sources.tgz> -out <overlay.pack> [-work <dir>]")
+	if *tree == "" || *out == "" || *sources == "" || *export == "" || flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -sources <icu4c-78.3-sources.tgz> -export <icu4x-icuexportdata-78.3.zip> -out <overlay.pack> [-work <dir>]")
 		os.Exit(2)
 	}
-	if err := run(*tree, *sources, *out, *work); err != nil {
+	if err := run(*tree, *sources, *export, *out, *work); err != nil {
 		fmt.Fprintln(os.Stderr, "profilegen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(tree, sources, out, work string) error {
+func run(tree, sources, export, out, work string) error {
 	if b, err := os.ReadFile("go.mod"); err != nil || !bytes.HasPrefix(b, []byte("module github.com/go-quickjs/go-intl\n")) {
 		return errors.New("run from go-intl's repository root")
 	}
@@ -110,12 +115,19 @@ func run(tree, sources, out, work string) error {
 	if sources, err = filepath.Abs(sources); err != nil {
 		return err
 	}
+	if export, err = filepath.Abs(export); err != nil {
+		return err
+	}
 	if work == "" {
 		if work, err = os.MkdirTemp("", "profilegen-"); err != nil {
 			return err
 		}
 		defer os.RemoveAll(work)
 	} else if work, err = filepath.Abs(work); err != nil {
+		return err
+	}
+	// What a run for another tree wrote is not this one's.
+	if err := os.RemoveAll(filepath.Join(work, "data")); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(work, "data"), 0o755); err != nil {
@@ -139,7 +151,7 @@ func run(tree, sources, out, work string) error {
 			args = append(args, "-seed", filepath.Join(base, s.pool))
 		}
 		for _, a := range s.args {
-			args = append(args, strings.NewReplacer("{tree}", tree, "{base}", base, "{sources}", sources).Replace(a))
+			args = append(args, strings.NewReplacer("{tree}", tree, "{base}", base, "{sources}", sources, "{export}", export).Replace(a))
 		}
 		cmd := exec.Command(filepath.Join(bin, s.name+exeSuffix()), args...)
 		cmd.Dir = work

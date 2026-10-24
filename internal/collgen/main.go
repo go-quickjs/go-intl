@@ -23,6 +23,10 @@
 // aliases and parents, and a default type in the few locales that name one --
 // and it is read from there.
 //
+// The data archive may be a tree of ICU's sources instead (icusrc.OpenArchive),
+// a browser's, through the filter its build applies: its collations are the
+// export's that its collation bundles still have, the locales and the types.
+//
 // The collation types that tailor the conjoining Hangul jamo -- the search
 // collations, Korean's searchjl -- are taken from ICU's compiled data
 // instead, where the export leaves them incomplete: see compiled.go.
@@ -39,7 +43,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -74,18 +77,21 @@ func run(exportPath, dataPath, sourcesPath string) error {
 	if err != nil {
 		return err
 	}
-	sources, err := icusrc.Open(dataPath, icusrc.DataSHA256)
+	sources, err := icusrc.OpenArchive(dataPath)
 	if err != nil {
 		return err
 	}
-
+	defer sources.Close()
 	tables, err := readExport(export)
 	if err != nil {
 		return err
 	}
-	tree, defaults, err := readSources(sources)
+	tree, defaults, types, err := readSources(sources)
 	if err != nil {
 		return err
+	}
+	if sources.Filtered() {
+		keepFiltered(tables, tree, types)
 	}
 	dat, err := icudat.Read(sourcesPath)
 	if err != nil {
@@ -570,31 +576,23 @@ var (
 
 // readSources reads ICU's collation sources for what the export leaves out:
 // which locales exist, how they inherit, and what each one defaults to.
-func readSources(z *zip.ReadCloser) (*colldata.Tree, map[string]string, error) {
+func readSources(a *icusrc.Archive) (*colldata.Tree, map[string]string, map[string]map[string]bool, error) {
 	const dir = "data/coll/"
 	tree := &colldata.Tree{}
 	defaults := map[string]string{}
-	var deps localeDeps
-	found := false
-	for _, f := range z.File {
-		if !strings.HasPrefix(f.Name, dir) || path.Dir(f.Name)+"/" != dir {
-			continue
-		}
-		base := path.Base(f.Name)
-		body, err := readAll(f)
-		if err != nil {
-			return nil, nil, err
-		}
-		if base == "LOCALE_DEPS.json" {
-			if err := json.Unmarshal(stripComments(body), &deps); err != nil {
-				return nil, nil, fmt.Errorf("%s: %w", f.Name, err)
-			}
-			found = true
-			continue
-		}
-		name, ok := strings.CutSuffix(base, ".txt")
+	types := map[string]map[string]bool{}
+	deps, err := readDeps(a, dir+"LOCALE_DEPS.json")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, file := range a.Names(dir) {
+		name, ok := strings.CutSuffix(path.Base(file), ".txt")
 		if !ok {
 			continue
+		}
+		body, err := a.ReadFile(file)
+		if err != nil {
+			return nil, nil, nil, err
 		}
 		// The legacy variant locales -- "de__PHONEBOOK" and the "de_" it
 		// is aliased from -- predate BCP 47 and nothing reaches them.
@@ -610,9 +608,19 @@ func readSources(z *zip.ReadCloser) (*colldata.Tree, map[string]string, error) {
 		if name != "root" {
 			tree.Installed = append(tree.Installed, name)
 		}
-	}
-	if !found {
-		return nil, nil, fmt.Errorf("no %sLOCALE_DEPS.json in the data archive", dir)
+		// The types the bundle has, as the filter leaves them.
+		bundle, err := a.Bundle(file)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		types[name] = map[string]bool{}
+		if c := bundle.Get("collations"); c != nil {
+			for _, t := range c.Children {
+				if t.Table {
+					types[name][t.Key] = true
+				}
+			}
+		}
 	}
 	for from, to := range deps.Aliases {
 		tree.Aliases = append(tree.Aliases, [2]string{from, to})
@@ -624,9 +632,48 @@ func readSources(z *zip.ReadCloser) (*colldata.Tree, map[string]string, error) {
 	sort.Slice(tree.Parents, func(i, j int) bool { return tree.Parents[i][0] < tree.Parents[j][0] })
 	sort.Strings(tree.Installed)
 	if defaults["root"] != "standard" {
-		return nil, nil, fmt.Errorf("the root's default collation is %q, not standard", defaults["root"])
+		return nil, nil, nil, fmt.Errorf("the root's default collation is %q, not standard", defaults["root"])
 	}
-	return tree, defaults, nil
+	return tree, defaults, types, nil
+}
+
+// readDeps reads a tree's LOCALE_DEPS.json, which ICU's build reads and does
+// not filter.
+func readDeps(a *icusrc.Archive, name string) (localeDeps, error) {
+	var deps localeDeps
+	body, err := a.ReadFile(name)
+	if err != nil {
+		return deps, fmt.Errorf("no %s in the data archive: %w", name, err)
+	}
+	if err := json.Unmarshal(stripComments(body), &deps); err != nil {
+		return deps, fmt.Errorf("%s: %w", name, err)
+	}
+	return deps, nil
+}
+
+// keepFiltered keeps the export's collations that a filtered tree still has:
+// a locale whose bundle the filter leaves out has none, and of a locale's
+// types, only those its bundle keeps. The root keeps the types its bundle
+// names and those it has no rules for in the sources -- the standard one.
+func keepFiltered(tables map[string]exportFiles, tree *colldata.Tree, types map[string]map[string]bool) {
+	installed := map[string]bool{"root": true}
+	for _, name := range tree.Installed {
+		installed[name] = true
+	}
+	for name, files := range tables {
+		if !installed[name] {
+			delete(tables, name)
+			continue
+		}
+		for kind := range files {
+			if !types[name][kind] && !(name == "root" && kind == "standard") {
+				delete(files, kind)
+			}
+		}
+		if len(files) == 0 {
+			delete(tables, name)
+		}
+	}
 }
 
 // checkDefaults makes sure every default names a type that exists somewhere.
@@ -645,15 +692,6 @@ func checkDefaults(tables map[string]exportFiles, defaults map[string]string) er
 		}
 	}
 	return nil
-}
-
-func readAll(f *zip.File) ([]byte, error) {
-	rc, err := f.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer rc.Close()
-	return io.ReadAll(rc)
 }
 
 // stripComments removes the // lines ICU heads its JSON with.

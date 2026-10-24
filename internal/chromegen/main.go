@@ -92,6 +92,7 @@ func run(cache string) error {
 			fmt.Printf("chromegen: ICU %s at %s, overlay %s\n", p.ICUVersion, short(p.ICU), name)
 			cmd := exec.Command("go", "run", "./internal/profilegen", "-tree", tree,
 				"-sources", filepath.Join(cache, "icu4c-78.3-sources.tgz"),
+				"-export", filepath.Join(cache, "icu4x-icuexportdata-78.3.zip"),
 				"-out", filepath.Join(out, name+".pack"), "-work", filepath.Join(cache, "chromium-icu", "work"))
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			if err := cmd.Run(); err != nil {

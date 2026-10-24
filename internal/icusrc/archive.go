@@ -91,9 +91,11 @@ func category(name string) (cat, stem string) {
 	return dir, stem
 }
 
-// kept reports whether the filter keeps a file.
+// kept reports whether the filter keeps a file. It filters the resource
+// bundle sources, the .txt files; what else the build reads, a tree's
+// LOCALE_DEPS.json, it reads whatever the filter says.
 func (a *Archive) kept(name string) bool {
-	if a.filter == nil {
+	if a.filter == nil || path.Ext(name) != ".txt" {
 		return true
 	}
 	cat, stem := category(name)
