@@ -68,8 +68,14 @@ func run(zipPath, tzDir, seed string) error {
 	if err != nil {
 		return err
 	}
-	zones := icusrc.TreeOf(archive, "zone")
-	regions := icusrc.TreeOf(archive, "region")
+	zones, err := icusrc.TreeOf(archive, "zone")
+	if err != nil {
+		return err
+	}
+	regions, err := icusrc.TreeOf(archive, "region")
+	if err != nil {
+		return err
+	}
 	fb, err := icusrc.ICUFallback()
 	if err != nil {
 		return err

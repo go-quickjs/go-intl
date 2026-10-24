@@ -154,8 +154,12 @@ func readBoundaries(dataPath string) ([]byte, error) {
 		return nil, err
 	}
 	defer a.Close()
+	files, err := a.Names("data/brkitr")
+	if err != nil {
+		return nil, err
+	}
 	var lines []string
-	for _, file := range a.Names("data/brkitr") {
+	for _, file := range files {
 		bundle, ok := strings.CutSuffix(path.Base(file), ".txt")
 		if !ok {
 			continue

@@ -79,15 +79,22 @@ func (a *Archive) Close() error {
 }
 
 // category is the data build tool's category of a file of the sources,
-// "data/locales/en.txt" being in "locales_tree", and the file's stem. The
-// currencies' supplemental data, curr/supplementalData.txt, is no locale's
-// and has a category of its own.
+// "data/locales/en.txt" being in "locales_tree", and the file's stem, as
+// ICU's filtration.py names them. Two files of a tree are no locale's and
+// have a category of their own, curr/supplementalData.txt and
+// zone/tzdbNames.txt; the break iterator's sources beneath brkitr are
+// brkitr_rules, brkitr_dictionaries and the like.
 func category(name string) (cat, stem string) {
 	dir, file := path.Split(strings.TrimPrefix(name, "data/"))
 	dir = strings.TrimSuffix(dir, "/")
 	stem = strings.TrimSuffix(file, path.Ext(file))
-	if dir == "curr" && stem == "supplementalData" {
+	switch {
+	case dir == "curr" && stem == "supplementalData":
 		return "curr_supplemental", stem
+	case dir == "zone" && stem == "tzdbNames":
+		return "zone_supplemental", stem
+	case strings.HasPrefix(dir, "brkitr/"):
+		return "brkitr_" + strings.TrimPrefix(dir, "brkitr/"), stem
 	}
 	switch dir {
 	case "locales", "curr", "lang", "region", "zone", "unit", "coll", "brkitr", "rbnf":
@@ -108,8 +115,10 @@ func (a *Archive) kept(name string) bool {
 }
 
 // Names lists the files directly in a directory of the sources,
-// "data/locales", sorted.
-func (a *Archive) Names(dir string) []string {
+// "data/locales", sorted. A tree of sources that lacks the directory, or
+// cannot be read, is an error, not an empty tree: a tree fetched whole
+// has every directory the archive does.
+func (a *Archive) Names(dir string) ([]string, error) {
 	dir = strings.TrimSuffix(dir, "/") + "/"
 	var out []string
 	if a.zip != nil {
@@ -119,7 +128,10 @@ func (a *Archive) Names(dir string) []string {
 			}
 		}
 	} else {
-		entries, _ := os.ReadDir(filepath.Join(a.dir, filepath.FromSlash(dir)))
+		entries, err := os.ReadDir(filepath.Join(a.dir, filepath.FromSlash(dir)))
+		if err != nil {
+			return nil, err
+		}
 		for _, e := range entries {
 			if !e.IsDir() {
 				out = append(out, dir+e.Name())
@@ -133,7 +145,7 @@ func (a *Archive) Names(dir string) []string {
 		}
 	}
 	sort.Strings(kept)
-	return kept
+	return kept, nil
 }
 
 // ReadFile reads a file of the sources as it is: one the filter leaves out

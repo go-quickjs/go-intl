@@ -114,24 +114,32 @@ func OpenTree(path, tree string) (*Locales, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := TreeOf(a, tree)
+	c, err := TreeOf(a, tree)
+	if err != nil {
+		a.Close()
+		return nil, err
+	}
 	c.own = true
 	return c, nil
 }
 
 // TreeOf is one tree of an archive's bundles.
-func TreeOf(a *Archive, tree string) *Locales {
+func TreeOf(a *Archive, tree string) (*Locales, error) {
 	c := &Locales{a: a, tree: tree, names: map[string]bool{}, cache: map[string]*icutxt.Node{}}
 	// A tree's bundles are the files at its top; brkitr keeps its rules and
 	// dictionaries' sources in directories beneath.
-	for _, name := range a.Names("data/" + tree) {
+	names, err := a.Names("data/" + tree)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range names {
 		if stem, ok := strings.CutSuffix(path.Base(name), ".txt"); ok {
 			if cat, _ := category(name); cat == tree+"_tree" {
 				c.names[stem] = true
 			}
 		}
 	}
-	return c
+	return c, nil
 }
 
 // Supplemental reads the tree's bundle that is no locale's, as the filter

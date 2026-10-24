@@ -585,7 +585,11 @@ func readSources(a *icusrc.Archive) (*colldata.Tree, map[string]string, map[stri
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	for _, file := range a.Names(dir) {
+	files, err := a.Names(dir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, file := range files {
 		name, ok := strings.CutSuffix(path.Base(file), ".txt")
 		if !ok {
 			continue
