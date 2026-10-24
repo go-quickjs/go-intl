@@ -2,7 +2,7 @@
 // different ICU's data sources -- a browser's -- make differently from the
 // sources the package's own data is made from (intl.NewOverlay).
 //
-//	go run ./internal/profilegen -tree <sources dir> -out <overlay.pack> [-work <dir>]
+//	go run ./internal/profilegen -tree <sources dir> -sources <icu4c-78.3-sources.tgz> -out <overlay.pack> [-work <dir>]
 //
 // The tree is ICU's data sources as icusrc.OpenArchive reads a directory:
 // the sources at data/, and the data filter the build applies at
@@ -74,24 +74,28 @@ var steps = []step{
 	{"aliasgen", "", []string{"{tree}", "-"}},
 	{"availgen", "", []string{"{tree}", "-"}},
 	{"rbnfgen", "", []string{"{tree}"}},
+	// The zones' offsets, from the tree's own time zone files; the zones a
+	// host's abbreviations stand for are ICU 78.3's.
+	{"tzgen", "", []string{"{tree}", "{sources}"}},
 }
 
 func main() {
 	tree := flag.String("tree", "", "the data sources to make the overlay from")
 	out := flag.String("out", "", "the overlay pack to write")
+	sources := flag.String("sources", "", "ICU 78.3's sources, for tzgen")
 	work := flag.String("work", "", "the working directory (default: a temporary one, removed after)")
 	flag.Parse()
-	if *tree == "" || *out == "" || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -out <overlay.pack> [-work <dir>]")
+	if *tree == "" || *out == "" || *sources == "" || flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/profilegen -tree <sources dir> -sources <icu4c-78.3-sources.tgz> -out <overlay.pack> [-work <dir>]")
 		os.Exit(2)
 	}
-	if err := run(*tree, *out, *work); err != nil {
+	if err := run(*tree, *sources, *out, *work); err != nil {
 		fmt.Fprintln(os.Stderr, "profilegen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(tree, out, work string) error {
+func run(tree, sources, out, work string) error {
 	if b, err := os.ReadFile("go.mod"); err != nil || !bytes.HasPrefix(b, []byte("module github.com/go-quickjs/go-intl\n")) {
 		return errors.New("run from go-intl's repository root")
 	}
@@ -100,6 +104,9 @@ func run(tree, out, work string) error {
 		return err
 	}
 	if tree, err = filepath.Abs(tree); err != nil {
+		return err
+	}
+	if sources, err = filepath.Abs(sources); err != nil {
 		return err
 	}
 	if work == "" {
@@ -131,7 +138,7 @@ func run(tree, out, work string) error {
 			args = append(args, "-seed", filepath.Join(base, s.pool))
 		}
 		for _, a := range s.args {
-			args = append(args, strings.NewReplacer("{tree}", tree, "{base}", base).Replace(a))
+			args = append(args, strings.NewReplacer("{tree}", tree, "{base}", base, "{sources}", sources).Replace(a))
 		}
 		cmd := exec.Command(filepath.Join(bin, s.name+exeSuffix()), args...)
 		cmd.Dir = work

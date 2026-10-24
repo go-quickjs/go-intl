@@ -70,7 +70,7 @@ import (
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/tzgen <icu-tz-2026c dir> <icu4c-78.3-sources.tgz>")
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/tzgen <icu-tz-2026c dir, or a tree of sources> <icu4c-78.3-sources.tgz>")
 		os.Exit(2)
 	}
 	files, err := build(os.Args[1])
@@ -95,7 +95,18 @@ func main() {
 	fmt.Fprintf(os.Stderr, "tzgen: %d zones\n", len(files))
 }
 
+// read reads one of the time zone files: from the update's directory, or,
+// where dir is a tree of ICU's sources (icusrc.OpenArchive), which carries
+// its own, from its data/misc.
 func read(dir, name string) (*icutxt.Node, error) {
+	if info, err := os.Stat(filepath.Join(dir, "data", "misc")); err == nil && info.IsDir() {
+		a, err := icusrc.OpenArchive(dir)
+		if err != nil {
+			return nil, err
+		}
+		defer a.Close()
+		return a.Bundle("data/misc/" + name + ".txt")
+	}
 	b, err := icusrc.ReadTZ(dir, name)
 	if err != nil {
 		return nil, err
