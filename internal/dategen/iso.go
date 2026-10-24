@@ -11,15 +11,20 @@ import (
 // something of their own (Chinese) merged over the root key by key. The glue
 // between a date and a time, which it has none of its own for, stays the
 // Gregorian calendar's, as ICU falls back to it.
-func isoCalendar(greg datedata.Calendar, chain []*icutxt.Node) *datedata.Calendar {
+//
+// eraRules says whether the supplemental data gives the calendar era rules.
+// ICU 78's does not, and what DateFormatSymbols is then left holding is no
+// wide or abbreviated era names at all and, of the narrow ones, only the
+// first: Node writes nothing for "AD" at any width and the narrow name for
+// "BC", "B" in English. Chrome's ICU, from Chrome 150, patches the rules in,
+// and writes the Gregorian calendar's names.
+func isoCalendar(greg datedata.Calendar, chain []*icutxt.Node, eraRules bool) *datedata.Calendar {
 	c := greg
 	c.DateNumbers, c.TimeNumbers = [datedata.Lengths]string{}, [datedata.Lengths]string{}
-	// ICU 78 has no era rules for the ISO 8601 calendar, and what
-	// DateFormatSymbols is left holding is no wide or abbreviated era names
-	// at all and, of the narrow ones, only the first: Node writes nothing for
-	// "AD" at any width and the narrow name for "BC", "B" in English.
-	c.Eras = [datedata.Widths]datedata.Names{}
-	c.Eras[datedata.Narrow].Text = []string{greg.Era(datedata.Narrow, 0)}
+	if !eraRules {
+		c.Eras = [datedata.Widths]datedata.Names{}
+		c.Eras[datedata.Narrow].Text = []string{greg.Era(datedata.Narrow, 0)}
+	}
 	for _, n := range chain {
 		p := n.Get("calendar", "iso8601", "DateTimePatterns")
 		if p == nil || p.Alias || len(p.Values) < 13 {

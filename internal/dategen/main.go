@@ -126,8 +126,13 @@ func run(icu *icusrc.Locales, seed string) error {
 	if err != nil {
 		return err
 	}
+	supplemental, err := icu.Misc("supplementalData")
+	if err != nil {
+		return err
+	}
+	isoEras := supplemental.Get("calendarData", "iso8601", "eras") != nil
 	built, err := icusrc.EachLocale(icu, fb, func(v *icusrc.View) ([]byte, error) {
-		l, err := readLocale(icu, fb, v)
+		l, err := readLocale(icu, fb, v, isoEras)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", v.Name(), err)
 		}
@@ -182,8 +187,9 @@ func run(icu *icusrc.Locales, seed string) error {
 }
 
 // readLocale builds one locale's dates: the Gregorian calendar, the others
-// in extras' order, and the ISO calendar last.
-func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View) (*datedata.Locale, error) {
+// in extras' order, and the ISO calendar last, whose eras depend on whether
+// the supplemental data gives it era rules (isoCalendar).
+func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View, isoEras bool) (*datedata.Locale, error) {
 	name := v.Name()
 	chain, err := icu.Resolve(name, fb)
 	if err != nil {
@@ -222,7 +228,7 @@ func readLocale(icu *icusrc.Locales, fb icusrc.Fallback, v *icusrc.View) (*dated
 		return nil, err
 	}
 	l.Calendars = append(l.Calendars, datedata.NamedCalendar{Name: "gregory", Calendar: *greg})
-	iso := isoCalendar(*greg, chain)
+	iso := isoCalendar(*greg, chain, isoEras)
 	if iso.IntervalFallback, iso.Intervals, err = intervalsFromICU(chain, "iso8601"); err != nil {
 		return nil, fmt.Errorf("iso8601: %w", err)
 	}
