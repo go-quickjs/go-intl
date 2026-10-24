@@ -92,6 +92,33 @@ func (r recording) compatFor(node intl.Compat) intl.Compat {
 	return r.compat
 }
 
+// A host resolves a requested locale as V8 does, among the service's
+// available locales in a recording's data, else the default, en-US
+// (Isolate::DefaultLocale), and builds the formatter with what it finds.
+// Node has every locale the recordings ask for; a Chrome leaves many out.
+type host struct {
+	t        *testing.T
+	src      intl.Source
+	matchers map[intl.Service]*intl.LocaleMatcher
+}
+
+func (r recording) host(t *testing.T) *host {
+	return &host{t: t, src: r.src, matchers: map[intl.Service]*intl.LocaleMatcher{}}
+}
+
+func (h *host) resolve(service intl.Service, loc intl.Locale) intl.Locale {
+	m, ok := h.matchers[service]
+	if !ok {
+		var err error
+		if m, err = intl.NewLocaleMatcher(h.src, service); err != nil {
+			h.t.Fatal(err)
+		}
+		h.matchers[service] = m
+	}
+	def, _ := intl.ParseLocale("en-US")
+	return m.Resolve([]intl.Locale{loc}, intl.BestFit, def)
+}
+
 // withHeaders takes each recording's header line off its lines.
 func withHeaders(rs []recording) []recording {
 	for i := range rs {

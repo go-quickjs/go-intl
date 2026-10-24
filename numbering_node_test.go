@@ -22,6 +22,7 @@ var numberingGaps = map[string]string{}
 // Node writes. The expectations are written by testdata/numbering_node.js.
 func TestNumberingSystemsMatchNode(t *testing.T) {
 	replay(t, "testdata/numbering_node.txt.gz", func(t *testing.T, r recording) {
+		h := r.host(t)
 
 		var ran, matched, gaps int
 		var differences []string
@@ -51,6 +52,7 @@ func TestNumberingSystemsMatchNode(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", c.Tag, err)
 			}
+			loc = h.resolve(intl.Service(c.Service), loc)
 			nu, _ := c.Opts["numberingSystem"].(string)
 			name := fmt.Sprintf("%s %s %v %v", c.Service, c.Tag, c.Opts, c.Value)
 

@@ -84,6 +84,7 @@ func testDateTimeAgainstNode(t *testing.T, file string) {
 
 func replayDateTimes(t *testing.T, r recording) {
 	r.checkHeader(t)
+	h := r.host(t)
 	var ran, matched, gaps int
 	gapCases, gapPasses := map[string]int{}, map[string]int{}
 	var differences []string
@@ -116,7 +117,7 @@ func replayDateTimes(t *testing.T, r recording) {
 			if err != nil {
 				t.Fatalf("%s: %v", name, err)
 			}
-			last, lastErr = intl.NewDateTimeFormatFrom(r.src, loc, o)
+			last, lastErr = intl.NewDateTimeFormatFrom(r.src, h.resolve(intl.ServiceDateTimeFormat, loc), o)
 			lastKey = key
 		}
 		why, gap := dateTimeGap(r.who, tag, opts)

@@ -14,6 +14,7 @@ import (
 // word-likeness.
 func TestSegmenterMatchesNode(t *testing.T) {
 	replay(t, "testdata/segmenter_node.txt.gz", func(t *testing.T, r recording) {
+		h := r.host(t)
 		segmenters := map[string]*intl.Segmenter{}
 		ran, bad := 0, 0
 		for _, line := range r.lines {
@@ -38,7 +39,7 @@ func TestSegmenterMatchesNode(t *testing.T) {
 				}
 				g := map[string]intl.Granularity{"grapheme": intl.GranularityGrapheme,
 					"word": intl.GranularityWord, "sentence": intl.GranularitySentence}[granularity]
-				if seg, err = intl.NewSegmenterFrom(r.src, loc, intl.SegmenterOptions{Granularity: g}); err != nil {
+				if seg, err = intl.NewSegmenterFrom(r.src, h.resolve(intl.ServiceSegmenter, loc), intl.SegmenterOptions{Granularity: g}); err != nil {
 					t.Fatal(err)
 				}
 				segmenters[key] = seg

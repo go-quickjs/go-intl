@@ -17,6 +17,7 @@ import (
 // expectations are written by testdata/datetime_resolved_node.js.
 func TestDateTimeResolvedMatchesNode(t *testing.T) {
 	replay(t, "testdata/datetime_resolved_node.txt.gz", func(t *testing.T, r recording) {
+		h := r.host(t)
 
 		var ran, matched int
 		var differences []string
@@ -47,7 +48,7 @@ func TestDateTimeResolvedMatchesNode(t *testing.T) {
 			}
 			var got any
 			opts.Compat = r.compatFor(opts.Compat)
-			if dtf, err := intl.NewDateTimeFormatFrom(r.src, loc, opts); err != nil {
+			if dtf, err := intl.NewDateTimeFormatFrom(r.src, h.resolve(intl.ServiceDateTimeFormat, loc), opts); err != nil {
 				got = err.Error()
 			} else {
 				got = normalizeJSON(resolvedAsNode(dtf.ResolvedOptions()))

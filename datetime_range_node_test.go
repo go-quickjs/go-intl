@@ -18,6 +18,7 @@ import (
 // testdata/datetime_range_node.js.
 func TestDateTimeRangeMatchesNode(t *testing.T) {
 	replay(t, "testdata/datetime_range_node.txt.gz", func(t *testing.T, r recording) {
+		h := r.host(t)
 
 		var ran, matched int
 		var differences []string
@@ -50,7 +51,7 @@ func TestDateTimeRangeMatchesNode(t *testing.T) {
 					t.Fatalf("%s: %v", name, err)
 				}
 				o.Compat = r.compatFor(o.Compat)
-				last, lastErr = intl.NewDateTimeFormatFrom(r.src, loc, o)
+				last, lastErr = intl.NewDateTimeFormatFrom(r.src, h.resolve(intl.ServiceDateTimeFormat, loc), o)
 				lastKey = key
 			}
 			if lastErr != nil {
