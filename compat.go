@@ -177,6 +177,9 @@ const (
 	// ThinSpace writes a plain space where ICU writes U+2009 in a date or a
 	// range of dates, as Chrome's V8 does and Node's does not.
 	ThinSpace
+	// ISOMonthNames writes no name for a month of the ISO 8601 calendar, as
+	// Chrome 148 does.
+	ISOMonthNames
 )
 
 const (
@@ -615,6 +618,16 @@ var divergences = []Divergence{
 		Chrome: "V8 replaces U+2009 with a plain space in everything it formats (ReplaceUnicodeSpaces, " +
 			"\"Revert ICU 78 change\"), \"2024/1/5 下午3:04\", and in a range from Chrome 148, " +
 			"\"5/1/2024 – 7/1/2024\"",
+	},
+	{
+		Name: "ISOMonthNames", Flag: ISOMonthNames,
+		Area:     "DateTimeFormat",
+		What:     "a month's name in the ISO 8601 calendar",
+		Standard: "the Gregorian calendar's names, as CLDR's root aliases them: \"1900 March 1, Thursday\"",
+		Node:     "the standard's",
+		Chrome: "Chrome 148's V8, over ICU 78 data that gives the ISO 8601 calendar no era rules, " +
+			"writes none at any width, though its ICU's code and data are Node's there: " +
+			"\"1900  1, Thursday\"; from 148.0.7778.178 Chromium patches the rules in, and it writes them",
 	},
 }
 

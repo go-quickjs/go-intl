@@ -264,6 +264,10 @@ func (f *DateTimeFormat) writeField(fd dateField, p *dateParts) string {
 			text = cal.Month(context, datedata.Narrow, month)
 			leap = datedata.LeapFormatNarrow
 		}
+		if fd.count >= 3 && f.system == ISO8601 && f.opts.Compat.Has(ISOMonthNames) {
+			// Chrome 148 writes no name for an ISO 8601 month.
+			text = ""
+		}
 		if p.leapMonth {
 			// A leap month is its month's name or number in the locale's
 			// leap-month pattern, "{0}bis".

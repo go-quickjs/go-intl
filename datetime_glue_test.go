@@ -110,6 +110,27 @@ func TestThinSpaceByProfile(t *testing.T) {
 	}
 }
 
+// Chrome 148 writes no month name in the ISO 8601 calendar; the standard,
+// and Node, write the Gregorian calendar's.
+func TestISOMonthNamesByProfile(t *testing.T) {
+	when := time.Date(1900, 3, 1, 0, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "1900 March 1, Thursday"},
+		{intl.NodeICU, "1900 March 1, Thursday"},
+		{intl.NodeICU | intl.ISOMonthNames, "1900  1, Thursday"},
+	} {
+		f := newDateTime(t, "en", intl.DateTimeFormatOptions{
+			Calendar: "iso8601", TimeZone: "UTC", DateStyle: intl.LengthFull, Compat: c.compat,
+		})
+		if got := f.Format(when); got != c.want {
+			t.Errorf("%v: %+q, want %+q", c.compat, got, c.want)
+		}
+	}
+}
+
 // V8 writes a plain space wherever ICU writes a narrow no-break one; the
 // standard profile keeps CLDR's character.
 func TestNarrowNoBreakSpaceByProfile(t *testing.T) {
