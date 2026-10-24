@@ -190,6 +190,10 @@ func (EmbeddedSource) Open(m Marker, d DataLocale) ([]byte, error) {
 	return packSource{embeddedPack}.Open(m, d)
 }
 
+func (EmbeddedSource) readFile(name string) ([]byte, error) {
+	return packSource{embeddedPack}.readFile(name)
+}
+
 // packSource serves a pack in place.
 type packSource struct{ pack string }
 
@@ -341,8 +345,11 @@ func compareBytes(a, b []byte) int {
 }
 
 // openShared opens the pool a data set kept per locale shares, which its
-// tables are read with.
+// tables are read with. An overlay's may extend its base's (overlay.go).
 func openShared(src Source, m Marker, version byte) (blob.Shared, error) {
+	if o, ok := src.(*overlaySource); ok {
+		return o.openPool(m, version)
+	}
 	b, err := src.Open(m, DataLocale{})
 	if err != nil {
 		return blob.Shared{}, fmt.Errorf("intl: %s: %w", m, err)

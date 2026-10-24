@@ -82,16 +82,33 @@ func Build(fsys fs.FS) ([]byte, error) {
 	return out, nil
 }
 
-// Find returns a file's bounds in a pack: where its data starts and ends.
-// It reads the pack where it lies and allocates nothing.
-func Find(pack string, name string) (start, end int, ok bool) {
+// Valid reports whether pack begins as a pack of this version does, with
+// a count of files its records fit in.
+func Valid(pack string) bool {
+	_, ok := count(pack)
+	return ok
+}
+
+// count is the number of files a pack's header gives, where the header is
+// a pack's and the records fit.
+func count(pack string) (int, bool) {
 	if len(pack) < headerSize || pack[:len(magic)] != magic || pack[len(magic)] != Version {
-		return 0, 0, false
+		return 0, false
 	}
 	// A count past what the pack holds, compared without multiplying it
 	// out, which overflows on 32 bits, as does a count past 2^31.
 	n := int(u32(pack, len(magic)+1))
 	if n < 0 || n > (len(pack)-headerSize)/recordSize {
+		return 0, false
+	}
+	return n, true
+}
+
+// Find returns a file's bounds in a pack: where its data starts and ends.
+// It reads the pack where it lies and allocates nothing.
+func Find(pack string, name string) (start, end int, ok bool) {
+	n, ok := count(pack)
+	if !ok {
 		return 0, 0, false
 	}
 	lo, hi := 0, n
