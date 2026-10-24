@@ -29,6 +29,9 @@ for (const m of listing.matchAll(/data\/(?:locales|coll|lang|region|unit|curr|zo
 const plurals = execFileSync("unzip", ["-p", zip, "data/misc/plurals.txt"], { maxBuffer: 1 << 26 }).toString();
 for (const m of plurals.matchAll(/^        ([a-z]{2,3}(?:_[A-Za-z0-9]+)*)\{"set/gm)) names.add(m[1]);
 for (const t of dataLocales(path.join(__dirname, "..", "data", "dates"))) names.add(t);
+// CLDR's locales with a variant, whose dates go-intl writes as the locale
+// without it (internal/datawrite), and so has no file for.
+for (const t of ["be-tarask", "ca-ES-valencia", "el-polyton"]) names.add(t);
 
 const candidates = new Set();
 for (const name of names) {
