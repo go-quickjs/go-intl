@@ -4,7 +4,8 @@
 //	go run ./internal/regen
 //
 // or, as the intl package's go:generate directive runs it, go generate from
-// the repository root.
+// the repository root, which takes no flags: GO_INTL_SOURCES names the
+// cache for it.
 //
 // It downloads each source SOURCES.md pins into a cache, checks its sha256,
 // runs every generator with the arguments it takes, and repacks data.pack.
@@ -18,8 +19,8 @@
 //
 // Flags:
 //
-//	-cache dir   where the sources are kept (default: the user cache
-//	             directory's go-intl-sources)
+//	-cache dir   where the sources are kept (default: $GO_INTL_SOURCES,
+//	             else the user cache directory's go-intl-sources)
 //	-j n         how many generators run at once (default: the CPUs)
 //	-chrome      whether to rebuild the chrome package's data too (default:
 //	             true); -chrome=false rebuilds the intl package's alone, in
@@ -131,9 +132,14 @@ func jobs(cache string) []job {
 }
 
 func main() {
-	defaultCache := "go-intl-sources"
-	if dir, err := os.UserCacheDir(); err == nil {
-		defaultCache = filepath.Join(dir, "go-intl-sources")
+	// GO_INTL_SOURCES names the cache where no -cache does, for a run
+	// that cannot be given flags: go generate's.
+	defaultCache := os.Getenv("GO_INTL_SOURCES")
+	if defaultCache == "" {
+		defaultCache = "go-intl-sources"
+		if dir, err := os.UserCacheDir(); err == nil {
+			defaultCache = filepath.Join(dir, "go-intl-sources")
+		}
 	}
 	cache := flag.String("cache", defaultCache, "where the upstream sources are kept")
 	parallel := flag.Int("j", runtime.NumCPU(), "how many generators run at once")

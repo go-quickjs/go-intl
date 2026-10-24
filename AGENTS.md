@@ -45,7 +45,9 @@ Regenerate all of it in one step, from the repository root:
 go run ./internal/regen   # or: go generate
 ```
 
-`regen` downloads the pinned sources into a cache (`-cache`), checks their
+`regen` downloads the pinned sources into a cache (`-cache`, else
+`$GO_INTL_SOURCES`, else the user cache directory's `go-intl-sources`;
+`go generate` takes no flags, so set the variable to reuse a cache), checks their
 checksums, runs every generator in parallel (`-j`), zonegen after dategen,
 repacks, rebuilds the chrome package's overlays with chromegen, and reports
 whether the result is byte for byte what git holds. Chrome's eleven ICUs take

@@ -153,8 +153,10 @@ pinned upstream sources:
 go run ./internal/regen   # or: go generate
 ```
 
-It downloads each source [SOURCES.md](SOURCES.md) pins into a cache, checks
-its sha256, runs every generator and repacks the embedded data; on a clean
+It downloads each source [SOURCES.md](SOURCES.md) pins into a cache -- the
+user cache directory's `go-intl-sources`, or the directory `-cache` or the
+`GO_INTL_SOURCES` environment variable names -- checks its sha256, runs
+every generator and repacks the embedded data; on a clean
 checkout it reproduces `data/` and `data.pack` byte for byte, and says so.
 The first run fetches about 85 MB, which the cache keeps unpacked in about
 670 MB, and takes about a minute; later runs reuse the cache and take seconds.

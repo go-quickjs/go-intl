@@ -4,6 +4,9 @@
 //
 //	go run ./internal/chromegen [-cache dir]
 //
+// The cache is regen's: -cache, else $GO_INTL_SOURCES, else the user cache
+// directory's go-intl-sources.
+//
 // The Chromes and their ICU are testdata/chrome/pins.json (pins.js). For
 // each distinct pair of ICU sources and data filter it fetches Chromium's
 // source/data at the pin, filters/common.json, the filter a desktop Chrome
@@ -63,9 +66,14 @@ type pin struct {
 const gitiles = "https://chromium.googlesource.com/chromium/deps/icu/"
 
 func main() {
-	defaultCache := "go-intl-sources"
-	if dir, err := os.UserCacheDir(); err == nil {
-		defaultCache = filepath.Join(dir, "go-intl-sources")
+	// GO_INTL_SOURCES names the cache where no -cache does, for a run
+	// that cannot be given flags: go generate's.
+	defaultCache := os.Getenv("GO_INTL_SOURCES")
+	if defaultCache == "" {
+		defaultCache = "go-intl-sources"
+		if dir, err := os.UserCacheDir(); err == nil {
+			defaultCache = filepath.Join(dir, "go-intl-sources")
+		}
 	}
 	cache := flag.String("cache", defaultCache, "where the sources are kept")
 	flag.Parse()
