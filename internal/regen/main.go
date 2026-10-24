@@ -148,7 +148,7 @@ func jobs(cache string) []job {
 		{name: "numbergen", args: []string{pkg("cldr-numbers-full"), at(dataZip)}},
 		{name: "listgen", args: []string{at(dataZip)}},
 		{name: "unitgen", args: []string{pkg("cldr-units-full")}},
-		{name: "reltimegen", args: []string{pkg("cldr-dates-full")}},
+		{name: "reltimegen", args: []string{at(dataZip)}},
 		{name: "namegen", args: []string{pkg("cldr-localenames-full"), pkg("cldr-dates-full")}},
 		{name: "dategen", args: dates},
 		{name: "zonegen", args: []string{at(dataZip), at(tzDir)}, after: []string{"dategen"}},
