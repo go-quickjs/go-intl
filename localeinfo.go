@@ -100,7 +100,33 @@ func (i *LocaleInfo) Minimize(l Locale) Locale {
 	if !ok {
 		return cloned(l)
 	}
-	return withBase(l, short)
+	m := withBase(l, short)
+	if i.opts.Compat.Has(MinimizeLength) && icuBaseNameLength(m) == icuBaseNameLength(l) {
+		return cloned(l)
+	}
+	return m
+}
+
+// icuBaseNameLength is the length of ICU's base name for a locale, which
+// writes no "und": "_Hant" for "und-Hant", "en__POSIX" for "en-posix".
+func icuBaseNameLength(l Locale) int {
+	n := 0
+	if !l.Language.IsUnd() {
+		n += len(l.Language.String())
+	}
+	if !l.Script.IsZero() {
+		n += 1 + len(l.Script.String())
+	}
+	if !l.Region.IsZero() {
+		n += 1 + len(l.Region.String())
+	}
+	if len(l.Variants) > 0 && l.Region.IsZero() {
+		n++
+	}
+	for _, v := range l.Variants {
+		n += 1 + len(v.String())
+	}
+	return n
 }
 
 // withoutUnknown is a locale without the unknown script, "Zzzz", and the

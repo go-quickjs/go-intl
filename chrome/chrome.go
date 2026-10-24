@@ -124,6 +124,8 @@ var standardFrom = []struct {
 	{intl.RoundingWindow, 150},
 	{intl.RepeatedMidnight, 150},
 	{intl.SubdivisionHourCycles, 155},
+	// V8 15.5 reads "Y" for the year resolvedOptions reports.
+	{intl.WeekYearOmitted, 155},
 }
 
 // browserFrom are Chrome's divergences that Node does not share, and the
@@ -169,6 +171,15 @@ func compatOf(major int, pin string) intl.Compat {
 	// Chrome 148 is the first over ICU 78.
 	if major < 148 {
 		c |= intl.AmeteMihretExtendedYear
+	}
+	// V8 14.4 compares the base names minimize makes, not their lengths;
+	// Chrome 144 ships Temporal, and with it V8's parts read Replace202F.
+	if major < 144 {
+		c |= intl.MinimizeLength | intl.NarrowSpaceParts
+	}
+	// Chrome 143 is the first over ICU 77, past ICU 76's pattern generator.
+	if major < 143 {
+		c |= intl.HourCycleStyleTimes
 	}
 	return c
 }

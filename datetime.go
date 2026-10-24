@@ -872,7 +872,7 @@ func (f *DateTimeFormat) Check(t time.Time) error {
 // Format writes an instant.
 func (f *DateTimeFormat) Format(t time.Time) string {
 	var b strings.Builder
-	for _, p := range f.FormatToParts(t) {
+	for _, p := range f.parts(t, false) {
 		b.WriteString(p.Value)
 	}
 	return b.String()
@@ -880,6 +880,12 @@ func (f *DateTimeFormat) Format(t time.Time) string {
 
 // FormatToParts writes an instant as the pieces it is made of.
 func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
+	return f.parts(t, true)
+}
+
+// parts writes an instant's pieces, for formatToParts or, where asParts
+// is false, for a string (NarrowSpaceParts).
+func (f *DateTimeFormat) parts(t time.Time, asParts bool) []Part {
 	var out []Part
 	for _, seg := range f.render(&f.pattern, f.instant(t)) {
 		kind := PartLiteral
@@ -888,7 +894,7 @@ func (f *DateTimeFormat) FormatToParts(t time.Time) []Part {
 		}
 		out = append(out, Part{kind, seg.value})
 	}
-	if f.opts.Compat.Has(NarrowSpace) {
+	if f.opts.Compat.Has(NarrowSpace) && !(asParts && f.opts.Compat.Has(NarrowSpaceParts)) {
 		// V8 writes a plain space wherever ICU writes a narrow no-break
 		// one, reverting ICU 72 for the web's sake (Replace202F).
 		for i := range out {
@@ -973,8 +979,8 @@ var resolvedFieldRuns = [...]struct {
 		[]string{"GGGGG", "GGGG", "GGG"},
 		[]FieldWidth{WidthNarrow, WidthLong, WidthShort}},
 	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Year },
-		[]string{"yy", "y"},
-		[]FieldWidth{Width2Digit, WidthNumeric}},
+		[]string{"yy", "y", "YY", "Y"},
+		[]FieldWidth{Width2Digit, WidthNumeric, Width2Digit, WidthNumeric}},
 	{func(r *ResolvedDateTimeFormat) *FieldWidth { return &r.Month },
 		[]string{"MMMMM", "MMMM", "MMM", "MM", "M", "LLLLL", "LLLL", "LLL", "LL", "L"},
 		[]FieldWidth{WidthNarrow, WidthLong, WidthShort, Width2Digit, WidthNumeric,
@@ -1026,6 +1032,9 @@ func (f *DateTimeFormat) resolvedFields(r *ResolvedDateTimeFormat) {
 	}
 	for _, item := range resolvedFieldRuns {
 		for i, run := range item.runs {
+			if run[0] == 'Y' && f.opts.Compat.Has(WeekYearOmitted) {
+				continue
+			}
 			if strings.Contains(text, run) {
 				*item.into(r) = item.as[i]
 				break

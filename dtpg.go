@@ -550,7 +550,16 @@ type dtpg struct {
 // PatternCalendar.
 func newDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
 	hourChar byte, allowed []string) *dtpg {
-	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, true)
+	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, true, nil)
+}
+
+// newDTPGWithTimes is newDTPG with time styles of the caller's in place of
+// the locale's: those ICU before 76 adds, which its addICUPatterns takes
+// from DateFormat::createTimeInstance rather than from the bundle
+// (HourCycleStyleTimes).
+func newDTPGWithTimes(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
+	hourChar byte, allowed []string, times *[datedata.Lengths]string) *dtpg {
+	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, true, times)
 }
 
 // newDTPGWithoutStyles is ICU's createInstanceNoStdPat: a generator without
@@ -558,11 +567,11 @@ func newDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]stri
 // time style with.
 func newDTPGWithoutStyles(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string,
 	decimal string, hourChar byte, allowed []string) *dtpg {
-	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, false)
+	return buildDTPG(patterns, glue, fieldNames, decimal, hourChar, allowed, false, nil)
 }
 
 func buildDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]string, decimal string,
-	hourChar byte, allowed []string, styles bool) *dtpg {
+	hourChar byte, allowed []string, styles bool, times *[datedata.Lengths]string) *dtpg {
 	cal := patterns
 	g := &dtpg{decimal: decimal, defaultHourChar: hourChar, allowedHours: allowed}
 	// Room for every pattern, so that the elements are allocated once.
@@ -572,7 +581,11 @@ func buildDTPG(patterns, glue *datedata.Calendar, fieldNames [datedata.Fields]st
 		g.addPattern(string(canonicalItems[i]), "", false, false, &fp)
 	}
 	// The style patterns, the times from full to short and then the dates.
-	for _, set := range [][datedata.Lengths]string{cal.TimeFormats, cal.DateFormats} {
+	timeFormats := cal.TimeFormats
+	if times != nil {
+		timeFormats = *times
+	}
+	for _, set := range [][datedata.Lengths]string{timeFormats, cal.DateFormats} {
 		for _, p := range set {
 			if p != "" && styles {
 				g.addPattern(p, "", false, false, &fp)

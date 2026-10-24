@@ -57,12 +57,25 @@ type rangeFormat struct {
 // (LazyCreateDateIntervalFormat): from a skeleton, the formatter's pattern's
 // or a Temporal kind's, in the locale with the resolved hour cycle.
 func (f *DateTimeFormat) newRangeFormat(src Source, g *dtpg, skeleton string) (*rangeFormat, error) {
-	if letter, ok := hourLetters[f.hourCycle]; ok && letter != g.defaultHourChar {
+	styleTimes := f.opts.Compat.Has(HourCycleStyleTimes)
+	if letter, ok := hourLetters[f.hourCycle]; ok && (letter != g.defaultHourChar || styleTimes) {
 		_, allowed, err := allowedHourFormats(src, f.locale)
 		if err != nil {
 			return nil, err
 		}
-		g = newDTPG(f.patterns, f.calendar, f.data.FieldNames, f.decimal, letter, allowed)
+		if styleTimes {
+			// ICU before 76 adds the time styles as DateFormat makes them,
+			// and SimpleDateFormat::construct makes them afresh for the
+			// -u-hc the locale carries (HourCycleStyleTimes).
+			fresh := newDTPGWithoutStyles(f.patterns, f.calendar, f.data.FieldNames, f.decimal, letter, allowed)
+			var times [datedata.Lengths]string
+			for i := range times {
+				times[i] = fresh.bestPattern(timeStyleSkeletons[i], 0)
+			}
+			g = newDTPGWithTimes(f.patterns, f.calendar, f.data.FieldNames, f.decimal, letter, allowed, &times)
+		} else {
+			g = newDTPG(f.patterns, f.calendar, f.data.FieldNames, f.decimal, letter, allowed)
+		}
 	}
 	r := &rangeFormat{info: newIntervalInfo(f.patterns), skeleton: skeleton}
 	r.pattern = g.bestPattern(r.skeleton, 0)
@@ -901,7 +914,7 @@ type RangePart struct {
 // FormatRange writes a range of two moments.
 func (f *DateTimeFormat) FormatRange(start, end time.Time) string {
 	var b strings.Builder
-	for _, p := range f.FormatRangeToParts(start, end) {
+	for _, p := range f.rangeParts(start, end, false) {
 		b.WriteString(p.Value)
 	}
 	return b.String()
@@ -909,8 +922,14 @@ func (f *DateTimeFormat) FormatRange(start, end time.Time) string {
 
 // FormatRangeToParts writes a range of two moments as the pieces it is made
 // of, each marked with the end it belongs to. Moments that differ in nothing
-// the formatter shows are written once, as Format writes them.
+// the formatter shows are written once, as FormatToParts writes them.
 func (f *DateTimeFormat) FormatRangeToParts(start, end time.Time) []RangePart {
+	return f.rangeParts(start, end, true)
+}
+
+// rangeParts writes a range's pieces, for formatRangeToParts or, where
+// asParts is false, for a string (NarrowSpaceParts).
+func (f *DateTimeFormat) rangeParts(start, end time.Time, asParts bool) []RangePart {
 	segs, firstIndex := f.ranges.format(f, f.instant(start), f.instant(end))
 	var spans [2][2]int
 	hasSpans := false
@@ -921,7 +940,7 @@ func (f *DateTimeFormat) FormatRangeToParts(start, end time.Time) []RangePart {
 		// No part of the range is the start's or the end's alone, which V8
 		// reads as the moments being the same.
 		var out []RangePart
-		for _, p := range f.FormatToParts(start) {
+		for _, p := range f.parts(start, asParts) {
 			out = append(out, RangePart{Kind: p.Kind, Value: p.Value, Source: SourceShared})
 		}
 		return out

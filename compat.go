@@ -32,10 +32,12 @@ import (
 // relative time names in words, the digits of a double rounded to an
 // increment, which currencies a currency's own format is used for, the
 // empty items of a list, the hour cycle keyword a time style is made with,
-// what Intl.Locale answers for a keyword with no value, and a text
-// direction no one knows. Standard and NodeICU are the two ends. A
+// what Intl.Locale answers for a keyword with no value, a text direction
+// no one knows, and the year of a pattern that writes the week-based one.
+// Standard and NodeICU are the two ends. A
 // browser's divergences that Node does not share, ThinSpace, ISOMonthNames,
-// AmeteMihretExtendedYear and KhmerCombining, are in neither
+// AmeteMihretExtendedYear, KhmerCombining, MinimizeLength,
+// NarrowSpaceParts and HourCycleStyleTimes, are in neither
 // NodeICU nor Standard: a profile of the browser chooses them.
 //
 // The rule that keeps this honest is that every divergence is a named,
@@ -175,6 +177,9 @@ const (
 	// whose direction is unknown, or a locale whose script cannot be found,
 	// as ICU's uloc_isRightToLeft does.
 	LeftToRightDirection
+	// WeekYearOmitted reports no year from a pattern whose year is the
+	// week-based one ("Y"), as V8 before 15.5 does.
+	WeekYearOmitted
 	// ThinSpace writes a plain space where ICU writes U+2009 in a date or a
 	// range of dates, as Chrome's V8 does and Node's does not.
 	ThinSpace
@@ -188,6 +193,18 @@ const (
 	// KhmerCombining joins a non-word to a longer Khmer dictionary word
 	// before it, as Chromium's patched Khmer break engine does.
 	KhmerCombining
+	// MinimizeLength has Intl.Locale's minimize answer the locale it is
+	// given where the minimal one's ICU base name is as long as its own, as
+	// V8 before 14.4 does.
+	MinimizeLength
+	// NarrowSpaceParts keeps ICU's narrow no-break space in formatToParts,
+	// and in formatRangeToParts of a range that is one moment, where
+	// NarrowSpace replaces it, as V8 without Temporal does.
+	NarrowSpaceParts
+	// HourCycleStyleTimes makes a range's pattern generator with the time
+	// styles SimpleDateFormat synthesizes for an hour cycle keyword, as ICU
+	// before 76 does.
+	HourCycleStyleTimes
 )
 
 const (
@@ -202,7 +219,7 @@ const (
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
 		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity |
-		TrueKeywords | LeftToRightDirection
+		TrueKeywords | LeftToRightDirection | WeekYearOmitted
 )
 
 // Has reports whether Node's, or the browser's, behavior is chosen for a
@@ -618,6 +635,14 @@ var divergences = []Divergence{
 			"left, and V8 writes that as \"ltr\": all of these are \"ltr\"",
 	},
 	{
+		Name: "WeekYearOmitted", Flag: WeekYearOmitted,
+		Area: "DateTimeFormat",
+		What: "resolvedOptions' year where the chosen pattern writes the week-based year, \"Y\"",
+		Standard: "the year the format writes, as ECMA-402 reports the fields of the format it chose: " +
+			"Telugu's {year: \"numeric\", month: \"long\"} is \"MMMM YYYY\", so year is \"numeric\"",
+		Node: "V8 before 15.5 reads only \"y\" for the year, and reports none",
+	},
+	{
 		Name: "ThinSpace", Flag: ThinSpace,
 		Area:     "DateTimeFormat",
 		What:     "the thin space ICU 78 writes between a short date and its time, and around a range's dash",
@@ -657,6 +682,39 @@ var divergences = []Divergence{
 		Chrome: "Chromium's khmer-dictbe.patch raises the two to 10 and 5, so that a run joins a " +
 			"longer word: over ICU's dictionary, \"\u17ad\u178c\u1785\u17b9\u17bd\u17ca\u17ce\u17b6\u17c6\u17ce" +
 			"\u17cf\u17b9\u17bf\u179d\u17c2\u178d\u17a9\u1796\" breaks into words at 0, 1, 13 and 15, where ICU breaks at 2 too",
+	},
+	{
+		Name: "MinimizeLength", Flag: MinimizeLength,
+		Area: "Locale",
+		What: "Intl.Locale.prototype.minimize where the minimal tag's ICU base name is as long as the locale's",
+		Standard: "the Remove Likely Subtags of UTS #35, as ICU's minimizeSubtags answers it: " +
+			"\"und-Hant\" is \"zh-TW\"",
+		Node: "the standard's",
+		Chrome: "V8 before 14.4, Chrome before 144, takes the base name for unchanged when its length is, " +
+			"and answers the locale it was given: \"und-Hant\", whose base name \"_Hant\" is as long as \"zh_TW\"",
+	},
+	{
+		Name: "NarrowSpaceParts", Flag: NarrowSpaceParts,
+		Area: "DateTimeFormat",
+		What: "the narrow no-break space before a day period in formatToParts, and in formatRangeToParts " +
+			"of a range that is one moment, where V8 replaces it elsewhere (NarrowSpace)",
+		Standard: "ICU's U+202F, in every method: \"3:04\u202fPM\"",
+		Node:     "a plain space in every method, as NarrowSpace has it",
+		Chrome: "Chrome before 144, whose V8 ships no Temporal, formats parts through FormatMillisecondsToArray, " +
+			"which does not call Replace202F: format and formatRange write \"3:04 PM\", and formatToParts " +
+			"a literal \"\u202f\"",
+	},
+	{
+		Name: "HourCycleStyleTimes", Flag: HourCycleStyleTimes,
+		Area: "DateTimeFormat",
+		What: "the time styles the pattern generator of a range format starts from, which V8 makes in the " +
+			"locale with the formatter's hour cycle as -u-hc",
+		Standard: "the locale's time styles as its data gives them, as ICU from 76 adds them: Bulgarian's " +
+			"short time is \"H:mm\", so a range across days ends \"7.02.2024 \u0433., 9:00\"",
+		Node: "the standard's",
+		Chrome: "ICU before 76, Chrome before 143, adds them through DateFormat::createTimeInstance, which " +
+			"for a locale with -u-hc makes each from the available formats: \"HH:mm '\u0447'.\", so the " +
+			"range ends \"7.02.2024 \u0433., 09:00 \u0447.\"",
 	},
 }
 
