@@ -1,12 +1,11 @@
 // Command unitgen writes the measurement tables the intl package carries.
 //
-// It reads CLDR's cldr-units-full package, which is not vendored: SOURCES.md
-// pins the release and its checksum, and the path to an unpacked copy is given
-// here.
+// It reads ICU's unit bundles, data/unit/*.txt in the data archive
+// SOURCES.md pins: each locale's units as ICU resolves them.
 //
-//	curl -sLO https://registry.npmjs.org/cldr-units-full/-/cldr-units-full-48.0.0.tgz
-//	tar xzf cldr-units-full-48.0.0.tgz
-//	go run ./internal/unitgen package
+//	go run ./internal/unitgen [-seed pool.bin] icu4c-78.3-data.zip
+//
+// -seed numbers the pool's parts after an earlier pool's (datawrite.NewPool).
 //
 // Only the units ECMA-402 sanctions are written. CLDR carries 268 of them and
 // ECMA-402 allows 45, chosen because every language has a name for each, so
@@ -15,21 +14,22 @@
 package main
 
 import (
-	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/go-quickjs/go-intl/internal/blob"
 	"github.com/go-quickjs/go-intl/internal/datawrite"
+	"github.com/go-quickjs/go-intl/internal/icusrc"
 	"github.com/go-quickjs/go-intl/internal/unitdata"
 	"github.com/go-quickjs/go-intl/internal/writeset"
 )
 
 // sanctioned maps ECMA-402's name for a unit to CLDR's, which carries the
-// category it belongs to. The mapping is written out rather than guessed from
+// category it belongs to: ICU keeps the unit under its category,
+// units/length/foot. The mapping is written out rather than guessed from
 // the suffix, because the suffix is ambiguous: "meter" ends the key of a
 // length, an area, a volume and a torque.
 var sanctioned = map[string]string{
@@ -66,51 +66,51 @@ var sanctioned = map[string]string{
 	"mile-per-gallon":     "consumption-mile-per-gallon",
 }
 
-var widthNames = [unitdata.Widths]string{"long", "short", "narrow"}
+// widthNames are ICU's tables of each width, in unitdata's order.
+var widthNames = [unitdata.Widths]string{"units", "unitsShort", "unitsNarrow"}
 
-type file struct {
-	Main map[string]struct {
-		Units map[string]json.RawMessage `json:"units"`
-	} `json:"main"`
-}
+// notCounts are the keys of a unit's table that are not a plural category's
+// pattern: its display name, its per-unit pattern, and its gender.
+var notCounts = map[string]bool{"dnam": true, "per": true, "gender": true}
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/unitgen <cldr-units-full/package>")
+	seed := flag.String("seed", "", "a pool to number the parts after")
+	flag.Parse()
+	if flag.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/unitgen [-seed pool.bin] <icu4c-78.3-data.zip>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1]); err != nil {
+	if err := run(flag.Arg(0), *seed); err != nil {
 		fmt.Fprintln(os.Stderr, "unitgen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(root string) error {
-	main := filepath.Join(root, "main")
-	entries, err := os.ReadDir(main)
+func run(zip, seed string) error {
+	units, err := icusrc.OpenTree(zip, "unit")
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", main, err)
+		return err
 	}
-
-	built := map[string][]byte{}
-	// The locales share one pool, written beside them. ReadDir's order is
-	// sorted, so the pool is the same every run.
-	pool := blob.NewPool(unitdata.Version)
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		l, err := read(main, e.Name())
-		if err != nil {
-			return fmt.Errorf("%s: %w", e.Name(), err)
-		}
-		if l == nil {
-			continue
-		}
-		built[e.Name()] = unitdata.Encode(l, pool)
+	defer units.Close()
+	fb, err := icusrc.ICUFallback()
+	if err != nil {
+		return err
 	}
-	if len(built) == 0 {
-		return fmt.Errorf("no locales found under %s", main)
+	// The locales share one pool, written beside them. EachLocale visits
+	// the bundles in order, so the pool is the same every run.
+	pool, err := datawrite.NewPool(unitdata.Version, seed)
+	if err != nil {
+		return err
+	}
+	built, err := icusrc.EachLocale(units, fb, func(v *icusrc.View) ([]byte, error) {
+		l, err := read(v)
+		if err != nil || l == nil {
+			return nil, err
+		}
+		return unitdata.Encode(l, pool), nil
+	})
+	if err != nil {
+		return err
 	}
 
 	set := writeset.New()
@@ -125,51 +125,36 @@ func run(root string) error {
 	return nil
 }
 
-func read(main, name string) (*unitdata.Built, error) {
-	raw, err := os.ReadFile(filepath.Join(main, name, "units.json"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var f file
-	if err := json.Unmarshal(raw, &f); err != nil {
-		return nil, fmt.Errorf("units.json: %w", err)
-	}
-	entry, ok := f.Main[name]
-	if !ok {
-		return nil, nil
-	}
-
+func read(v *icusrc.View) (*unitdata.Built, error) {
 	var out unitdata.Built
 	any := false
 	for i, width := range widthNames {
-		body, ok := entry.Units[width]
-		if !ok {
-			continue
-		}
-		var byUnit map[string]map[string]string
-		if err := json.Unmarshal(body, &byUnit); err != nil {
-			return nil, fmt.Errorf("%s: %w", width, err)
-		}
 		w := &out.Widths[i]
-		if per, ok := byUnit["per"]; ok {
-			w.Compound = per["compoundUnitPattern"]
+		per, err := v.Get(width, "compound", "per")
+		if err != nil {
+			return nil, err
+		}
+		if per != nil {
+			w.Compound = per.Value
 		}
 		for short, key := range sanctioned {
-			fields, ok := byUnit[key]
-			if !ok {
+			category, name, _ := strings.Cut(key, "-")
+			fields, err := v.Get(width, category, name)
+			if err != nil {
+				return nil, err
+			}
+			if fields == nil {
 				continue
 			}
-			u := unitdata.Unit{Name: short, PerUnit: fields["perUnitPattern"]}
-			for field, text := range fields {
-				count, ok := strings.CutPrefix(field, "unitPattern-count-")
-				if !ok || text == "" {
+			u := unitdata.Unit{Name: short}
+			if p := fields.Get("per"); p != nil {
+				u.PerUnit = p.Value
+			}
+			for _, f := range fields.Children {
+				if f.Table || notCounts[f.Key] || f.Value == "" {
 					continue
 				}
-				u.Patterns = append(u.Patterns,
-					unitdata.CountedText{Count: count, Text: text})
+				u.Patterns = append(u.Patterns, unitdata.CountedText{Count: f.Key, Text: f.Value})
 			}
 			if len(u.Patterns) == 0 {
 				continue
