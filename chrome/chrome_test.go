@@ -39,9 +39,9 @@ func TestCompat(t *testing.T) {
 		version  string
 		has, not intl.Compat
 	}{
-		{"142", intl.NarrowSpace | intl.RoundingWindow, intl.DurationOverflow | intl.CurrencyNames | intl.ThinSpace},
-		{"146", intl.DurationOverflow | intl.PlainValueZone, intl.ThinSpace},
-		{"148.0.7778.169", intl.ThinSpace | intl.ISOMonthNames | intl.RoundingWindow, intl.PlainValueZone},
+		{"142", intl.NarrowSpace | intl.RoundingWindow | intl.AmeteMihretExtendedYear, intl.DurationOverflow | intl.CurrencyNames | intl.ThinSpace},
+		{"146", intl.DurationOverflow | intl.PlainValueZone | intl.AmeteMihretExtendedYear, intl.ThinSpace},
+		{"148.0.7778.169", intl.ThinSpace | intl.ISOMonthNames | intl.RoundingWindow, intl.PlainValueZone | intl.AmeteMihretExtendedYear},
 		{"148.0.7778.218", intl.ThinSpace | intl.RoundingWindow, intl.ISOMonthNames | intl.PlainValueZone},
 		{"150", intl.ThinSpace, intl.ISOMonthNames | intl.RoundingWindow | intl.RepeatedMidnight},
 		{"155", intl.ThinSpace, intl.SubdivisionHourCycles},

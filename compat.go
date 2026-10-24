@@ -34,7 +34,8 @@ import (
 // empty items of a list, the hour cycle keyword a time style is made with,
 // what Intl.Locale answers for a keyword with no value, and a text
 // direction no one knows. Standard and NodeICU are the two ends. A
-// browser's divergences that Node does not share, ThinSpace, are in neither
+// browser's divergences that Node does not share, ThinSpace, ISOMonthNames
+// and AmeteMihretExtendedYear, are in neither
 // NodeICU nor Standard: a profile of the browser chooses them.
 //
 // The rule that keeps this honest is that every divergence is a named,
@@ -180,6 +181,10 @@ const (
 	// ISOMonthNames writes no name for a month of the ISO 8601 calendar, as
 	// Chrome 148 does.
 	ISOMonthNames
+	// AmeteMihretExtendedYear reckons the Ethiopic Amete Alem calendar's
+	// extended year, and so its week-based year, in Amete Mihret years, as
+	// ICU before 78 does.
+	AmeteMihretExtendedYear
 )
 
 const (
@@ -628,6 +633,16 @@ var divergences = []Divergence{
 		Chrome: "Chrome 148's V8, over ICU 78 data that gives the ISO 8601 calendar no era rules, " +
 			"writes none at any width, though its ICU's code and data are Node's there: " +
 			"\"1900  1, Thursday\"; from 148.0.7778.178 Chromium patches the rules in, and it writes them",
+	},
+	{
+		Name: "AmeteMihretExtendedYear", Flag: AmeteMihretExtendedYear,
+		Area: "DateTimeFormat",
+		What: "the week-based year (\"Y\") of the Ethiopic Amete Alem calendar",
+		Standard: "the calendar's own year, as UTS #35 counts a week-based year and ICU 78 " +
+			"reckons it: Telugu's \"MMMM YYYY\" writes 1 January 1970 \"\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 7462\"",
+		Node: "the standard's",
+		Chrome: "Chrome before 148, over ICU 77 and before, whose EthiopicAmeteAlemCalendar keeps the " +
+			"extended year it counts weeks in as the Amete Mihret one: \"\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 1962\"",
 	},
 }
 

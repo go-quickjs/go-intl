@@ -150,5 +150,9 @@ func compatOf(major int, pin string) intl.Compat {
 	if major >= 148 && noISOEraRules[pin] {
 		c |= intl.ISOMonthNames
 	}
+	// Chrome 148 is the first over ICU 78.
+	if major < 148 {
+		c |= intl.AmeteMihretExtendedYear
+	}
 	return c
 }

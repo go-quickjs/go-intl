@@ -131,6 +131,36 @@ func TestISOMonthNamesByProfile(t *testing.T) {
 	}
 }
 
+// ICU before 78 counts the Amete Alem calendar's weeks in Amete Mihret
+// years, which Telugu's "MMMM YYYY" shows; the standard, and Node, count
+// them in the calendar's own.
+func TestAmeteMihretExtendedYearByProfile(t *testing.T) {
+	when := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		compat intl.Compat
+		want   string
+	}{
+		{intl.Standard, "\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 7462"},
+		{intl.NodeICU, "\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 7462"},
+		{intl.NodeICU | intl.AmeteMihretExtendedYear, "\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 1962"},
+	} {
+		f := newDateTime(t, "te", intl.DateTimeFormatOptions{
+			Calendar: "ethioaa", TimeZone: "UTC", Year: intl.WidthNumeric, Month: intl.WidthLong, Compat: c.compat,
+		})
+		if got := f.Format(when); got != c.want {
+			t.Errorf("%v: %+q, want %+q", c.compat, got, c.want)
+		}
+	}
+	// The flag touches no other calendar.
+	f := newDateTime(t, "te", intl.DateTimeFormatOptions{
+		Calendar: "ethiopic", TimeZone: "UTC", Year: intl.WidthNumeric, Month: intl.WidthLong,
+		Compat: intl.NodeICU | intl.AmeteMihretExtendedYear,
+	})
+	if got, want := f.Format(when), "\u0c24\u0c39\u0c38\u0c3e\u0c38\u0c4d 1962"; got != want {
+		t.Errorf("ethiopic: %+q, want %+q", got, want)
+	}
+}
+
 // V8 writes a plain space wherever ICU writes a narrow no-break one; the
 // standard profile keeps CLDR's character.
 func TestNarrowNoBreakSpaceByProfile(t *testing.T) {

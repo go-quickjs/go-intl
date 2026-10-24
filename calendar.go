@@ -239,6 +239,10 @@ func reckon(t time.Time, system CalendarSystem, rules calendarRules) dateParts {
 		switch {
 		case system == EthiopicAmeteAlem:
 			p.year, p.era = eyear, 0
+			if rules.ameteMihret {
+				// ICU 77's EthiopicAmeteAlemCalendar::handleComputeFields.
+				p.extYear = eyear - ameteMihretDiff
+			}
 		case system == Ethiopic && eyear <= 0:
 			p.year, p.era = eyear+ameteMihretDiff, 0
 		case system == Coptic && eyear <= 0:
@@ -352,6 +356,9 @@ type calendarRules struct {
 	// Temporal reckons with; nil where ICU4C's astronomy reckons them
 	// (ChineseAstronomy).
 	eastAsian *eastasian.Rules
+	// ameteMihret is that the Amete Alem calendar's extended year is the
+	// Amete Mihret one (AmeteMihretExtendedYear).
+	ameteMihret bool
 }
 
 // loadEastAsian reads ICU4X's rules for the Chinese calendar or Dangi.
