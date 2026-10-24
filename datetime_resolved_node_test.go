@@ -1,8 +1,6 @@
 package intl_test
 
 import (
-	"bufio"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,78 +16,60 @@ import (
 // resolvedOptions reports, the fields read from the pattern among it. The
 // expectations are written by testdata/datetime_resolved_node.js.
 func TestDateTimeResolvedMatchesNode(t *testing.T) {
-	f, err := os.Open("testdata/datetime_resolved_node.txt.gz")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	z, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := bufio.NewScanner(z)
-	s.Buffer(make([]byte, 1<<20), 1<<20)
+	replay(t, "testdata/datetime_resolved_node.txt.gz", func(t *testing.T, r recording) {
 
-	var ran, matched int
-	var differences []string
-	for s.Scan() {
-		line := s.Text()
-		if strings.HasPrefix(line, "#") {
-			if !strings.HasSuffix(line, "ICU 78.3") {
-				t.Fatalf("the expectations come from %q, not ICU 78.3", line)
+		var ran, matched int
+		var differences []string
+		for _, line := range r.lines {
+			var c struct {
+				tag  string
+				opts map[string]any
+				want map[string]any
 			}
-			continue
-		}
-		var c struct {
-			tag  string
-			opts map[string]any
-			want map[string]any
-		}
-		var fields []json.RawMessage
-		if err := json.Unmarshal([]byte(line), &fields); err != nil || len(fields) != 3 {
-			t.Fatalf("a line that is not three fields: %s", line)
-		}
-		for i, dst := range []any{&c.tag, &c.opts, &c.want} {
-			if err := json.Unmarshal(fields[i], dst); err != nil {
-				t.Fatalf("%s: field %d: %v", line, i, err)
+			var fields []json.RawMessage
+			if err := json.Unmarshal([]byte(line), &fields); err != nil || len(fields) != 3 {
+				t.Fatalf("a line that is not three fields: %s", line)
 			}
-		}
-		ran++
+			for i, dst := range []any{&c.tag, &c.opts, &c.want} {
+				if err := json.Unmarshal(fields[i], dst); err != nil {
+					t.Fatalf("%s: field %d: %v", line, i, err)
+				}
+			}
+			ran++
 
-		opts, err := dateTimeOptions(c.opts)
-		if err != nil {
-			t.Fatalf("%s: %v", line, err)
+			opts, err := dateTimeOptions(c.opts)
+			if err != nil {
+				t.Fatalf("%s: %v", line, err)
+			}
+			loc, err := intl.ParseLocale(c.tag)
+			if err != nil {
+				t.Fatalf("%s: %v", line, err)
+			}
+			var got any
+			opts.Compat = r.compatFor(opts.Compat)
+			if dtf, err := intl.NewDateTimeFormatFrom(r.src, loc, opts); err != nil {
+				got = err.Error()
+			} else {
+				got = normalizeJSON(resolvedAsNode(dtf.ResolvedOptions()))
+			}
+			if reflect.DeepEqual(got, any(c.want)) {
+				matched++
+				continue
+			}
+			gotText, _ := json.Marshal(got)
+			differences = append(differences, fmt.Sprintf("%s %s\n   got  %s\n   want %s",
+				c.tag, fields[1], gotText, fields[2]))
 		}
-		loc, err := intl.ParseLocale(c.tag)
-		if err != nil {
-			t.Fatalf("%s: %v", line, err)
+		t.Logf("%d of %d match %s exactly", matched, ran, r.who)
+		if len(differences) > 0 {
+			sort.Strings(differences)
+			shown := differences
+			if len(shown) > 25 && os.Getenv("ALLDIFF") == "" {
+				shown = shown[:25]
+			}
+			t.Errorf("%d differences:\n%s", len(differences), strings.Join(shown, "\n"))
 		}
-		var got any
-		if dtf, err := intl.NewDateTimeFormat(loc, opts); err != nil {
-			got = err.Error()
-		} else {
-			got = normalizeJSON(resolvedAsNode(dtf.ResolvedOptions()))
-		}
-		if reflect.DeepEqual(got, any(c.want)) {
-			matched++
-			continue
-		}
-		gotText, _ := json.Marshal(got)
-		differences = append(differences, fmt.Sprintf("%s %s\n   got  %s\n   want %s",
-			c.tag, fields[1], gotText, fields[2]))
-	}
-	if err := s.Err(); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%d of %d match Node exactly", matched, ran)
-	if len(differences) > 0 {
-		sort.Strings(differences)
-		shown := differences
-		if len(shown) > 25 && os.Getenv("ALLDIFF") == "" {
-			shown = shown[:25]
-		}
-		t.Errorf("%d differences:\n%s", len(differences), strings.Join(shown, "\n"))
-	}
+	})
 }
 
 // resolvedAsNode is what resolvedOptions makes of a formatter's resolved

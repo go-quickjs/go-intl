@@ -1,11 +1,8 @@
 package intl_test
 
 import (
-	"bufio"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -97,159 +94,142 @@ var durationLocaleGaps = map[string]string{}
 
 // TestDurationFormatMatchesNode replays testdata/duration_node.js.
 func TestDurationFormatMatchesNode(t *testing.T) {
-	f, err := os.Open("testdata/duration_node.txt.gz")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	z, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := bufio.NewScanner(z)
-	s.Buffer(make([]byte, 1<<20), 1<<20)
-	// Each locale is resolved among DurationFormat's available locales, as a
-	// host does before building the formatter, with Node's default.
-	matcher, err := intl.NewLocaleMatcher(intl.Embedded, intl.ServiceDurationFormat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	def, _ := intl.ParseLocale("en-US")
-	// The lines come grouped by formatter, so only the last is kept.
-	type key struct{ locale, options string }
-	var last key
-	var df *intl.DurationFormat
-	var dfErr error
-	var ran, matched, gaps int
-	gapPasses, gapFails := map[string]int{}, map[string]int{}
-	localeFails := map[string]int{}
-	var diffs []string
-	for s.Scan() {
-		line := s.Text()
-		if strings.HasPrefix(line, "#") {
-			if !strings.HasSuffix(line, "ICU 78.3") {
-				t.Fatalf("the expectations come from %q, not ICU 78.3", line)
-			}
-			continue
-		}
-		var c []json.RawMessage
-		if err := json.Unmarshal([]byte(line), &c); err != nil || len(c) != 5 {
-			t.Fatalf("a line that is not five fields: %s", line)
-		}
-		var locale string
-		var raw map[string]any
-		json.Unmarshal(c[0], &locale)
-		json.Unmarshal(c[1], &raw)
-		if k := (key{locale, string(c[1])}); k != last {
-			loc, err := intl.ParseLocale(locale)
-			if err != nil {
-				t.Fatal(err)
-			}
-			loc = matcher.Resolve([]intl.Locale{loc}, intl.BestFit, def)
-			df, dfErr = intl.NewDurationFormat(loc, durationOptions(t, raw))
-			last = k
-		}
-		ran++
-		if string(c[2]) == "null" {
-			// Node refused the options.
-			if dfErr == nil {
-				diffs = append(diffs, fmt.Sprintf("%s %s: accepted, Node throws", locale, c[1]))
-			} else {
-				matched++
-			}
-			continue
-		}
-		if dfErr != nil {
-			diffs = append(diffs, fmt.Sprintf("%s %s: %v", locale, c[1], dfErr))
-			continue
-		}
-		fail := func(text string) {
-			if _, gap := durationLocaleGaps[locale]; gap {
-				localeFails[locale]++
-				gaps++
-				ran--
-				return
-			}
-			diffs = append(diffs, text)
-		}
-		var want map[string]any
-		json.Unmarshal(c[4], &want)
-		got := resolvedDuration(df.ResolvedOptions())
-		gotJSON, _ := json.Marshal(got)
-		wantJSON, _ := json.Marshal(want)
-		if string(gotJSON) != string(wantJSON) {
-			fail(fmt.Sprintf("%s %s resolved:\n\t\tgot  %s\n\t\twant %s", locale, c[1], gotJSON, wantJSON))
-			continue
-		}
-
-		// An empty duration is refused by the JavaScript that reads it, a
-		// TypeError, before any formatting.
-		if string(c[2]) == "{}" {
-			ran--
-			continue
-		}
-		var amounts map[string]float64
-		json.Unmarshal(c[2], &amounts)
-		var d intl.Duration
-		for i, name := range durationUnitNames {
-			d[i] = amounts[name]
-		}
-		parts, err := df.FormatToParts(d)
-		gotParts := [][3]string{}
-		for _, p := range parts {
-			gotParts = append(gotParts, [3]string{string(p.Kind), p.Value, p.Unit})
-		}
-		gotText, _ := json.Marshal(gotParts)
+	replay(t, "testdata/duration_node.txt.gz", func(t *testing.T, r recording) {
+		// Each locale is resolved among DurationFormat's available locales, as a
+		// host does before building the formatter, with Node's default.
+		matcher, err := intl.NewLocaleMatcher(r.src, intl.ServiceDurationFormat)
 		if err != nil {
-			gotText = []byte("error: " + err.Error())
+			t.Fatal(err)
 		}
-		var wantParts [][3]string
-		json.Unmarshal(c[3], &wantParts)
-		wantText, _ := json.Marshal(wantParts)
-		if string(c[3]) == "null" {
-			wantText = []byte("an error")
-		}
-		same := string(gotText) == string(wantText) || err != nil && string(c[3]) == "null"
-		gap := false
-		for _, g := range durationGaps {
-			if g.duration == string(c[2]) {
-				gap = true
-				if same {
-					gapPasses[g.duration]++
+		def, _ := intl.ParseLocale("en-US")
+		// The lines come grouped by formatter, so only the last is kept.
+		type key struct{ locale, options string }
+		var last key
+		var df *intl.DurationFormat
+		var dfErr error
+		var ran, matched, gaps int
+		gapPasses, gapFails := map[string]int{}, map[string]int{}
+		localeFails := map[string]int{}
+		var diffs []string
+		for _, line := range r.lines {
+			var c []json.RawMessage
+			if err := json.Unmarshal([]byte(line), &c); err != nil || len(c) != 5 {
+				t.Fatalf("a line that is not five fields: %s", line)
+			}
+			var locale string
+			var raw map[string]any
+			json.Unmarshal(c[0], &locale)
+			json.Unmarshal(c[1], &raw)
+			if k := (key{locale, string(c[1])}); k != last {
+				loc, err := intl.ParseLocale(locale)
+				if err != nil {
+					t.Fatal(err)
+				}
+				loc = matcher.Resolve([]intl.Locale{loc}, intl.BestFit, def)
+				o := durationOptions(t, raw)
+				o.Compat = r.compatFor(o.Compat)
+				df, dfErr = intl.NewDurationFormatFrom(r.src, loc, o)
+				last = k
+			}
+			ran++
+			if string(c[2]) == "null" {
+				// Node refused the options.
+				if dfErr == nil {
+					diffs = append(diffs, fmt.Sprintf("%s %s: accepted, Node throws", locale, c[1]))
 				} else {
-					gapFails[g.duration]++
+					matched++
+				}
+				continue
+			}
+			if dfErr != nil {
+				diffs = append(diffs, fmt.Sprintf("%s %s: %v", locale, c[1], dfErr))
+				continue
+			}
+			fail := func(text string) {
+				if _, gap := durationLocaleGaps[locale]; gap {
+					localeFails[locale]++
+					gaps++
+					ran--
+					return
+				}
+				diffs = append(diffs, text)
+			}
+			var want map[string]any
+			json.Unmarshal(c[4], &want)
+			got := resolvedDuration(df.ResolvedOptions())
+			gotJSON, _ := json.Marshal(got)
+			wantJSON, _ := json.Marshal(want)
+			if string(gotJSON) != string(wantJSON) {
+				fail(fmt.Sprintf("%s %s resolved:\n\t\tgot  %s\n\t\twant %s", locale, c[1], gotJSON, wantJSON))
+				continue
+			}
+
+			// An empty duration is refused by the JavaScript that reads it, a
+			// TypeError, before any formatting.
+			if string(c[2]) == "{}" {
+				ran--
+				continue
+			}
+			var amounts map[string]float64
+			json.Unmarshal(c[2], &amounts)
+			var d intl.Duration
+			for i, name := range durationUnitNames {
+				d[i] = amounts[name]
+			}
+			parts, err := df.FormatToParts(d)
+			gotParts := [][3]string{}
+			for _, p := range parts {
+				gotParts = append(gotParts, [3]string{string(p.Kind), p.Value, p.Unit})
+			}
+			gotText, _ := json.Marshal(gotParts)
+			if err != nil {
+				gotText = []byte("error: " + err.Error())
+			}
+			var wantParts [][3]string
+			json.Unmarshal(c[3], &wantParts)
+			wantText, _ := json.Marshal(wantParts)
+			if string(c[3]) == "null" {
+				wantText = []byte("an error")
+			}
+			same := string(gotText) == string(wantText) || err != nil && string(c[3]) == "null"
+			gap := false
+			for _, g := range durationGaps {
+				if g.duration == string(c[2]) {
+					gap = true
+					if same {
+						gapPasses[g.duration]++
+					} else {
+						gapFails[g.duration]++
+					}
 				}
 			}
+			if gap {
+				gaps++
+				ran--
+				continue
+			}
+			if same {
+				matched++
+				continue
+			}
+			fail(fmt.Sprintf("%s %s %s:\n\t\tgot  %s\n\t\twant %s", locale, c[1], c[2], gotText, wantText))
 		}
-		if gap {
-			gaps++
-			ran--
-			continue
+		t.Logf("%d of %d match Node; %d left out as known gaps", matched, ran, gaps)
+		for tag := range durationLocaleGaps {
+			if localeFails[tag] == 0 {
+				t.Errorf("the locale gap %s no longer differs; remove it", tag)
+			}
 		}
-		if same {
-			matched++
-			continue
+		for d, n := range gapPasses {
+			if gapFails[d] == 0 {
+				t.Errorf("the gap %s passes in all %d cases; remove it", d, n)
+			}
 		}
-		fail(fmt.Sprintf("%s %s %s:\n\t\tgot  %s\n\t\twant %s", locale, c[1], c[2], gotText, wantText))
-	}
-	if err := s.Err(); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%d of %d match Node; %d left out as known gaps", matched, ran, gaps)
-	for tag := range durationLocaleGaps {
-		if localeFails[tag] == 0 {
-			t.Errorf("the locale gap %s no longer differs; remove it", tag)
+		if len(diffs) > 0 {
+			if len(diffs) > 25 {
+				diffs = diffs[:25]
+			}
+			t.Errorf("%d differ, the first:\n\t%s", ran-matched, strings.Join(diffs, "\n\t"))
 		}
-	}
-	for d, n := range gapPasses {
-		if gapFails[d] == 0 {
-			t.Errorf("the gap %s passes in all %d cases; remove it", d, n)
-		}
-	}
-	if len(diffs) > 0 {
-		if len(diffs) > 25 {
-			diffs = diffs[:25]
-		}
-		t.Errorf("%d differ, the first:\n\t%s", ran-matched, strings.Join(diffs, "\n\t"))
-	}
+	})
 }

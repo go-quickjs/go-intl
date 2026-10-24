@@ -1,12 +1,9 @@
 package intl_test
 
 import (
-	"bufio"
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -24,135 +21,117 @@ var numberingGaps = map[string]string{}
 // by keyword and by option in locales that do and do not have it, to what
 // Node writes. The expectations are written by testdata/numbering_node.js.
 func TestNumberingSystemsMatchNode(t *testing.T) {
-	f, err := os.Open(filepath.FromSlash("testdata/numbering_node.txt.gz"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	z, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := bufio.NewScanner(z)
-	s.Buffer(make([]byte, 1<<20), 1<<20)
+	replay(t, "testdata/numbering_node.txt.gz", func(t *testing.T, r recording) {
 
-	var ran, matched, gaps int
-	var differences []string
-	var (
-		lastKey string
-		lastNF  *intl.NumberFormat
-		lastErr error
-	)
-	for s.Scan() {
-		line := s.Text()
-		if strings.HasPrefix(line, "#") {
-			if !strings.HasSuffix(line, "ICU 78.3") {
-				t.Fatalf("the expectations come from %q, not ICU 78.3", line)
+		var ran, matched, gaps int
+		var differences []string
+		var (
+			lastKey string
+			lastNF  *intl.NumberFormat
+			lastErr error
+		)
+		for _, line := range r.lines {
+			var c struct {
+				Service, Tag string
+				Opts         map[string]any
+				Value        float64
+				Want         string
+				Locale, Nu   string
 			}
-			continue
-		}
-		var c struct {
-			Service, Tag string
-			Opts         map[string]any
-			Value        float64
-			Want         string
-			Locale, Nu   string
-		}
-		var fields []json.RawMessage
-		if err := json.Unmarshal([]byte(line), &fields); err != nil || len(fields) != 7 {
-			t.Fatalf("a line that is not seven fields: %s", line)
-		}
-		for i, dst := range []any{&c.Service, &c.Tag, &c.Opts, &c.Value, &c.Want, &c.Locale, &c.Nu} {
-			if err := json.Unmarshal(fields[i], dst); err != nil {
-				t.Fatalf("%s: field %d: %v", line, i, err)
+			var fields []json.RawMessage
+			if err := json.Unmarshal([]byte(line), &fields); err != nil || len(fields) != 7 {
+				t.Fatalf("a line that is not seven fields: %s", line)
 			}
-		}
-		loc, err := intl.ParseLocale(c.Tag)
-		if err != nil {
-			t.Fatalf("%s: %v", c.Tag, err)
-		}
-		nu, _ := c.Opts["numberingSystem"].(string)
-		name := fmt.Sprintf("%s %s %v %v", c.Service, c.Tag, c.Opts, c.Value)
-
-		var got, gotLocale, gotNu string
-		switch c.Service {
-		case "NumberFormat":
-			// The cases come three values to a formatter, in a row.
-			key := string(fields[1]) + string(fields[2])
-			nf, err := lastNF, lastErr
-			if key != lastKey {
-				opts := intl.NumberFormatOptions{NumberingSystem: nu}
-				if err := numberOptionsFromMap(c.Opts, &opts); err != nil {
-					t.Fatalf("%s: %v", name, err)
+			for i, dst := range []any{&c.Service, &c.Tag, &c.Opts, &c.Value, &c.Want, &c.Locale, &c.Nu} {
+				if err := json.Unmarshal(fields[i], dst); err != nil {
+					t.Fatalf("%s: field %d: %v", line, i, err)
 				}
-				nf, err = intl.NewNumberFormat(loc, opts)
-				lastKey, lastNF, lastErr = key, nf, err
 			}
+			loc, err := intl.ParseLocale(c.Tag)
 			if err != nil {
-				differences = append(differences, name+": "+err.Error())
-				ran++
+				t.Fatalf("%s: %v", c.Tag, err)
+			}
+			nu, _ := c.Opts["numberingSystem"].(string)
+			name := fmt.Sprintf("%s %s %v %v", c.Service, c.Tag, c.Opts, c.Value)
+
+			var got, gotLocale, gotNu string
+			switch c.Service {
+			case "NumberFormat":
+				// The cases come three values to a formatter, in a row.
+				key := string(fields[1]) + string(fields[2])
+				nf, err := lastNF, lastErr
+				if key != lastKey {
+					opts := intl.NumberFormatOptions{NumberingSystem: nu}
+					if err := numberOptionsFromMap(c.Opts, &opts); err != nil {
+						t.Fatalf("%s: %v", name, err)
+					}
+					opts.Compat = r.compatFor(opts.Compat)
+					nf, err = intl.NewNumberFormatFrom(r.src, loc, opts)
+					lastKey, lastNF, lastErr = key, nf, err
+				}
+				if err != nil {
+					differences = append(differences, name+": "+err.Error())
+					ran++
+					continue
+				}
+				got = nf.Format(c.Value)
+				r := nf.ResolvedOptions()
+				gotLocale, gotNu = r.Locale, r.NumberingSystem
+			case "DateTimeFormat":
+				dtf, err := intl.NewDateTimeFormatFrom(r.src, loc, intl.DateTimeFormatOptions{
+					TimeZone: "UTC", DateStyle: intl.LengthShort, TimeStyle: intl.LengthMedium,
+					NumberingSystem: nu, Compat: r.compatFor(intl.NodeICU),
+				})
+				if err != nil {
+					differences = append(differences, name+": "+err.Error())
+					ran++
+					continue
+				}
+				got = dtf.Format(time.UnixMilli(int64(c.Value)).UTC())
+				r := dtf.ResolvedOptions()
+				gotLocale, gotNu = r.Locale, r.NumberingSystem
+			case "RelativeTimeFormat":
+				rtf, err := intl.NewRelativeTimeFormatFrom(r.src, loc, intl.RelativeTimeFormatOptions{NumberingSystem: nu, Compat: r.compatFor(intl.Standard)})
+				if err != nil {
+					differences = append(differences, name+": "+err.Error())
+					ran++
+					continue
+				}
+				got = rtf.Format(c.Value, intl.RelativeDay)
+				r := rtf.ResolvedOptions()
+				gotLocale, gotNu = r.Locale, r.NumberingSystem
+			default:
+				t.Fatalf("a %s case", c.Service)
+			}
+			ok := got == c.Want && gotLocale == c.Locale && gotNu == c.Nu
+			// A gap is about the locale's own calendar, so a case that names
+			// another is not in it.
+			why, gap := numberingGaps[c.Service+" "+strings.Split(c.Tag, "-u-")[0]]
+			if gap && !strings.Contains(c.Tag, "-ca-") {
+				if ok {
+					differences = append(differences, fmt.Sprintf("%s: passes, so %q is no longer a gap", name, why))
+				}
+				gaps++
 				continue
 			}
-			got = nf.Format(c.Value)
-			r := nf.ResolvedOptions()
-			gotLocale, gotNu = r.Locale, r.NumberingSystem
-		case "DateTimeFormat":
-			dtf, err := intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
-				TimeZone: "UTC", DateStyle: intl.LengthShort, TimeStyle: intl.LengthMedium,
-				NumberingSystem: nu, Compat: intl.NodeICU,
-			})
-			if err != nil {
-				differences = append(differences, name+": "+err.Error())
-				ran++
-				continue
-			}
-			got = dtf.Format(time.UnixMilli(int64(c.Value)).UTC())
-			r := dtf.ResolvedOptions()
-			gotLocale, gotNu = r.Locale, r.NumberingSystem
-		case "RelativeTimeFormat":
-			rtf, err := intl.NewRelativeTimeFormat(loc, intl.RelativeTimeFormatOptions{NumberingSystem: nu})
-			if err != nil {
-				differences = append(differences, name+": "+err.Error())
-				ran++
-				continue
-			}
-			got = rtf.Format(c.Value, intl.RelativeDay)
-			r := rtf.ResolvedOptions()
-			gotLocale, gotNu = r.Locale, r.NumberingSystem
-		default:
-			t.Fatalf("a %s case", c.Service)
-		}
-		ok := got == c.Want && gotLocale == c.Locale && gotNu == c.Nu
-		// A gap is about the locale's own calendar, so a case that names
-		// another is not in it.
-		why, gap := numberingGaps[c.Service+" "+strings.Split(c.Tag, "-u-")[0]]
-		if gap && !strings.Contains(c.Tag, "-ca-") {
+			ran++
 			if ok {
-				differences = append(differences, fmt.Sprintf("%s: passes, so %q is no longer a gap", name, why))
+				matched++
+				continue
 			}
-			gaps++
-			continue
+			differences = append(differences, fmt.Sprintf("%s\n   got  %+q %s %s\n   want %+q %s %s",
+				name, got, gotLocale, gotNu, c.Want, c.Locale, c.Nu))
 		}
-		ran++
-		if ok {
-			matched++
-			continue
+		t.Logf("%d of %d match %s exactly; %d left out as known gaps", matched, ran, r.who, gaps)
+		if len(differences) > 0 {
+			sort.Strings(differences)
+			shown := differences
+			if len(shown) > 25 && os.Getenv("ALLDIFF") == "" {
+				shown = shown[:25]
+			}
+			t.Errorf("%d differences:\n%s", len(differences), strings.Join(shown, "\n"))
 		}
-		differences = append(differences, fmt.Sprintf("%s\n   got  %+q %s %s\n   want %+q %s %s",
-			name, got, gotLocale, gotNu, c.Want, c.Locale, c.Nu))
-	}
-	if err := s.Err(); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%d of %d match Node exactly; %d left out as known gaps", matched, ran, gaps)
-	if len(differences) > 0 {
-		sort.Strings(differences)
-		shown := differences
-		if len(shown) > 25 && os.Getenv("ALLDIFF") == "" {
-			shown = shown[:25]
-		}
-		t.Errorf("%d differences:\n%s", len(differences), strings.Join(shown, "\n"))
-	}
+	})
 }
 
 // numberOptionsFromMap reads the few options the numbering cases use.
