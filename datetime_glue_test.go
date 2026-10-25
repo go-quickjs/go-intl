@@ -272,3 +272,26 @@ func TestNarrowNoBreakSpaceByProfile(t *testing.T) {
 		}
 	}
 }
+
+// A locale with no day-period rules of its own takes those of the first
+// locale its name truncates to that has some, as ICU's DayPeriodRules does:
+// hi-Latn-IN's are hi-Latn's, which have a noon, and not Hindi's, which do
+// not. Node 26 writes noon so.
+func TestDayPeriodRulesOfATruncation(t *testing.T) {
+	noon := time.UnixMilli(1704456000000)
+	for _, c := range []struct {
+		tag   string
+		width intl.FieldWidth
+		want  string
+	}{
+		{"hi-Latn-IN", intl.WidthNarrow, "n"},
+		{"hi-Latn-IN", intl.WidthShort, "noon"},
+		{"hi-Latn-IN", intl.WidthLong, "Madhyanh"},
+		{"hi-Latn", intl.WidthLong, "Madhyanh"},
+	} {
+		f := newDateTime(t, c.tag, intl.DateTimeFormatOptions{TimeZone: "UTC", DayPeriod: c.width})
+		if got := f.Format(noon); got != c.want {
+			t.Errorf("%s %v: %q, want %q", c.tag, c.width, got, c.want)
+		}
+	}
+}

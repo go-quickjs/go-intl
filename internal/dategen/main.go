@@ -552,14 +552,21 @@ func readPeriodRules(icu *icusrc.Locales) (map[string][]datedata.PeriodRule, err
 }
 
 // periodRules returns the rules that say which part of the day an hour
-// falls in. ICU keeps them per language rather than per locale, so a
-// locale with no rules of its own takes its language's.
+// falls in. ICU keeps them for a few locales, mostly languages, and a
+// locale with no rules of its own takes those of the first locale its name
+// truncates to that has some (DayPeriodRules::getInstance, by
+// ulocimp_getParent): hi-Latn-IN's are hi-Latn's, not Hindi's.
 func (t *tree) periodRules(name string) []datedata.PeriodRule {
-	if set, ok := t.periods[name]; ok {
-		return set
+	for {
+		if set, ok := t.periods[name]; ok {
+			return set
+		}
+		cut := strings.LastIndexByte(name, '-')
+		if cut < 0 {
+			return nil
+		}
+		name = name[:cut]
 	}
-	language, _, _ := strings.Cut(name, "-")
-	return t.periods[language]
 }
 
 // minutes reads a time of day as minutes past midnight. CLDR writes the end of
