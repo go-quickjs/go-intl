@@ -14,9 +14,19 @@
 // from those sources (internal/chromegen), and every profile is held to what
 // a Chrome for Testing build of its ICU answers (testdata/chrome).
 //
-// A profile is Chrome running in English: ICU reads its default locale's
-// data for a locale it has none for, and Chrome makes ICU's default its own
-// locale, which for the recordings is en-US.
+// A Chrome makes the language it runs in ICU's default locale, whose data
+// ICU reads for a locale it has none for -- and Chrome's data leaves many
+// out: Akan has dates but no zone or region names, so a Chrome running in
+// English writes "Eastern Standard Time" for it and one running in Korean
+// the Korean name. A profile's Source answers with the host's default
+// locale, as the intl package's data does; a Chrome of another language is
+// the profile with that one given:
+//
+//	src := intl.WithDefaultLocale(p.Source, ko)
+//
+// A request for a locale the Chrome has no data for at all resolves to its
+// language as well, which a host makes with an intl.LocaleMatcher given it
+// as the default. The recordings were all made in en-US.
 package chrome
 
 import (

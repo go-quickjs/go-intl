@@ -122,7 +122,12 @@ func TestProfiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		c.opts.Compat = p.Compat
-		f, err := intl.NewDateTimeFormatFrom(p.Source, loc, c.opts)
+		// The recordings ran in a Chrome running in English.
+		en, err := intl.ParseLocale("en-US")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := intl.NewDateTimeFormatFrom(intl.WithDefaultLocale(p.Source, en), loc, c.opts)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -202,13 +202,17 @@ func (c *Locales) Has(name string) bool { return c.names[name] }
 // A Fallback is what ICU's getParentLocaleID consults when a bundle a locale
 // asks for does not exist: CLDR's parent locales, and the script a language
 // is written in by default, in a region or anywhere.
+//
+// ICU's default locale is not part of it. ures_open reads the default
+// locale's bundles for a locale that has none of its own, nor its parents',
+// in a tree, before the root's; but the default is the host's, which the
+// data cannot know, and the services resolve it when they are built (the
+// intl package's WithDefaultLocale). So a locale a tree has no bundle for
+// resolves to the root here, and the data holds no part read from a
+// default.
 type Fallback struct {
 	Parent        func(name string) (string, bool)
 	DefaultScript func(language, region string) string
-	// Default is ICU's default locale, "en_US", whose bundles ures_open
-	// reads for a locale that has none of its own or its parents' in a
-	// tree, before the root's; "" reads the root's.
-	Default string
 }
 
 // Resolve is the whole of what ICU's ures_open reads for a locale, the most
@@ -259,16 +263,10 @@ func (c *Locales) Resolve(name string, fb Fallback) ([]*icutxt.Node, error) {
 
 // first is the bundle ures_open finds first for a locale: its own, or the
 // first its fallback reaches before the root; where there is none, the
-// default locale's, which entryOpen chains in with U_USING_DEFAULT_WARNING;
-// and else the root.
+// root's, the default locale's being the services' to read (Fallback).
 func (c *Locales) first(name string, fb Fallback) string {
 	if found, ok := c.existing(name, fb); ok {
 		return found
-	}
-	if fb.Default != "" && name != "root" && name != fb.Default {
-		if found, ok := c.existing(fb.Default, fb); ok {
-			return found
-		}
 	}
 	return "root"
 }
