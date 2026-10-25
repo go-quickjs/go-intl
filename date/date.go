@@ -28,7 +28,7 @@ type Options struct {
 	// Now is the clock; nil is the system's.
 	Now func() time.Time
 	// Compat chooses Node's side of intl.HostAbbreviations, for the host's
-	// zone where TimeZone is nil.
+	// zone where TimeZone is nil, and of intl.WholeMinuteOffset.
 	Compat intl.Compat
 }
 
@@ -38,8 +38,9 @@ type Options struct {
 // number of goroutines to share, but, as V8's, what it says a time's offset
 // is can depend on the times it was asked about before (see cache.go).
 type Environment struct {
-	tz  *intl.TimeZone
-	now func() time.Time
+	tz     *intl.TimeZone
+	now    func() time.Time
+	compat intl.Compat
 	// The names V8 writes in brackets. V8 asks ICU for each once, at the
 	// current time, and keeps it; this asks for both when it is built.
 	standardName, daylightName string
@@ -66,7 +67,7 @@ func New(opts Options) (*Environment, error) {
 	if now == nil {
 		now = time.Now
 	}
-	e := &Environment{tz: tz, now: now}
+	e := &Environment{tz: tz, now: now, compat: opts.Compat}
 	e.cache.reset()
 	at := now()
 	var err error
@@ -154,12 +155,18 @@ func (e *Environment) UTC(local float64) float64 {
 }
 
 // TimezoneOffset is Date.prototype.getTimezoneOffset: the minutes UTC is
-// ahead of local time, truncated. NaN for NaN.
+// ahead of local time, with their fraction where the offset has seconds, as
+// a local mean time's does, or truncated, as V8 before 15.6 counts them
+// (intl.WholeMinuteOffset). NaN for NaN.
 func (e *Environment) TimezoneOffset(t float64) float64 {
 	if math.IsNaN(t) {
 		return t
 	}
-	return float64(e.timezoneOffset(int64(t)))
+	if e.compat.Has(intl.WholeMinuteOffset) {
+		return float64(e.timezoneOffset(int64(t)))
+	}
+	ms := int64(t)
+	return float64(ms-e.toLocal(ms)) / msPerMinute
 }
 
 // zoneName is V8's DateCache::LocalTimezone: the name of standard or

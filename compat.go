@@ -33,7 +33,8 @@ import (
 // increment, which currencies a currency's own format is used for, the
 // empty items of a list, the hour cycle keyword a time style is made with,
 // what Intl.Locale answers for a keyword with no value, a text direction
-// no one knows, and the year of a pattern that writes the week-based one.
+// no one knows, the year of a pattern that writes the week-based one, and
+// the minutes getTimezoneOffset counts.
 // Standard and NodeICU are the two ends. A
 // browser's divergences that Node does not share, ThinSpace, ISOMonthNames,
 // AmeteMihretExtendedYear, KhmerCombining, MinimizeLength,
@@ -180,6 +181,9 @@ const (
 	// WeekYearOmitted reports no year from a pattern whose year is the
 	// week-based one ("Y"), as V8 before 15.5 does.
 	WeekYearOmitted
+	// WholeMinuteOffset has Date's getTimezoneOffset count whole minutes,
+	// truncated, as V8 before 15.6 does.
+	WholeMinuteOffset
 	// ThinSpace writes a plain space where ICU writes U+2009 in a date or a
 	// range of dates, as Chrome's V8 does and Node's does not.
 	ThinSpace
@@ -219,7 +223,7 @@ const (
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
 		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity |
-		TrueKeywords | LeftToRightDirection | WeekYearOmitted
+		TrueKeywords | LeftToRightDirection | WeekYearOmitted | WholeMinuteOffset
 )
 
 // Has reports whether Node's, or the browser's, behavior is chosen for a
@@ -641,6 +645,14 @@ var divergences = []Divergence{
 		Standard: "the year the format writes, as ECMA-402 reports the fields of the format it chose: " +
 			"Telugu's {year: \"numeric\", month: \"long\"} is \"MMMM YYYY\", so year is \"numeric\"",
 		Node: "V8 before 15.5 reads only \"y\" for the year, and reports none",
+	},
+	{
+		Name: "WholeMinuteOffset", Flag: WholeMinuteOffset,
+		Area: "Date",
+		What: "getTimezoneOffset where a zone's offset is not a whole number of minutes, as a local mean time's is",
+		Standard: "ECMA-262's (t - LocalTime(t)) / msPerMinute, the minutes and their fraction: Abidjan's " +
+			"local mean time in 1900, 16 minutes and 8 seconds, is 16.133333333333333",
+		Node: "V8 before 15.6 keeps the offset in whole minutes (DateCache::TimezoneOffset), truncated: 16",
 	},
 	{
 		Name: "ThinSpace", Flag: ThinSpace,

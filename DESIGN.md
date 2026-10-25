@@ -165,7 +165,7 @@ standard's of the rest; `--node-quirks` takes Node's of all.
 
 Every divergence is a named, documented entry in `compat.go`
 (`Divergences()`), with what the standard and Node each answer and a test on
-both sides. There are forty-three: thirty-six of Node's, which `NodeICU`
+both sides. There are forty-four: thirty-seven of Node's, which `NodeICU`
 holds, and seven of Chrome's alone, which Node answers as the standard does
 and a Chrome profile chooses.
 

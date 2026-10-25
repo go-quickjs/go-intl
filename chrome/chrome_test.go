@@ -46,7 +46,8 @@ func TestCompat(t *testing.T) {
 		{"148.0.7778.169", intl.ThinSpace | intl.ISOMonthNames | intl.RoundingWindow, intl.PlainValueZone | intl.AmeteMihretExtendedYear},
 		{"148.0.7778.218", intl.ThinSpace | intl.RoundingWindow, intl.ISOMonthNames | intl.PlainValueZone},
 		{"150", intl.ThinSpace, intl.ISOMonthNames | intl.RoundingWindow | intl.RepeatedMidnight},
-		{"155", intl.ThinSpace, intl.SubdivisionHourCycles | intl.WeekYearOmitted},
+		{"155", intl.ThinSpace | intl.WholeMinuteOffset, intl.SubdivisionHourCycles | intl.WeekYearOmitted},
+		{"156", intl.ThinSpace, intl.WholeMinuteOffset},
 		{"153", intl.WeekYearOmitted, 0},
 	} {
 		p, err := chrome.ForVersion(c.version)

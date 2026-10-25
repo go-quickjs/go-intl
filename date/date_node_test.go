@@ -1,46 +1,95 @@
 package date
 
 import (
-	"bufio"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	intl "github.com/go-quickjs/go-intl"
+	"github.com/go-quickjs/go-intl/chrome"
 )
 
 // TestDateMatchesNode replays testdata/date_node.js: toString,
 // toDateString, toTimeString and getTimezoneOffset about every transition
 // of every zone Node knows and at the ends of time, dates made from local
 // fields across every transition, Date.parse, toUTCString and toISOString.
+//
+// Where INTL_CHROME asks for them -- Chrome versions separated by commas,
+// or "all" -- it replays each Chrome's recording of the same cases too
+// (testdata/chrome), with that Chrome's profile: its zones' rules and its
+// names for them. A Chrome's recording names the Chrome and not the clock
+// or the locale, which are Node's: the locale is en-US for both, and the
+// names a Chrome asked for at its own now are those of the same metazones.
 func TestDateMatchesNode(t *testing.T) {
-	f, err := os.Open("../testdata/date_node.txt.gz")
+	lines := recordingLines(t, readGzipped(t, "../testdata/date_node.txt.gz"))
+	// The header has the clock and the locale the zone names were asked
+	// for at (V8 asks ICU for a zone's names once, at the current time).
+	header := lines[0]
+	i := strings.Index(header, "now ")
+	if i < 0 || !strings.Contains(header, "ICU 78.3, tz 2026c") {
+		t.Fatalf("the expectations come from %q", header)
+	}
+	var ms int64
+	var tag string
+	fmt.Sscanf(header[i:], "now %d, locale %s", &ms, &tag)
+	now := time.UnixMilli(ms)
+	loc, err := intl.ParseLocale(tag)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	z, err := gzip.NewReader(f)
+	t.Run("Node", func(t *testing.T) { replayDate(t, intl.Embedded, intl.NodeICU, lines[1:], now, loc) })
+
+	want := os.Getenv("INTL_CHROME")
+	if want == "" {
+		return
+	}
+	dirs, err := filepath.Glob(filepath.FromSlash("../testdata/chrome/[0-9]*"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := bufio.NewScanner(z)
-	s.Buffer(nil, 1<<20)
-	var now time.Time
-	var loc intl.Locale
+	for _, dir := range dirs {
+		version := filepath.Base(dir)
+		if want != "all" && !contains(strings.Split(want, ","), version) {
+			continue
+		}
+		delta := filepath.Join(dir, "date_node.txt.gz.delta.gz")
+		if _, err := os.Stat(delta); err != nil {
+			continue
+		}
+		t.Run("Chrome "+version, func(t *testing.T) {
+			p, err := chrome.ForVersion(version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := applyDelta(t, lines, readGzipped(t, delta))
+			if !strings.HasPrefix(got[0], "# Chrome "+version+", ICU ") {
+				t.Fatalf("the expectations come from %q", got[0])
+			}
+			replayDate(t, p.Source, p.Compat, got[1:], now, loc)
+		})
+	}
+}
+
+// replayDate checks a recording's cases, but for its header, over a source
+// and in a recording's divergences.
+func replayDate(t *testing.T, src intl.Source, compat intl.Compat, lines []string, now time.Time, loc intl.Locale) {
 	var env *Environment
 	// Setting process.env.TZ empties V8's offset cache, so each zone line
 	// starts a new Environment.
 	envFor := func(zone string) *Environment {
-		tz, err := intl.LoadTimeZone(intl.Embedded, zone)
+		tz, err := intl.LoadTimeZone(src, zone)
 		if err != nil {
 			t.Fatalf("%s: %v", zone, err)
 		}
-		e, err := New(Options{Locale: &loc, TimeZone: tz, Now: func() time.Time { return now }})
+		e, err := New(Options{Source: src, Locale: &loc, TimeZone: tz, Now: func() time.Time { return now }, Compat: compat})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,22 +104,7 @@ func TestDateMatchesNode(t *testing.T) {
 			t.Errorf("%s %s: "+format, append([]any{kind, zone}, args...)...)
 		}
 	}
-	for s.Scan() {
-		line := s.Text()
-		if strings.HasPrefix(line, "#") {
-			var ms int64
-			var tag string
-			i := strings.Index(line, "now ")
-			if i < 0 || !strings.Contains(line, "ICU 78.3, tz 2026c") {
-				t.Fatalf("the expectations come from %q", line)
-			}
-			fmt.Sscanf(line[i:], "now %d, locale %s", &ms, &tag)
-			now = time.UnixMilli(ms)
-			if loc, err = intl.ParseLocale(tag); err != nil {
-				t.Fatal(err)
-			}
-			continue
-		}
+	for _, line := range lines {
 		var c []json.RawMessage
 		if err := json.Unmarshal([]byte(line), &c); err != nil {
 			t.Fatalf("%s: %v", line, err)
@@ -163,9 +197,6 @@ func TestDateMatchesNode(t *testing.T) {
 			}
 		}
 	}
-	if err := s.Err(); err != nil {
-		t.Fatal(err)
-	}
 	total := 0
 	for k, n := range ran {
 		total += n
@@ -177,6 +208,97 @@ func TestDateMatchesNode(t *testing.T) {
 		t.Fatalf("%d cases: the recording is short", total)
 	}
 	t.Logf("%d cases", total)
+}
+
+func readGzipped(t *testing.T, file string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.FromSlash(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	z, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(z)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// recordingLines is a recording's lines, without the empty one after its
+// last newline.
+func recordingLines(t *testing.T, b []byte) []string {
+	t.Helper()
+	lines := strings.Split(string(b), "\n")
+	if n := len(lines); n > 0 && lines[n-1] == "" {
+		lines = lines[:n-1]
+	}
+	if len(lines) == 0 {
+		t.Fatal("an empty recording")
+	}
+	return lines
+}
+
+// applyDelta makes a Chrome's recording from Node's lines and its edits, as
+// testdata/chrome/delta.js writes them: "=" keeps n lines, "-" drops n, "+"
+// adds the lines given.
+func applyDelta(t *testing.T, base []string, delta []byte) []string {
+	t.Helper()
+	var d struct {
+		Edits []json.RawMessage `json:"edits"`
+	}
+	if err := json.Unmarshal(delta, &d); err != nil {
+		t.Fatal(err)
+	}
+	// delta.js's lines are the text split at each newline, a last empty
+	// one included, which base has had taken off.
+	base = append(base[:len(base):len(base)], "")
+	var out []string
+	at := 0
+	for _, e := range d.Edits {
+		var op []json.RawMessage
+		var kind string
+		if json.Unmarshal(e, &op) != nil || len(op) != 2 || json.Unmarshal(op[0], &kind) != nil {
+			t.Fatalf("an edit %s", e)
+		}
+		switch kind {
+		case "=", "-":
+			var n int
+			if err := json.Unmarshal(op[1], &n); err != nil || at+n > len(base) {
+				t.Fatalf("an edit %s past the end", e)
+			}
+			if kind == "=" {
+				out = append(out, base[at:at+n]...)
+			}
+			at += n
+		case "+":
+			var lines []string
+			if err := json.Unmarshal(op[1], &lines); err != nil {
+				t.Fatalf("an edit %s", e)
+			}
+			out = append(out, lines...)
+		default:
+			t.Fatalf("an edit %s", e)
+		}
+	}
+	if at != len(base) {
+		t.Fatalf("the edits cover %d of %d lines", at, len(base))
+	}
+	if n := len(out); n > 0 && out[n-1] == "" {
+		out = out[:n-1]
+	}
+	return out
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func utf16Runes(u []uint16) []rune {

@@ -135,6 +135,8 @@ var standardFrom = []struct {
 	{intl.SubdivisionHourCycles, 155},
 	// V8 15.5 reads "Y" for the year resolvedOptions reports.
 	{intl.WeekYearOmitted, 155},
+	// V8 15.6 keeps a date's offset in milliseconds.
+	{intl.WholeMinuteOffset, 156},
 }
 
 // browserFrom are Chrome's divergences that Node does not share, and the
