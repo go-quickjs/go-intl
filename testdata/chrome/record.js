@@ -16,7 +16,11 @@
 // tens of thousands; a recording Node has none of is written whole. What a
 // script writes to stdout is the recording beside it named for it,
 // <script>.txt.gz or <script>.txt. The page's time zone is TZ, or UTC, and
-// its locale en-US, as the Node scripts run.
+// its locale en-US, as the Node scripts run, or the language --lang names:
+// Chrome runs in it, which makes it ICU's default locale, and the header
+// says so, ", language ko-KR". The header keeps what the script wrote after
+// its Node and ICU versions: the clock date_node.js asked for its zones'
+// names at, which is the Chrome's own.
 //
 // A script that sets process.env.TZ, as date_node.js does zone by zone,
 // changes the page's time zone where it does: each "process.env.TZ = x;"
@@ -37,18 +41,23 @@ const childProcess = require("child_process");
 const { launch } = require("./cdp.js");
 const { diff } = require("./delta.js");
 
-const usage = "usage: node testdata/chrome/record.js [--shards N] <chrome.exe> <ICU version> <tz version> <out dir> <script.js> [args...]";
+const usage = "usage: node testdata/chrome/record.js [--shards N] [--lang tag] <chrome.exe> <ICU version> <tz version> <out dir> <script.js> [args...]";
 
 async function main() {
   const argv = process.argv.slice(2);
   let shards = 1;
-  if (argv[0] === "--shards") {
-    shards = Number(argv[1]);
-    argv.splice(0, 2);
-    if (!Number.isInteger(shards) || shards < 1) {
-      console.error(usage);
-      process.exit(2);
+  let lang = null;
+  while (argv[0] === "--shards" || argv[0] === "--lang") {
+    if (argv[0] === "--shards") {
+      shards = Number(argv[1]);
+      if (!Number.isInteger(shards) || shards < 1) {
+        console.error(usage);
+        process.exit(2);
+      }
+    } else {
+      lang = argv[1];
     }
+    argv.splice(0, 2);
   }
   const [chromePath, icu, tz, outDir, script, ...args] = argv;
   if (!script) {
@@ -63,7 +72,7 @@ async function main() {
   const written = new Map();
   let browser;
   for (let shard = 0; shard < shards; shard++) {
-    const chrome = await launch(chromePath);
+    const chrome = await launch(chromePath, { lang: lang || "en-US" });
     try {
       const timeZone = process.env.TZ || "UTC";
       await chrome.send("Emulation.setTimezoneOverride", { timezoneId: timeZone });
@@ -82,7 +91,7 @@ async function main() {
         }
         await chrome.send("Runtime.evaluate", { expression: `__recordTimeZoneSet(${JSON.stringify(failed)})` });
       });
-      await chrome.send("Emulation.setLocaleOverride", { locale: "en-US" });
+      await chrome.send("Emulation.setLocaleOverride", { locale: lang || "en-US" });
       browser = chrome.version; // "Chrome/155.0.8059.84"
       const page = pageProgram(source, {
         tape, modules, resolved, shard: shards > 1 ? { index: shard, count: shards } : null,
@@ -108,7 +117,12 @@ async function main() {
 
   fs.mkdirSync(outDir, { recursive: true });
   for (const o of written.values()) {
-    const text = o.data.replace(/^# [Nn]ode [^\n]*/, `# ${browser.replace("/", " ")}, ICU ${icu}`);
+    // "# Node Chrome 155.0.8059.84, ICU 78.2, tz 2026c, now ...": the
+    // Chrome and its ICU, then what the script wrote after them.
+    const header = `# ${browser.replace("/", " ")}, ICU ${icu}` + (lang ? `, language ${lang}` : "");
+    const text = lang
+      ? o.data.replace(/^# [Nn]ode [^\n,]*,? ICU [^\n, ]*/, header)
+      : o.data.replace(/^# [Nn]ode [^\n]*/, header);
     let name = path.basename(o.path);
     let gzip = o.gzip;
     if (o.stdout) {

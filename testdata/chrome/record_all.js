@@ -1,7 +1,9 @@
 // Records every *_node.js script in one Chrome, one script after another,
 // with record.js:
 //
-//	node testdata/chrome/record_all.js <chrome.exe> <ICU version> <tz version> <out dir> <icu4c-78.3-data.zip> <test262 dir> [script.js ...]
+//	node testdata/chrome/record_all.js [--lang tag] <chrome.exe> <ICU version> <tz version> <out dir> <icu4c-78.3-data.zip> <test262 dir> [script.js ...]
+//
+// --lang runs each Chrome in that language (record.js).
 //
 // The data archive and test262 are the arguments available_node.js and
 // canonical_node.js take; the named scripts alone are recorded when any
@@ -15,7 +17,13 @@ const { spawnSync } = require("child_process");
 const shards = { "datetime_features_node.js": 8, "datetime_range_node.js": 8 };
 
 function main() {
-  const [chrome, icu, tz, outDir, zip, test262, ...only] = process.argv.slice(2);
+  const all = process.argv.slice(2);
+  let lang = null;
+  if (all[0] === "--lang") {
+    lang = all[1];
+    all.splice(0, 2);
+  }
+  const [chrome, icu, tz, outDir, zip, test262, ...only] = all;
   if (!test262) {
     console.error("usage: node testdata/chrome/record_all.js <chrome.exe> <ICU version> <tz version> <out dir> <icu4c-78.3-data.zip> <test262 dir> [script.js ...]");
     process.exit(2);
@@ -29,6 +37,7 @@ function main() {
     const start = Date.now();
     const argv = [path.join(__dirname, "record.js")];
     if (shards[s]) argv.push("--shards", String(shards[s]));
+    if (lang) argv.push("--lang", lang);
     argv.push(chrome, icu, tz, outDir, path.join(testdata, s), ...(args[s] || []));
     const r = spawnSync(process.execPath, argv, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
     const took = ((Date.now() - start) / 1000).toFixed(0);

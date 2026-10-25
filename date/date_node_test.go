@@ -25,9 +25,11 @@ import (
 // Where INTL_CHROME asks for them -- Chrome versions separated by commas,
 // or "all" -- it replays each Chrome's recording of the same cases too
 // (testdata/chrome), with that Chrome's profile: its zones' rules and its
-// names for them. A Chrome's recording names the Chrome and not the clock
-// or the locale, which are Node's: the locale is en-US for both, and the
-// names a Chrome asked for at its own now are those of the same metazones.
+// names for them, in English and in each language it was recorded in,
+// which is ICU's default locale and so the locale it names zones in. A
+// Chrome's recording in English names the Chrome and not the clock, which
+// is Node's: the names a Chrome asked for at its own now are those of the
+// same metazones. One in another language keeps the Chrome's own clock.
 func TestDateMatchesNode(t *testing.T) {
 	lines := recordingLines(t, readGzipped(t, "../testdata/date_node.txt.gz"))
 	// The header has the clock and the locale the zone names were asked
@@ -60,21 +62,44 @@ func TestDateMatchesNode(t *testing.T) {
 		if want != "all" && !contains(strings.Split(want, ","), version) {
 			continue
 		}
-		delta := filepath.Join(dir, "date_node.txt.gz.delta.gz")
-		if _, err := os.Stat(delta); err != nil {
-			continue
+		// In English, then in each language there are recordings in, the
+		// language being ICU's default locale, which Date names zones in.
+		languages, err := filepath.Glob(filepath.Join(dir, "[a-z]*"))
+		if err != nil {
+			t.Fatal(err)
 		}
-		t.Run("Chrome "+version, func(t *testing.T) {
-			p, err := chrome.ForVersion(version)
-			if err != nil {
-				t.Fatal(err)
+		for _, d := range append([]string{dir}, languages...) {
+			delta := filepath.Join(d, "date_node.txt.gz.delta.gz")
+			if _, err := os.Stat(delta); err != nil {
+				continue
 			}
-			got := applyDelta(t, lines, readGzipped(t, delta))
-			if !strings.HasPrefix(got[0], "# Chrome "+version+", ICU ") {
-				t.Fatalf("the expectations come from %q", got[0])
+			who, language, check := "Chrome "+version, loc, "# Chrome "+version+", ICU "
+			if d != dir {
+				who += " in " + filepath.Base(d)
+				if language, err = intl.ParseLocale(filepath.Base(d)); err != nil {
+					t.Fatal(err)
+				}
 			}
-			replayDate(t, p.Source, p.Compat, got[1:], now, loc)
-		})
+			t.Run(who, func(t *testing.T) {
+				p, err := chrome.ForVersion(version)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := applyDelta(t, lines, readGzipped(t, delta))
+				if !strings.HasPrefix(got[0], check) || d != dir && !strings.Contains(got[0], ", language "+language.String()) {
+					t.Fatalf("the expectations come from %q", got[0])
+				}
+				// A recording in a language keeps the clock the Chrome
+				// asked for its zones' names at.
+				clock := now
+				if i := strings.Index(got[0], "now "); i >= 0 {
+					var ms int64
+					fmt.Sscanf(got[0][i:], "now %d", &ms)
+					clock = time.UnixMilli(ms)
+				}
+				replayDate(t, p.Source, p.Compat, got[1:], clock, language)
+			})
+		}
 	}
 }
 

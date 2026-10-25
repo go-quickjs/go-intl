@@ -127,6 +127,12 @@ src := intl.NewFS(os.DirFS("/path/to/data"))
 nf, err := intl.NewNumberFormatFrom(src, loc, opts)
 ```
 
+Where ICU's data has nothing for a locale, ICU reads its default locale's,
+which is the host's, and so does go-intl: a source answers with the host's
+locale as ICU's default, or the one `intl.WithDefaultLocale` gives it. The
+[`chrome`](chrome) package's profiles, a Chrome's data and divergences, take
+the language that Chrome runs in that way.
+
 ## Design
 
 - A formatter is immutable after construction and safe for concurrent use.

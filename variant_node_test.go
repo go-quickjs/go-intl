@@ -18,7 +18,7 @@ import (
 // locales, then built as Node builds it.
 func TestVariantMatchesNode(t *testing.T) {
 	replay(t, "testdata/variant_node.txt.gz", func(t *testing.T, r recording) {
-		def, _ := intl.ParseLocale("en-US")
+		def := r.language
 		matchers := map[string]*intl.LocaleMatcher{}
 		resolve := func(service, tag string) intl.Locale {
 			m, ok := matchers[service]

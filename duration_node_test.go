@@ -101,7 +101,9 @@ func TestDurationFormatMatchesNode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		def, _ := intl.ParseLocale("en-US")
+		// A request the data has no locale for resolves to the language the
+		// recording ran in.
+		def := r.language
 		// The lines come grouped by formatter, so only the last is kept.
 		type key struct{ locale, options string }
 		var last key

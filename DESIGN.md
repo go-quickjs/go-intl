@@ -179,6 +179,43 @@ fix, and ICU bugs a standard formatter should not copy.
 Record the version in the golden file header; corpus-exactness is the
 operational definition.
 
+## The default locale
+
+ICU has a default locale, and a locale's answers can depend on it. ICU reads
+a locale's data in each of its trees -- locales, currencies, units,
+languages, regions, zones, collations, break rules -- along the locale's
+fallback, and where a tree has no bundle for the locale nor for any locale
+it falls back to short of the root, it reads the default locale's bundles
+before the root's (`ures_open`'s `entryOpen`). The default is also the
+locale `Date` names a zone in. Node takes it from the environment and
+Chrome from the language it runs in, so the same request answers
+differently on two hosts: Akan's zones, which Chrome's data has no names
+for, are "Eastern Standard Time" in a Chrome running in English and Korean
+in one running in Korean.
+
+So go-intl answers for any locale as ICU does with a default locale that is
+the host's (`HostLocale`), or the one `WithDefaultLocale` gives a source.
+It is resolved when a service is built, tree by tree, never generated: the
+generators resolve a locale a tree has no bundle for to the root, and the
+data holds no part read from a default. A service whose data comes from
+more than one tree -- numbers with the currency tree's names, zone names
+with the region tree's -- reads each part along its own tree's chain. Not
+every ICU service reads the default: a break iterator's rules and a
+collator's tailoring are opened with `ures_openNoDefault`, so a locale
+their trees lack reads the root's, while the list of a locale's collations
+reads the default's. ICU 78.3's full data has a bundle for every language
+in most trees, so on it the default shows in little but that list; a
+browser's filtered data shows it everywhere.
+
+Choosing a locale for a request that names one a service lacks is not
+ICU's step but the host's, V8's `ResolveLocale` with
+`Isolate::DefaultLocale`, which a `LocaleMatcher` makes with the default
+it is given. A host gives both the same locale, as V8's are one.
+
+Every recording was made with a default of its own -- en-US, or the
+language a Chrome recording ran in -- and its replay gives its data that
+one, so that no test depends on the host's.
+
 ## Testing
 
 Two suites, testing different things. Much of test262's intl402 is about JS

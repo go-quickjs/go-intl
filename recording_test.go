@@ -20,8 +20,13 @@ import (
 // scripts: Node's, which the package's own data and NodeICU reproduce, or a
 // Chrome's (testdata/chrome), which that Chrome's profile reproduces.
 type recording struct {
-	// who is the implementation, "Node" or "Chrome 155.0.8059.84".
-	who string
+	// who is the implementation, "Node", "Chrome 155.0.8059.84", or
+	// "Chrome 155.0.8059.84 in ko-KR"; version is a Chrome's.
+	who, version string
+	// language is the language it ran in, ICU's default locale and the
+	// locale a request it has no data for resolves to: en-US, but for a
+	// Chrome recorded in another (testdata/chrome/<version>/<language>).
+	language intl.Locale
 	// src and compat are what reproduces it.
 	src    intl.Source
 	compat intl.Compat
@@ -32,16 +37,18 @@ type recording struct {
 
 // recordings are a recording's versions: Node's, then the Chromes' that
 // INTL_CHROME asks for -- versions separated by commas, or "all" -- each
-// made from Node's and the edits Chrome's differs by. A Chrome a recording
-// was not made with, because it predates what the script asks for, is left
-// out.
+// made from Node's and the edits Chrome's differs by, in English and in
+// each language it was recorded in too. A Chrome a recording was not made
+// with, because it predates what the script asks for, is left out.
 func recordings(t *testing.T, file string) []recording {
 	t.Helper()
 	lines := strings.Split(string(readMaybeGzipped(t, file)), "\n")
 	if n := len(lines); n > 0 && lines[n-1] == "" {
 		lines = lines[:n-1]
 	}
-	out := []recording{{who: "Node", src: recordedDefault(t, intl.Embedded), compat: intl.NodeICU, lines: lines}}
+	en := locale(t, "en-US")
+	out := []recording{{who: "Node", language: en, src: intl.WithDefaultLocale(intl.Embedded, en),
+		compat: intl.NodeICU, lines: lines}}
 	want := os.Getenv("INTL_CHROME")
 	if want == "" {
 		return withHeaders(out)
@@ -56,20 +63,40 @@ func recordings(t *testing.T, file string) []recording {
 		if want != "all" && !contains(strings.Split(want, ","), version) {
 			continue
 		}
-		delta := filepath.Join(dir, filepath.Base(file)+".delta.gz")
-		if _, err := os.Stat(delta); err != nil {
-			continue
-		}
 		p, err := chrome.ForVersion(version)
 		if err != nil {
 			t.Fatal(err)
 		}
-		out = append(out, recording{
-			who: "Chrome " + version, src: recordedDefault(t, p.Source), compat: p.Compat,
-			lines: applyDelta(t, lines, delta),
-		})
+		// In English, then in each language there are recordings in.
+		languages, err := filepath.Glob(filepath.Join(dir, "[a-z]*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range append([]string{dir}, languages...) {
+			delta := filepath.Join(d, filepath.Base(file)+".delta.gz")
+			if _, err := os.Stat(delta); err != nil {
+				continue
+			}
+			r := recording{who: "Chrome " + version, version: version, language: en, compat: p.Compat,
+				lines: applyDelta(t, lines, delta)}
+			if d != dir {
+				r.who += " in " + filepath.Base(d)
+				r.language = locale(t, filepath.Base(d))
+			}
+			r.src = intl.WithDefaultLocale(p.Source, r.language)
+			out = append(out, r)
+		}
 	}
 	return withHeaders(out)
+}
+
+func locale(t *testing.T, tag string) intl.Locale {
+	t.Helper()
+	l, err := intl.ParseLocale(tag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
 }
 
 // nodeData is the package's data with the default locale Node's recordings
@@ -82,17 +109,6 @@ var nodeData = func() intl.Source {
 	}
 	return intl.WithDefaultLocale(intl.Embedded, x)
 }()
-
-// recordedDefault is a source with the default locale every recording was
-// made with, Node's and the Chromes': en-US, whatever the host's is.
-func recordedDefault(t *testing.T, src intl.Source) intl.Source {
-	t.Helper()
-	x, err := intl.ParseLocale("en-US")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return intl.WithDefaultLocale(src, x)
-}
 
 // replay runs a test of a recording over each of its versions, a subtest
 // each, its header checked first.
@@ -115,17 +131,19 @@ func (r recording) compatFor(node intl.Compat) intl.Compat {
 }
 
 // A host resolves a requested locale as V8 does, among the service's
-// available locales in a recording's data, else the default, en-US
-// (Isolate::DefaultLocale), and builds the formatter with what it finds.
-// Node has every locale the recordings ask for; a Chrome leaves many out.
+// available locales in a recording's data, else the default, the language
+// the recording ran in (Isolate::DefaultLocale), and builds the formatter
+// with what it finds. Node has every locale the recordings ask for; a
+// Chrome leaves many out.
 type host struct {
 	t        *testing.T
 	src      intl.Source
+	language intl.Locale
 	matchers map[intl.Service]*intl.LocaleMatcher
 }
 
 func (r recording) host(t *testing.T) *host {
-	return &host{t: t, src: r.src, matchers: map[intl.Service]*intl.LocaleMatcher{}}
+	return &host{t: t, src: r.src, language: r.language, matchers: map[intl.Service]*intl.LocaleMatcher{}}
 }
 
 func (h *host) resolve(service intl.Service, loc intl.Locale) intl.Locale {
@@ -137,8 +155,7 @@ func (h *host) resolve(service intl.Service, loc intl.Locale) intl.Locale {
 		}
 		h.matchers[service] = m
 	}
-	def, _ := intl.ParseLocale("en-US")
-	return m.Resolve([]intl.Locale{loc}, intl.BestFit, def)
+	return m.Resolve([]intl.Locale{loc}, intl.BestFit, h.language)
 }
 
 // withHeaders takes each recording's header line off its lines.
@@ -152,14 +169,17 @@ func withHeaders(rs []recording) []recording {
 }
 
 // checkHeader is that a recording was made by what it should be: Node
-// over ICU 78.3, or the Chrome it is filed under. A recording that names no
-// maker is taken as it is.
+// over ICU 78.3, or the Chrome it is filed under, in the language it is
+// filed under. A recording that names no maker is taken as it is.
 func (r recording) checkHeader(t *testing.T) {
 	t.Helper()
 	if r.header == "" {
 		return
 	}
-	ok := strings.HasPrefix(r.header, "# "+r.who+", ICU ")
+	ok := strings.HasPrefix(r.header, "# Chrome "+r.version+", ICU ")
+	if r.language.String() != "en-US" {
+		ok = ok && strings.Contains(r.header, ", language "+r.language.String())
+	}
 	if r.who == "Node" {
 		ok = namesICU(r.header, "78.3")
 	}
