@@ -121,6 +121,12 @@ func (l *Locale) Zone(name string) (ZoneEntry, bool) {
 	return e, r.Err() == nil
 }
 
+// TakeRegions gives the locale another's region names: ICU reads them from
+// its region tree, along a fallback of their own, which may end elsewhere
+// than the zone tree's does -- at the default locale where one tree has no
+// bundle for the locale.
+func (l *Locale) TakeRegions(from *Locale) { l.regions = from.regions }
+
 // Region finds the locale's name for a region.
 func (l *Locale) Region(code string) (string, bool) {
 	r, ok := l.regions.Find(code)

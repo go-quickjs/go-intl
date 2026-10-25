@@ -2,6 +2,7 @@ package intl
 
 import (
 	"fmt"
+	"github.com/go-quickjs/go-intl/internal/blob"
 	"strings"
 	"time"
 
@@ -47,33 +48,51 @@ type zoneNames struct {
 	region string
 }
 
-func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
-	chain := loc.Fallback()
-	fb, fbErr := NewFallbacker(src)
-	if fbErr == nil {
-		// zonegen resolves ICU's zone and region trees itself for every
-		// locale it writes, so only a locale without a file of its own, such
-		// as the alias "sr-ME", is redirected.
-		chain = fb.ChainIn(treeZone, loc.Data())
-		if _, err := src.Open(MarkerZoneNames, loc.Data()); err == nil {
-			chain = fb.Chain(loc.Data())
-		}
-	}
-	pool, err := openShared(src, MarkerZoneNamesShared, zonedata.Version)
-	if err != nil {
-		return nil, err
-	}
-	var data *zonedata.Locale
+// firstZoneNames is the zone names of the first locale along a chain that
+// has them, and which locale that is.
+func firstZoneNames(src Source, pool blob.Shared, chain []DataLocale) (*zonedata.Locale, DataLocale, error) {
 	for _, d := range chain {
 		b, err := src.Open(MarkerZoneNames, d)
 		if err != nil {
 			continue
 		}
-		data, err = zonedata.Decode(b, pool)
+		data, err := zonedata.Decode(b, pool)
 		if err != nil {
-			return nil, fmt.Errorf("intl: the zone names for %s: %w", d, err)
+			return nil, d, fmt.Errorf("intl: the zone names for %s: %w", d, err)
 		}
-		break
+		return data, d, nil
+	}
+	return nil, DataLocale{}, nil
+}
+
+func loadZoneNames(src Source, loc Locale) (*zoneNames, error) {
+	// ICU reads what a locale calls zones from its zone tree and the names
+	// of the regions they are in from its region tree, each along its own
+	// fallback, which ends at the default locale where the tree has no
+	// bundle for the locale. Each locale's file holds both, as the locale's
+	// own bundles say; each part is read from the file of the locale its
+	// tree sends it to.
+	chain, regionChain := loc.Fallback(), []DataLocale(nil)
+	fb, fbErr := NewFallbacker(src)
+	if fbErr == nil {
+		chain, regionChain = fb.ChainIn(treeZone, loc.Data()), fb.ChainIn(treeRegion, loc.Data())
+	}
+	pool, err := openShared(src, MarkerZoneNamesShared, zonedata.Version)
+	if err != nil {
+		return nil, err
+	}
+	data, from, err := firstZoneNames(src, pool, chain)
+	if err != nil {
+		return nil, err
+	}
+	if data != nil && regionChain != nil {
+		regions, regionsFrom, err := firstZoneNames(src, pool, regionChain)
+		if err != nil {
+			return nil, err
+		}
+		if regions != nil && regionsFrom != from {
+			data.TakeRegions(regions)
+		}
 	}
 	if data == nil {
 		// Without names every zone is written as its offset, which is a worse

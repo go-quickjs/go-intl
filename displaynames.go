@@ -93,9 +93,12 @@ type DisplayNamesOptions struct {
 // A DisplayNames answers what things are called in one locale. It never
 // changes after it is built and is safe for any number of goroutines to share.
 type DisplayNames struct {
-	locale   Locale
-	opts     DisplayNamesOptions
-	data     *namedata.Locale
+	locale Locale
+	opts   DisplayNamesOptions
+	data   *namedata.Locale
+	// regions are the region names a language's name is qualified with,
+	// from the region tree's chain, which may end elsewhere than data's.
+	regions  *namedata.Locale
 	width    int
 	currency *numdata.Locale
 	// canon puts a language's code in canonical form before it is named.
@@ -116,18 +119,34 @@ func NewDisplayNames(loc Locale, opts DisplayNamesOptions) (*DisplayNames, error
 
 // NewDisplayNamesFrom builds one from a source of the caller's own.
 func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*DisplayNames, error) {
-	// ICU keeps language, script and region names in trees of their own,
-	// and the redirects differ between them only a little.
+	// ICU keeps language, script and calendar names in its language tree,
+	// region names in its region tree and the date fields' in its locales
+	// tree, each read along its own fallback, which ends at the default
+	// locale where the tree has no bundle for the locale.
 	tree := treeLang
-	if opts.Kind == DisplayRegion {
+	switch opts.Kind {
+	case DisplayRegion:
 		tree = treeRegion
+	case DisplayDateTimeField:
+		tree = treeLocales
 	}
-	data, err := loadNames(src, loc, tree)
+	data, from, err := loadNames(src, loc, tree)
 	if err != nil {
 		return nil, err
 	}
 	// DisplayNames uses nothing of the Unicode extension.
-	d := &DisplayNames{locale: loc.onlyKeywords(), opts: opts, data: data}
+	d := &DisplayNames{locale: loc.onlyKeywords(), opts: opts, data: data, regions: data}
+	if opts.Kind == DisplayLanguage {
+		// A language qualified by a region names the region from the
+		// region tree: "Akan (Ghana)".
+		regions, regionsFrom, err := loadNames(src, loc, treeRegion)
+		if err != nil {
+			return nil, err
+		}
+		if regionsFrom != from {
+			d.regions = regions
+		}
+	}
 	switch opts.Style {
 	case DisplayShort:
 		d.width = namedata.Short
@@ -157,14 +176,16 @@ func NewDisplayNamesFrom(src Source, loc Locale, opts DisplayNamesOptions) (*Dis
 	return d, nil
 }
 
-func loadNames(src Source, loc Locale, tree string) (*namedata.Locale, error) {
+// loadNames reads the display names of the first locale along a tree's
+// chain that has them, and says which locale that is.
+func loadNames(src Source, loc Locale, tree string) (*namedata.Locale, DataLocale, error) {
 	chain := loc.Fallback()
 	if f, err := NewFallbacker(src); err == nil {
 		chain = f.ChainIn(tree, loc.Data())
 	}
 	pool, err := openShared(src, MarkerNamesShared, namedata.Version)
 	if err != nil {
-		return nil, err
+		return nil, DataLocale{}, err
 	}
 	for _, d := range chain {
 		b, err := src.Open(MarkerNames, d)
@@ -173,11 +194,11 @@ func loadNames(src Source, loc Locale, tree string) (*namedata.Locale, error) {
 		}
 		l, err := namedata.Decode(b, pool)
 		if err != nil {
-			return nil, fmt.Errorf("intl: the display names for %s: %w", d, err)
+			return nil, d, fmt.Errorf("intl: the display names for %s: %w", d, err)
 		}
-		return l, nil
+		return l, d, nil
 	}
-	return nil, fmt.Errorf("intl: no display names for %s: %w", loc, ErrNotFound)
+	return nil, DataLocale{}, fmt.Errorf("intl: no display names for %s: %w", loc, ErrNotFound)
 }
 
 // Of returns what the locale calls a code.
@@ -265,7 +286,11 @@ func (d *DisplayNames) language(code string) (string, bool) {
 	// fallback.
 	substitute := d.opts.Fallback == FallbackCode
 	lookup := func(kind int, key string) (string, bool) {
-		if name, ok := d.data.Lookup(kind, d.width, key); ok {
+		data := d.data
+		if kind == namedata.Region {
+			data = d.regions
+		}
+		if name, ok := data.Lookup(kind, d.width, key); ok {
 			return name, true
 		}
 		return key, substitute
