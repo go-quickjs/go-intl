@@ -149,7 +149,7 @@ func NewCollatorFrom(src Source, loc Locale, opts CollatorOptions) (*Collator, e
 	if c.root, err = colldata.DecodeRoot(b); err != nil {
 		return nil, fmt.Errorf("intl: the root collation: %w", err)
 	}
-	chain, err := collationChain(src, loc.Data())
+	chain, err := collationChain(src, loc.Data(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -286,8 +286,12 @@ func NewCollatorFrom(src Source, loc Locale, opts CollatorOptions) (*Collator, e
 type collationSearch []*colldata.Locale
 
 // collationChain reads the collation data along a locale's chain in the
-// collation tree.
-func collationChain(src Source, d DataLocale) (collationSearch, error) {
+// collation tree. A collator's tailoring is read as ICU's CollationLoader
+// opens the tree, with ures_openNoDefault, and the types a locale lists as
+// ucol_getKeywordValuesForLocale does, with ures_open, which reaches the
+// default locale's bundles where the tree has none for the locale
+// (withDefault).
+func collationChain(src Source, d DataLocale, withDefault bool) (collationSearch, error) {
 	// ICU's index of the collation tree, where there is one, also knows
 	// where ICU goes for a locale it has no bundle for: "ar-Latn" is the
 	// root's, not Arabic's. The collation tree's own pairs are for a source
@@ -295,7 +299,7 @@ func collationChain(src Source, d DataLocale) (collationSearch, error) {
 	var steps []DataLocale
 	if fb, err := NewFallbacker(src); err == nil {
 		if _, ok := fb.icuTree(treeColl); ok {
-			steps = fb.ChainIn(treeColl, d)
+			steps = fb.chainIn(treeColl, d, withDefault)
 		}
 	}
 	if steps == nil {

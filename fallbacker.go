@@ -135,13 +135,28 @@ func (f *Fallbacker) icuTree(tree string) (*icuTree, bool) {
 // reads for the locale in that tree, most specific first, as data locales,
 // the root last. The index is optional, so that a source carrying only the
 // likely subtags and parent locales still works, by CLDR's chain.
+//
+// It is the chain ures_open reads, which reaches the default locale's
+// bundles where the tree has none for the locale. A break iterator's rules
+// and a collator's tailoring are read with ures_openNoDefault instead, which
+// goes from there to the root (chainNoDefault).
 func (f *Fallbacker) ChainIn(tree string, d DataLocale) []DataLocale {
+	return f.chainIn(tree, d, true)
+}
+
+// chainNoDefault is ChainIn as ures_openNoDefault reads a tree: without the
+// default locale's bundles.
+func (f *Fallbacker) chainNoDefault(tree string, d DataLocale) []DataLocale {
+	return f.chainIn(tree, d, false)
+}
+
+func (f *Fallbacker) chainIn(tree string, d DataLocale, withDefault bool) []DataLocale {
 	x, ok := f.icuTree(tree)
 	if !ok {
 		return f.Chain(d)
 	}
 	var chain []DataLocale
-	for _, name := range x.resolve(icuName(d)) {
+	for _, name := range x.resolve(icuName(d), withDefault) {
 		if name == "root" {
 			break
 		}
@@ -179,12 +194,13 @@ func icuName(d DataLocale) string {
 
 // resolve is what ures_open reads for a locale in a tree, as
 // icusrc.Locales.Resolve reads it at generation: the first bundle that
-// exists, found by ICU's fallback, then along its aliases and its parents or
-// its truncations to the root.
-func (x *icuTree) resolve(name string) []string {
+// exists, found by ICU's fallback, else the default locale's where
+// withDefault says, then along its aliases and its parents or its
+// truncations to the root.
+func (x *icuTree) resolve(name string, withDefault bool) []string {
 	if found, ok := x.existing(name); ok {
 		name = found
-	} else if defaultName := x.defaultLocaleName(); name != "root" && name != defaultName {
+	} else if defaultName := x.defaultLocaleName(); withDefault && name != "root" && name != defaultName {
 		// No bundle of the locale's, nor of a locale it falls back to: ICU
 		// reads the default locale's (entryOpen, U_USING_DEFAULT_WARNING),
 		// and else the root's.

@@ -219,7 +219,7 @@ func (i *LocaleInfo) Collations(l Locale) ([]string, error) {
 	if co, ok := i.keyword(l, "co"); ok {
 		return co, nil
 	}
-	chain, err := collationChain(i.src, l.Data())
+	chain, err := collationChain(i.src, l.Data(), true)
 	if err != nil {
 		return nil, err
 	}

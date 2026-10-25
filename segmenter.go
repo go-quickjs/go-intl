@@ -107,9 +107,11 @@ func breakRulesName(src Source, loc Locale, g Granularity) (string, error) {
 	var names []string
 	// "-u-va-posix" is ICU's variant POSIX, which the data locale holds:
 	// en_US_POSIX, which falls back to en_US.
+	// ICU's BreakIterator opens the tree with ures_openNoDefault: a
+	// locale it has no bundle for reads the root's, whatever the default.
 	chain := loc.Data().Fallback()
 	if fb, err := NewFallbacker(src); err == nil {
-		chain = fb.ChainIn(treeBrkitr, loc.Data())
+		chain = fb.chainNoDefault(treeBrkitr, loc.Data())
 	}
 	for _, d := range chain {
 		names = append(names, icuName(d))
