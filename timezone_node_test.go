@@ -58,7 +58,7 @@ func TestTimeZonesMatchNode(t *testing.T) {
 			ids++
 			var want *string
 			json.Unmarshal(c[2], &want)
-			df, err := NewDateTimeFormat(Locale{}, DateTimeFormatOptions{
+			df, err := NewDateTimeFormatFrom(nodeData, Locale{}, DateTimeFormatOptions{
 				// Node's names, ICU's canonical ones.
 				TimeZone: name, Compat: ZoneIdentifiers,
 			})
@@ -81,7 +81,7 @@ func TestTimeZonesMatchNode(t *testing.T) {
 				// may: Java's three-letter names, SystemV's.
 				continue
 			}
-			z, err := loadTimeZone(Embedded, name)
+			z, err := loadTimeZone(nodeData, name)
 			if err != nil {
 				fail("%v", err)
 				continue

@@ -63,7 +63,7 @@ func TestNumberDecimalMatchesNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if nf, err = intl.NewNumberFormat(loc, o); err != nil {
+			if nf, err = intl.NewNumberFormatFrom(nodeData, loc, o); err != nil {
 				t.Fatalf("%s: %v", key, err)
 			}
 			formats[key] = nf

@@ -49,7 +49,7 @@ func TestCalendarDaysMatchNode(t *testing.T) {
 	for i, run := range runs {
 		f, ok := formats[run.calendar]
 		if !ok {
-			f, err = intl.NewDateTimeFormat(loc, intl.DateTimeFormatOptions{
+			f, err = intl.NewDateTimeFormatFrom(nodeData, loc, intl.DateTimeFormatOptions{
 				Calendar: run.calendar, TimeZone: "UTC", Era: intl.WidthShort,
 				Year: intl.WidthNumeric, Month: intl.WidthNumeric, Day: intl.WidthNumeric,
 				// The days of Node's islamic and islamic-rgsa, which the

@@ -46,11 +46,23 @@ type Fallbacker struct {
 // icuTree is ICU's index of one of its trees, read when a locale is
 // resolved in it and looked up in where it lies: the tree's bundles,
 // aliases and parents, and, only if a bundle is missing, the tables ICU's
-// fallback then reads. availgen writes both as indexes (blob.Index).
+// fallback then reads and the default locale. availgen writes both tables
+// as indexes (blob.Index).
 type icuTree struct {
 	src      Source
 	index    blob.Index
 	fallback *blob.Index // data/icufallback.bin, read when first needed
+	// defaultName is ICU's name for the source's default locale, found
+	// when first needed (DefaultLocale).
+	defaultName string
+}
+
+// defaultLocaleName is the default locale's ICU name, "en_US".
+func (x *icuTree) defaultLocaleName() string {
+	if x.defaultName == "" {
+		x.defaultName = icuName(DefaultLocale(x.src).Data())
+	}
+	return x.defaultName
 }
 
 func (x *icuTree) has(name string) bool {
@@ -172,12 +184,12 @@ func icuName(d DataLocale) string {
 func (x *icuTree) resolve(name string) []string {
 	if found, ok := x.existing(name); ok {
 		name = found
-	} else if def, ok := x.fallbackValue("default"); ok && name != "root" && name != def {
+	} else if defaultName := x.defaultLocaleName(); name != "root" && name != defaultName {
 		// No bundle of the locale's, nor of a locale it falls back to: ICU
 		// reads the default locale's (entryOpen, U_USING_DEFAULT_WARNING),
 		// and else the root's.
 		name = "root"
-		if found, ok := x.existing(def); ok {
+		if found, ok := x.existing(defaultName); ok {
 			name = found
 		}
 	} else {

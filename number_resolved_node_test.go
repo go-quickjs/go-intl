@@ -139,7 +139,7 @@ func TestResolvedNumberOptionsMatchNode(t *testing.T) {
 			if g, ok := o["useGrouping"].(bool); ok && !g {
 				opts.UseGrouping = intl.GroupingNever
 			}
-			nf, err := intl.NewNumberFormat(loc, opts)
+			nf, err := intl.NewNumberFormatFrom(nodeData, loc, opts)
 			if err != nil {
 				got["error"] = "RangeError"
 				break
@@ -174,7 +174,7 @@ func TestResolvedNumberOptionsMatchNode(t *testing.T) {
 				RoundingMode: mode, RoundingIncrement: increment, TrailingZeroDisplay: zero,
 				Compat: intl.NodeICU,
 			}
-			pr, err := intl.NewPluralRules(loc, opts)
+			pr, err := intl.NewPluralRulesFrom(nodeData, loc, opts)
 			if err != nil {
 				got["error"] = "RangeError"
 				break
@@ -226,7 +226,7 @@ func TestPluralRulesDigits(t *testing.T) {
 		for _, compat := range []intl.Compat{intl.Standard, intl.PluralRulesDigits} {
 			o := c.opts
 			o.Compat = compat
-			pr, err := intl.NewPluralRules(loc, o)
+			pr, err := intl.NewPluralRulesFrom(nodeData, loc, o)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -273,7 +273,7 @@ func TestCurrencyDigitDefaults(t *testing.T) {
 		{intl.NumberFormatOptions{Style: intl.StyleCurrency, Currency: "USD",
 			MaximumFractionDigits: intl.Digits(0)}, "$1,235"},
 	} {
-		nf, err := intl.NewNumberFormat(loc, c.opts)
+		nf, err := intl.NewNumberFormatFrom(nodeData, loc, c.opts)
 		if err != nil {
 			t.Errorf("%+v: %v", c.opts, err)
 			continue

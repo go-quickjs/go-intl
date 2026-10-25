@@ -58,7 +58,7 @@ func TestRoundingPriorityMatchesNode(t *testing.T) {
 		opts.MaximumSignificantDigits = count("maximumSignificantDigits")
 		opts.MinimumFractionDigits = count("minimumFractionDigits")
 		opts.MaximumFractionDigits = count("maximumFractionDigits")
-		f, err := intl.NewNumberFormat(loc, opts)
+		f, err := intl.NewNumberFormatFrom(nodeData, loc, opts)
 		if err != nil {
 			differences = append(differences, fmt.Sprintf("%s: %v", c[0], err))
 			continue

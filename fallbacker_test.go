@@ -10,47 +10,57 @@ import (
 )
 
 // A locale none of whose bundles, nor those it falls back to, are in a tree
-// reads the default locale's before the root's, as ICU's ures_open does;
-// without a default, the root's. A browser's filtered trees leave whole
-// languages out: Chrome's unit tree has no Akan.
+// reads the default locale's before the root's, as ICU's ures_open does; a
+// default the tree has no bundle for either, or the root, reads the root's.
+// A browser's filtered trees leave whole languages out: Chrome's unit tree
+// has no Akan. The default is WithDefaultLocale's, and an overlay laid over
+// it keeps it.
 func TestChainInDefaultLocale(t *testing.T) {
-	index := func(version byte, records map[string][]byte) []byte {
-		b, err := blob.BuildIndex(version, records)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
+	tree, err := blob.BuildIndex(layout.ICUTree, map[string][]byte{"bundle root": nil, "bundle en": nil, "bundle de": nil})
+	if err != nil {
+		t.Fatal(err)
 	}
-	tree := index(layout.ICUTree, map[string][]byte{"bundle root": nil, "bundle en": nil, "bundle de": nil})
+	data, err := NewOverlay(Embedded, NewFS(fstest.MapFS{
+		"overlay.bin":      {Data: []byte("overlay 1\n")},
+		"icutree-unit.bin": {Data: tree},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	locale := func(tag string) Locale {
+		l, err := ParseLocale(tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	beneath, err := NewOverlay(WithDefaultLocale(Embedded, locale("de-CH")), NewFS(fstest.MapFS{
+		"overlay.bin":      {Data: []byte("overlay 1\n")},
+		"icutree-unit.bin": {Data: tree},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct {
-		name     string
-		fallback map[string][]byte
-		tag      string
-		want     string
+		name string
+		src  Source
+		tag  string
+		want string
 	}{
-		{"default", map[string][]byte{"default": []byte("en_US")}, "ak", "[en und]"},
-		{"default", map[string][]byte{"default": []byte("en_US")}, "de-AT", "[de und]"},
-		{"default", map[string][]byte{"default": []byte("en_US")}, "und", "[und]"},
-		{"none", map[string][]byte{}, "ak", "[und]"},
+		{"en-US", WithDefaultLocale(data, locale("en-US")), "ak", "[en und]"},
+		{"en-US", WithDefaultLocale(data, locale("en-US")), "de-AT", "[de und]"},
+		{"en-US", WithDefaultLocale(data, locale("en-US")), "und", "[und]"},
+		{"de", WithDefaultLocale(data, locale("de")), "ak", "[de und]"},
+		{"fr, which the tree has no bundle for", WithDefaultLocale(data, locale("fr")), "ak", "[und]"},
+		{"the root", WithDefaultLocale(data, Locale{}), "ak", "[und]"},
+		{"de-CH, beneath an overlay", beneath, "ak", "[de und]"},
 	} {
-		src, err := NewOverlay(Embedded, NewFS(fstest.MapFS{
-			"overlay.bin":      {Data: []byte("overlay 1\n")},
-			"icutree-unit.bin": {Data: tree},
-			"icufallback.bin":  {Data: index(layout.ICUFallback, c.fallback)},
-		}))
+		f, err := NewFallbacker(c.src)
 		if err != nil {
 			t.Fatal(err)
 		}
-		f, err := NewFallbacker(src)
-		if err != nil {
-			t.Fatal(err)
-		}
-		l, err := ParseLocale(c.tag)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := fmt.Sprint(f.ChainIn(treeUnit, l.Data())); got != c.want {
-			t.Errorf("%s %s: %s, want %s", c.name, c.tag, got, c.want)
+		if got := fmt.Sprint(f.ChainIn(treeUnit, locale(c.tag).Data())); got != c.want {
+			t.Errorf("default %s, %s: %s, want %s", c.name, c.tag, got, c.want)
 		}
 	}
 }

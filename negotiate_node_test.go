@@ -48,7 +48,7 @@ func TestAvailableLocalesMatchNode(t *testing.T) {
 		json.Unmarshal(c[2], &want)
 		m, ok := matchers[service]
 		if !ok {
-			if m, err = intl.NewLocaleMatcher(intl.Embedded, intl.Service(service)); err != nil {
+			if m, err = intl.NewLocaleMatcher(nodeData, intl.Service(service)); err != nil {
 				t.Fatal(err)
 			}
 			matchers[service] = m

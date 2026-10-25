@@ -16,7 +16,7 @@ import (
 // ICU knows, in a few surroundings, every Unicode extension type, and
 // test262's canonicalization tags, against Intl.getCanonicalLocales.
 func TestCanonicalizeMatchesNode(t *testing.T) {
-	c, err := intl.NewCanonicalizer(intl.Embedded, intl.CanonicalizeOptions{Compat: intl.NodeICU})
+	c, err := intl.NewCanonicalizer(nodeData, intl.CanonicalizeOptions{Compat: intl.NodeICU})
 	if err != nil {
 		t.Fatal(err)
 	}

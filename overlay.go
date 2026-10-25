@@ -111,6 +111,14 @@ func (s *overlaySource) readFile(name string) ([]byte, error) {
 // removes reports whether the manifest names the file, searching its
 // sorted lines where they lie: each step takes the line around the middle
 // of what is left.
+// defaultLocale is its base's, where its base was given one.
+func (s *overlaySource) defaultLocale() (Locale, bool) {
+	if d, ok := s.base.(defaultLocaler); ok {
+		return d.defaultLocale()
+	}
+	return Locale{}, false
+}
+
 func (s *overlaySource) removes(name string) bool {
 	b := s.removed
 	lo, hi := 0, len(b) // both at the start of a line, or hi at the end

@@ -71,7 +71,7 @@ func TestPluralRangeMatchesNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if p, err = intl.NewPluralRules(loc, o); err != nil {
+			if p, err = intl.NewPluralRulesFrom(nodeData, loc, o); err != nil {
 				t.Fatalf("%s: %v", key, err)
 			}
 			rules[key] = p
@@ -102,7 +102,7 @@ func TestPluralRangeMatchesNode(t *testing.T) {
 // selectRange with an end that is not a number throws in ECMA-402.
 func TestPluralRangeNaN(t *testing.T) {
 	loc, _ := intl.ParseLocale("en")
-	p, err := intl.NewPluralRules(loc, intl.PluralRulesOptions{})
+	p, err := intl.NewPluralRulesFrom(nodeData, loc, intl.PluralRulesOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

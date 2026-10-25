@@ -63,7 +63,7 @@ func TestPluralNotationMatchesNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if p, err = intl.NewPluralRules(loc, o); err != nil {
+			if p, err = intl.NewPluralRulesFrom(nodeData, loc, o); err != nil {
 				t.Fatalf("%s: %v", key, err)
 			}
 			rules[key] = p
@@ -152,7 +152,7 @@ func TestPluralSelectAsWritten(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		p, err := intl.NewPluralRules(loc, c.opts)
+		p, err := intl.NewPluralRulesFrom(nodeData, loc, c.opts)
 		if err != nil {
 			t.Fatal(err)
 		}

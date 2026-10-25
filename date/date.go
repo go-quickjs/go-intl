@@ -20,8 +20,9 @@ import (
 type Options struct {
 	// Source is the data; nil is the intl package's embedded data.
 	Source intl.Source
-	// Locale is the locale Date writes zone names in; nil is the host's,
-	// ICU's default locale.
+	// Locale is the locale Date writes zone names in; nil is ICU's default
+	// locale, the Source's (intl.DefaultLocale), which is the host's unless
+	// intl.WithDefaultLocale gave it another.
 	Locale *intl.Locale
 	// TimeZone is the zone local time is in; nil is the host's.
 	TimeZone *intl.TimeZone
@@ -55,7 +56,7 @@ func New(opts Options) (*Environment, error) {
 	if src == nil {
 		src = intl.Embedded
 	}
-	loc := intl.HostLocale()
+	loc := intl.DefaultLocale(src)
 	if opts.Locale != nil {
 		loc = *opts.Locale
 	}

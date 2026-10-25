@@ -41,7 +41,7 @@ func recordings(t *testing.T, file string) []recording {
 	if n := len(lines); n > 0 && lines[n-1] == "" {
 		lines = lines[:n-1]
 	}
-	out := []recording{{who: "Node", src: intl.Embedded, compat: intl.NodeICU, lines: lines}}
+	out := []recording{{who: "Node", src: recordedDefault(t, intl.Embedded), compat: intl.NodeICU, lines: lines}}
 	want := os.Getenv("INTL_CHROME")
 	if want == "" {
 		return withHeaders(out)
@@ -65,11 +65,33 @@ func recordings(t *testing.T, file string) []recording {
 			t.Fatal(err)
 		}
 		out = append(out, recording{
-			who: "Chrome " + version, src: p.Source, compat: p.Compat,
+			who: "Chrome " + version, src: recordedDefault(t, p.Source), compat: p.Compat,
 			lines: applyDelta(t, lines, delta),
 		})
 	}
 	return withHeaders(out)
+}
+
+// nodeData is the package's data with the default locale Node's recordings
+// were made with, en-US, whatever the host's is, for the replays of Node's
+// recordings alone.
+var nodeData = func() intl.Source {
+	x, err := intl.ParseLocale("en-US")
+	if err != nil {
+		panic(err)
+	}
+	return intl.WithDefaultLocale(intl.Embedded, x)
+}()
+
+// recordedDefault is a source with the default locale every recording was
+// made with, Node's and the Chromes': en-US, whatever the host's is.
+func recordedDefault(t *testing.T, src intl.Source) intl.Source {
+	t.Helper()
+	x, err := intl.ParseLocale("en-US")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return intl.WithDefaultLocale(src, x)
 }
 
 // replay runs a test of a recording over each of its versions, a subtest

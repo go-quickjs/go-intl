@@ -147,7 +147,7 @@ func temporalOutcome(tag string, in map[string]any, method, kind, calendar strin
 	if err != nil {
 		return err.Error()
 	}
-	f, err := intl.NewDateTimeFormat(loc, opts)
+	f, err := intl.NewDateTimeFormatFrom(nodeData, loc, opts)
 	if err != nil {
 		// The option errors CreateDateTimeFormat throws here are the
 		// TypeErrors of a style a method's required fields refuse.

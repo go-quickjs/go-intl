@@ -76,7 +76,7 @@ func TestCollatorMatchesNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		c, err := NewCollator(loc, opts)
+		c, err := NewCollatorFrom(nodeData, loc, opts)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

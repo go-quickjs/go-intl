@@ -38,7 +38,7 @@ func TestRoundingIncrementMatchesNode(t *testing.T) {
 	for _, c := range file.Cases {
 		inc, frac := int(c[0].(float64)), int(c[1].(float64))
 		mode, x, want := c[2].(string), c[3].(float64), c[4].(string)
-		f, err := intl.NewNumberFormat(loc, intl.NumberFormatOptions{RoundingIncrement: inc,
+		f, err := intl.NewNumberFormatFrom(nodeData, loc, intl.NumberFormatOptions{RoundingIncrement: inc,
 			MinimumFractionDigits: intl.Digits(frac), MaximumFractionDigits: intl.Digits(frac),
 			RoundingMode: modes[mode], UseGrouping: intl.GroupingNever, Compat: intl.NodeICU})
 		if err != nil {
@@ -59,7 +59,7 @@ func TestRoundingIncrementMatchesNode(t *testing.T) {
 // (-0).toLocaleString(); a float's digits had kept their own.
 func TestNegativeZeroFromFloat(t *testing.T) {
 	loc, _ := intl.ParseLocale("en-US")
-	f, err := intl.NewNumberFormat(loc, intl.NumberFormatOptions{})
+	f, err := intl.NewNumberFormatFrom(nodeData, loc, intl.NumberFormatOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

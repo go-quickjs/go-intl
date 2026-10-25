@@ -348,10 +348,11 @@ func compareBytes(a, b []byte) int {
 }
 
 // openShared opens the pool a data set kept per locale shares, which its
-// tables are read with. An overlay's may extend its base's (overlay.go).
+// tables are read with. An overlay's may extend its base's (overlay.go), and
+// a source laid over an overlay opens it through the overlay.
 func openShared(src Source, m Marker, version byte) (blob.Shared, error) {
-	if o, ok := src.(*overlaySource); ok {
-		return o.openPool(m, version)
+	if p, ok := src.(poolSource); ok {
+		return p.openPool(m, version)
 	}
 	b, err := src.Open(m, DataLocale{})
 	if err != nil {

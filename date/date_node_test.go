@@ -81,6 +81,9 @@ func TestDateMatchesNode(t *testing.T) {
 // replayDate checks a recording's cases, but for its header, over a source
 // and in a recording's divergences.
 func replayDate(t *testing.T, src intl.Source, compat intl.Compat, lines []string, now time.Time, loc intl.Locale) {
+	// The recordings ran with ICU's default locale the one the header
+	// names, whatever the host's is.
+	src = intl.WithDefaultLocale(src, loc)
 	var env *Environment
 	// Setting process.env.TZ empties V8's offset cache, so each zone line
 	// starts a new Environment.
