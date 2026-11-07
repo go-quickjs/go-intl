@@ -127,8 +127,8 @@ func (zs *Zones) fromTzRecord(r tzRecord) (TimeZone, error) {
 
 // TimeZoneFromIdentifier is TimeZone::try_from_identifier_str: a zone's
 // name, or an offset to the minute.
-func (zs *Zones) TimeZoneFromIdentifier(s []byte) (TimeZone, error) {
-	c := &cursor{src: s}
+func (zs *Zones) TimeZoneFromIdentifier(s []byte, compat intl.Compat) (TimeZone, error) {
+	c := newCursor(s, compat)
 	r, err := parseTimeZone(c)
 	if err == nil {
 		err = c.close()
@@ -141,24 +141,24 @@ func (zs *Zones) TimeZoneFromIdentifier(s []byte) (TimeZone, error) {
 
 // TimeZoneFromString is TimeZone::try_from_str: an identifier, or the zone
 // of a string in any of Temporal's formats.
-func (zs *Zones) TimeZoneFromString(s []byte) (TimeZone, error) {
-	if tz, err := zs.TimeZoneFromIdentifier(s); err == nil {
+func (zs *Zones) TimeZoneFromString(s []byte, compat intl.Compat) (TimeZone, error) {
+	if tz, err := zs.TimeZoneFromIdentifier(s, compat); err == nil {
 		return tz, nil
 	}
-	if tz, ok := zs.parseAllowedTimeZoneFormats(s); ok {
+	if tz, ok := zs.parseAllowedTimeZoneFormats(s, compat); ok {
 		return tz, nil
 	}
 	return TimeZone{}, rangeError("Not a valid time zone string")
 }
 
 // parseAllowedTimeZoneFormats is parse_allowed_timezone_formats.
-func (zs *Zones) parseAllowedTimeZoneFormats(s []byte) (TimeZone, bool) {
+func (zs *Zones) parseAllowedTimeZoneFormats(s []byte, compat intl.Compat) (TimeZone, bool) {
 	var r parseRecord
 	var err error
-	if r, err = parseIXDTF(s, variantDateTime); err != nil {
-		if r, err = parseAnnotatedTime(&cursor{src: s}, keepAll); err != nil {
-			if r, err = parseIXDTF(s, variantYearMonth); err != nil {
-				if r, err = parseIXDTF(s, variantMonthDay); err != nil {
+	if r, err = parseIXDTF(s, variantDateTime, compat); err != nil {
+		if r, err = parseAnnotatedTime(newCursor(s, compat), keepAll); err != nil {
+			if r, err = parseIXDTF(s, variantYearMonth, compat); err != nil {
+				if r, err = parseIXDTF(s, variantMonthDay, compat); err != nil {
 					return TimeZone{}, false
 				}
 			}

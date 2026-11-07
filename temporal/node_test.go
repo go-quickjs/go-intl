@@ -45,39 +45,12 @@ func TestTemporalMatchesNode(t *testing.T) {
 		if len(line) == 0 || line[0] == '#' {
 			continue
 		}
-		var c []json.RawMessage
-		if err := json.Unmarshal(line, &c); err != nil || len(c) != 4 {
-			t.Fatalf("%s: %v", line, err)
-		}
-		var op string
-		json.Unmarshal(c[0], &op)
+		op, wrong := h.replay(t, line)
 		ran[op]++
-		recv, err := decodeValue(c[1])
-		if err != nil {
-			t.Fatalf("%s: %v", line, err)
-		}
-		var rawArgs []json.RawMessage
-		json.Unmarshal(c[2], &rawArgs)
-		var args []any
-		for _, a := range rawArgs {
-			v, err := decodeValue(a)
-			if err != nil {
-				t.Fatalf("%s: %v", line, err)
-			}
-			args = append(args, v)
-		}
-		got := h.run(op, recv, args)
-		var want any
-		if err := json.Unmarshal(c[3], &want); err != nil {
-			t.Fatal(err)
-		}
-		gotJSON, _ := json.Marshal(got)
-		var gotNorm any
-		json.Unmarshal(gotJSON, &gotNorm)
-		if !jsonEqual(gotNorm, want) {
+		if wrong != "" {
 			bad[op]++
 			if bad[op] <= 8 {
-				t.Errorf("%s %s %s: got %s, want %s", op, c[1], c[2], gotJSON, c[3])
+				t.Error(wrong)
 			}
 		}
 	}
@@ -97,6 +70,43 @@ func TestTemporalMatchesNode(t *testing.T) {
 		t.Logf("%s: %d of %d differ", op, bad[op], ran[op])
 	}
 	t.Logf("%d cases", total)
+}
+
+// replay runs a line of a recording, and says how its answer differs, if
+// it does.
+func (h *harness) replay(t *testing.T, line []byte) (op, wrong string) {
+	t.Helper()
+	var c []json.RawMessage
+	if err := json.Unmarshal(line, &c); err != nil || len(c) != 4 {
+		t.Fatalf("%s: %v", line, err)
+	}
+	json.Unmarshal(c[0], &op)
+	recv, err := decodeValue(c[1])
+	if err != nil {
+		t.Fatalf("%s: %v", line, err)
+	}
+	var rawArgs []json.RawMessage
+	json.Unmarshal(c[2], &rawArgs)
+	var args []any
+	for _, a := range rawArgs {
+		v, err := decodeValue(a)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		args = append(args, v)
+	}
+	got := h.run(op, recv, args)
+	var want any
+	if err := json.Unmarshal(c[3], &want); err != nil {
+		t.Fatal(err)
+	}
+	gotJSON, _ := json.Marshal(got)
+	var gotNorm any
+	json.Unmarshal(gotJSON, &gotNorm)
+	if !jsonEqual(gotNorm, want) {
+		wrong = fmt.Sprintf("%s %s %s: got %s, want %s", op, c[1], c[2], gotJSON, c[3])
+	}
+	return op, wrong
 }
 
 func jsonEqual(a, b any) bool {
@@ -231,9 +241,10 @@ type specialValue struct {
 // ==== The harness ====
 
 type harness struct {
-	data  *Data
-	zones *Zones
-	opm   map[string]opFunc
+	data   *Data
+	zones  *Zones
+	opm    map[string]opFunc
+	compat intl.Compat
 }
 
 func newHarness() (*harness, error) {
@@ -241,7 +252,7 @@ func newHarness() (*harness, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &harness{data: d, zones: d.Zones}
+	h := &harness{data: d, zones: d.Zones, compat: intl.NodeICU}
 	h.opm = map[string]opFunc{}
 	h.durationOps(h.opm)
 	h.fromOps(h.opm)
@@ -1031,7 +1042,7 @@ func (h *harness) relativeTo(o *jsObject) (RelativeTo, error) {
 		if err != nil {
 			return RelativeTo{}, err
 		}
-		rel, err := h.data.ParseRelativeTo(b)
+		rel, err := h.data.ParseRelativeTo(b, h.compat)
 		return rel, rustErr(err)
 	}
 	if !isObject(v) {

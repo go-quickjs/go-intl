@@ -4,6 +4,8 @@ import (
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	intl "github.com/go-quickjs/go-intl"
 )
 
 // Parsing Temporal's strings, as temporal_rs 0.2.3's parsers module and
@@ -55,7 +57,7 @@ const (
 
 // parseIXDTF is parse_ixdtf: the string parsed for a variant, with
 // Temporal's checks on its calendar and date.
-func parseIXDTF(src []byte, v parseVariant) (parseRecord, error) {
+func parseIXDTF(src []byte, v parseVariant, compat intl.Compat) (parseRecord, error) {
 	var first *annotation
 	duplicate := false
 	handler := func(a annotation) bool {
@@ -69,7 +71,7 @@ func parseIXDTF(src []byte, v parseVariant) (parseRecord, error) {
 		}
 		return true
 	}
-	c := &cursor{src: src}
+	c := newCursor(src, compat)
 	var r parseRecord
 	var err error
 	switch v {
@@ -118,8 +120,8 @@ func parseIXDTF(src []byte, v parseVariant) (parseRecord, error) {
 	return r, nil
 }
 
-func parseDateTimeString(src []byte) (parseRecord, error) {
-	r, err := parseIXDTF(src, variantDateTime)
+func parseDateTimeString(src []byte, compat intl.Compat) (parseRecord, error) {
+	r, err := parseIXDTF(src, variantDateTime, compat)
 	if err != nil {
 		return r, err
 	}
@@ -129,8 +131,8 @@ func parseDateTimeString(src []byte) (parseRecord, error) {
 	return r, nil
 }
 
-func parseZonedDateTimeString(src []byte) (parseRecord, error) {
-	r, err := parseIXDTF(src, variantDateTime)
+func parseZonedDateTimeString(src []byte, compat intl.Compat) (parseRecord, error) {
+	r, err := parseIXDTF(src, variantDateTime, compat)
 	if err != nil {
 		return r, err
 	}
@@ -147,23 +149,23 @@ func checkNoZ(r parseRecord) (parseRecord, error) {
 	return r, nil
 }
 
-func parseYearMonthString(src []byte) (parseRecord, error) {
-	r, err := parseIXDTF(src, variantYearMonth)
+func parseYearMonthString(src []byte, compat intl.Compat) (parseRecord, error) {
+	r, err := parseIXDTF(src, variantYearMonth, compat)
 	if err == nil {
 		return checkNoZ(r)
 	}
-	if dt, err2 := parseDateTimeString(src); err2 == nil {
+	if dt, err2 := parseDateTimeString(src, compat); err2 == nil {
 		return checkNoZ(dt)
 	}
 	return r, err
 }
 
-func parseMonthDayString(src []byte) (parseRecord, error) {
-	r, err := parseIXDTF(src, variantMonthDay)
+func parseMonthDayString(src []byte, compat intl.Compat) (parseRecord, error) {
+	r, err := parseIXDTF(src, variantMonthDay, compat)
 	if err == nil {
 		return checkNoZ(r)
 	}
-	if dt, err2 := parseDateTimeString(src); err2 == nil {
+	if dt, err2 := parseDateTimeString(src, compat); err2 == nil {
 		return checkNoZ(dt)
 	}
 	return r, err
@@ -180,12 +182,12 @@ func checkTimeRecord(r parseRecord) (timeRecord, error) {
 	return *r.time, nil
 }
 
-func parseTimeString(src []byte) (timeRecord, error) {
-	r, err := parseIXDTF(src, variantTime)
+func parseTimeString(src []byte, compat intl.Compat) (timeRecord, error) {
+	r, err := parseIXDTF(src, variantTime, compat)
 	if err == nil {
 		return checkTimeRecord(r)
 	}
-	if dt, err2 := parseDateTimeString(src); err2 == nil {
+	if dt, err2 := parseDateTimeString(src, compat); err2 == nil {
 		return checkTimeRecord(dt)
 	}
 	return timeRecord{}, err
@@ -197,17 +199,17 @@ func keepAll(annotation) bool { return true }
 // parseAllowedCalendarFormats is parse_allowed_calendar_formats: the
 // calendar of a string that is any of Temporal's formats, and false for
 // one that is none.
-func parseAllowedCalendarFormats(s []byte) ([]byte, bool) {
-	if r, err := parseIXDTF(s, variantDateTime); err == nil {
+func parseAllowedCalendarFormats(s []byte, compat intl.Compat) ([]byte, bool) {
+	if r, err := parseIXDTF(s, variantDateTime, compat); err == nil {
 		return r.calendar, true
 	}
-	if r, err := parseAnnotatedTime(&cursor{src: s}, keepAll); err == nil {
+	if r, err := parseAnnotatedTime(newCursor(s, compat), keepAll); err == nil {
 		return r.calendar, true
 	}
-	if r, err := parseIXDTF(s, variantYearMonth); err == nil {
+	if r, err := parseIXDTF(s, variantYearMonth, compat); err == nil {
 		return r.calendar, true
 	}
-	if r, err := parseIXDTF(s, variantMonthDay); err == nil {
+	if r, err := parseIXDTF(s, variantMonthDay, compat); err == nil {
 		return r.calendar, true
 	}
 	return nil, false
@@ -254,8 +256,8 @@ func checkRecordTime(r parseRecord) error {
 }
 
 // ParseDate is ParsedDate::from_utf8.
-func ParseDate(s []byte) (ParsedDate, error) {
-	r, err := parseDateTimeString(s)
+func ParseDate(s []byte, compat intl.Compat) (ParsedDate, error) {
+	r, err := parseDateTimeString(s, compat)
 	if err != nil {
 		return ParsedDate{}, err
 	}
@@ -270,8 +272,8 @@ func ParseDate(s []byte) (ParsedDate, error) {
 }
 
 // ParseYearMonth is ParsedDate::year_month_from_utf8.
-func ParseYearMonth(s []byte) (ParsedDate, error) {
-	r, err := parseYearMonthString(s)
+func ParseYearMonth(s []byte, compat intl.Compat) (ParsedDate, error) {
+	r, err := parseYearMonthString(s, compat)
 	if err != nil {
 		return ParsedDate{}, err
 	}
@@ -286,8 +288,8 @@ func ParseYearMonth(s []byte) (ParsedDate, error) {
 }
 
 // ParseMonthDay is ParsedDate::month_day_from_utf8.
-func ParseMonthDay(s []byte) (ParsedDate, error) {
-	r, err := parseMonthDayString(s)
+func ParseMonthDay(s []byte, compat intl.Compat) (ParsedDate, error) {
+	r, err := parseMonthDayString(s, compat)
 	if err != nil {
 		return ParsedDate{}, err
 	}
@@ -311,8 +313,8 @@ type ParsedDateTime struct {
 }
 
 // ParseDateTime is ParsedDateTime::from_utf8.
-func ParseDateTime(s []byte) (ParsedDateTime, error) {
-	r, err := parseDateTimeString(s)
+func ParseDateTime(s []byte, compat intl.Compat) (ParsedDateTime, error) {
+	r, err := parseDateTimeString(s, compat)
 	if err != nil {
 		return ParsedDateTime{}, err
 	}
@@ -333,8 +335,8 @@ func ParseDateTime(s []byte) (ParsedDateTime, error) {
 func (p ParsedDateTime) Calendar() string { return p.date.cal }
 
 // ParsePlainTime is PlainTime::from_utf8.
-func ParsePlainTime(s []byte) (PlainTime, error) {
-	r, err := parseTimeString(s)
+func ParsePlainTime(s []byte, compat intl.Compat) (PlainTime, error) {
+	r, err := parseTimeString(s, compat)
 	if err != nil {
 		return PlainTime{}, err
 	}
@@ -503,8 +505,8 @@ func CalendarID(s string) (string, bool) {
 // parse_temporal_calendar_string has it: a calendar identifier, or the
 // calendar of a string in any of Temporal's formats, ISO where it names
 // none.
-func ParseCalendarString(s []byte) (string, bool) {
-	if cal, ok := parseAllowedCalendarFormats(s); ok {
+func ParseCalendarString(s []byte, compat intl.Compat) (string, bool) {
+	if cal, ok := parseAllowedCalendarFormats(s, compat); ok {
 		if len(cal) == 0 {
 			return "iso8601", true
 		}

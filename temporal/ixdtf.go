@@ -1,7 +1,11 @@
 package temporal
 
+import intl "github.com/go-quickjs/go-intl"
+
 // ISO 8601 and RFC 9557 strings, parsed as ICU4X's ixdtf crate 0.6.4
-// parses them, over the bytes temporal_rs hands it.
+// parses them, over the bytes temporal_rs hands it, but for annotations
+// and zones' names, which are 0.6.7's unless intl.AnnotationLookahead asks
+// for 0.6.4's.
 
 // ixdtfError is ixdtf's ParseError, by its message.
 type ixdtfError string
@@ -57,6 +61,13 @@ func (e ixdtfError) asTemporal() error { return rangeError("%s", string(e)) }
 type cursor struct {
 	pos int
 	src []byte
+	// lookahead reads annotations as ixdtf before 0.6.7 does
+	// (intl.AnnotationLookahead).
+	lookahead bool
+}
+
+func newCursor(src []byte, compat intl.Compat) *cursor {
+	return &cursor{src: src, lookahead: compat.Has(intl.AnnotationLookahead)}
 }
 
 // at is the byte n on, and false past the end.
@@ -81,6 +92,16 @@ func (c *cursor) next() (byte, bool) {
 	b, ok := c.current()
 	c.pos++
 	return b, ok
+}
+
+// nextIf is Cursor::next_if: the current byte, passed, if f takes it.
+func (c *cursor) nextIf(f func(byte) bool) (byte, bool) {
+	b, ok := c.current()
+	if !ok || !f(b) {
+		return 0, false
+	}
+	c.pos++
+	return b, true
 }
 
 // nextDigit is Cursor::next_digit: the next byte's value if a digit, false
@@ -125,6 +146,8 @@ func isHyphen(b byte) bool     { return b == '-' }
 func isColon(b byte) bool      { return b == ':' }
 func isOpen(b byte) bool       { return b == '[' }
 func isClose(b byte) bool      { return b == ']' }
+func isNotClose(b byte) bool   { return !isClose(b) }
+func isValuePart(b byte) bool  { return isDigit(b) || isAlpha(b) }
 
 // dateRecord is DateRecord.
 type dateRecord struct {
@@ -620,6 +643,32 @@ func parseTimeZone(c *cursor) (tzRecord, error) {
 }
 
 func parseTzName(c *cursor) ([]byte, error) {
+	if c.lookahead {
+		return parseTzNameLookahead(c)
+	}
+	start := c.pos
+	if _, ok := c.nextIf(isTzLeading); !ok {
+		return nil, errTzLeadingChar
+	}
+	for {
+		b, ok := c.nextIf(isNotClose)
+		if !ok {
+			return c.src[start:c.pos], nil
+		}
+		if b == '/' {
+			if _, ok := c.nextIf(isTzChar); !ok {
+				return nil, errIanaCharPostSeparator
+			}
+			continue
+		}
+		if !isTzChar(b) {
+			return nil, errIanaChar
+		}
+	}
+}
+
+// parseTzNameLookahead is parse_tz_iana_name before ixdtf 0.6.7.
+func parseTzNameLookahead(c *cursor) ([]byte, error) {
 	if !c.checkOr(false, isTzLeading) {
 		return nil, errTzLeadingChar
 	}
@@ -772,6 +821,26 @@ func parseKVAnnotation(c *cursor) (annotation, error) {
 }
 
 func parseAnnotationKey(c *cursor) ([]byte, error) {
+	if c.lookahead {
+		return parseAnnotationKeyLookahead(c)
+	}
+	start := c.pos
+	if _, ok := c.nextIf(isKeyLeading); !ok {
+		return nil, errAnnotationKeyLeadingChar
+	}
+	for {
+		b, ok := c.nextIf(func(b byte) bool { return b != '=' })
+		if !ok {
+			return c.src[start:c.pos], nil
+		}
+		if !isKeyChar(b) {
+			return nil, errAnnotationKeyChar
+		}
+	}
+}
+
+// parseAnnotationKeyLookahead is parse_annotation_key before ixdtf 0.6.7.
+func parseAnnotationKeyLookahead(c *cursor) ([]byte, error) {
 	start := c.pos
 	b, ok := c.next()
 	if !ok || !isKeyLeading(b) {
@@ -792,6 +861,33 @@ func parseAnnotationKey(c *cursor) ([]byte, error) {
 }
 
 func parseAnnotationValue(c *cursor) ([]byte, error) {
+	if c.lookahead {
+		return parseAnnotationValueLookahead(c)
+	}
+	start := c.pos
+	if _, ok := c.nextIf(isValuePart); !ok {
+		return nil, errAnnotationValueChar
+	}
+	for {
+		b, ok := c.nextIf(isNotClose)
+		if !ok {
+			return c.src[start:c.pos], nil
+		}
+		if isHyphen(b) {
+			if _, ok := c.nextIf(isValuePart); !ok {
+				return nil, errAnnotationValueCharPostHyp
+			}
+			continue
+		}
+		if !isValuePart(b) {
+			return nil, errAnnotationValueChar
+		}
+	}
+}
+
+// parseAnnotationValueLookahead is parse_annotation_value before ixdtf
+// 0.6.7.
+func parseAnnotationValueLookahead(c *cursor) ([]byte, error) {
 	start := c.pos
 	c.pos++
 	for {
@@ -807,13 +903,13 @@ func parseAnnotationValue(c *cursor) ([]byte, error) {
 		}
 		if isHyphen(b) {
 			p, ok := c.at(1)
-			if !ok || !(isDigit(p) || isAlpha(p)) {
+			if !ok || !isValuePart(p) {
 				return nil, errAnnotationValueCharPostHyp
 			}
 			c.pos++
 			continue
 		}
-		if !(isDigit(b) || isAlpha(b)) {
+		if !isValuePart(b) {
 			return nil, errAnnotationValueChar
 		}
 	}

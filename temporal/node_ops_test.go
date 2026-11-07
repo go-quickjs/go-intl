@@ -1310,7 +1310,7 @@ func (h *harness) zonedOps(m map[string]opFunc) {
 		if !ok {
 			return nil, typeErr("Time zone must be string")
 		}
-		tz, err := h.zones.TimeZoneFromIdentifier([]byte(stdString(s)))
+		tz, err := h.zones.TimeZoneFromIdentifier([]byte(stdString(s)), h.compat)
 		if err != nil {
 			return nil, rustErr(err)
 		}

@@ -1,5 +1,7 @@
 package temporal
 
+import intl "github.com/go-quickjs/go-intl"
+
 // An Instant is Temporal.Instant's value: nanoseconds since 1970, within
 // 10^8 days either way.
 type Instant struct{ ns int128 }
@@ -33,8 +35,8 @@ func InstantFromEpochMilliseconds(ms int64) (Instant, error) {
 func (i Instant) EpochMilliseconds() int64 { return i.ns.divEuclid(i128(1_000_000)).int64() }
 
 // ParseInstant is Instant::from_utf8.
-func ParseInstant(s []byte) (Instant, error) {
-	r, err := parseIXDTF(s, variantDateTime)
+func ParseInstant(s []byte, compat intl.Compat) (Instant, error) {
+	r, err := parseIXDTF(s, variantDateTime, compat)
 	if err != nil {
 		return Instant{}, err
 	}

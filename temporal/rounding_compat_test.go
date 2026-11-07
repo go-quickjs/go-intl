@@ -24,7 +24,7 @@ func TestRoundingWindow(t *testing.T) {
 		}
 		return p
 	}
-	rel, err := data.ParseRelativeTo([]byte("2020-01-31"))
+	rel, err := data.ParseRelativeTo([]byte("2020-01-31"), intl.Standard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestRepeatedMidnight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rel, err := data.ParseRelativeTo([]byte("2010-03-04T23:10:00+08:00[Antarctica/Casey]"))
+	rel, err := data.ParseRelativeTo([]byte("2010-03-04T23:10:00+08:00[Antarctica/Casey]"), intl.Standard)
 	if err != nil {
 		t.Fatal(err)
 	}

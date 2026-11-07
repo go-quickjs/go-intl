@@ -28,7 +28,7 @@ func TestPlainDateToZonedDateTimeOutOfRange(t *testing.T) {
 		"UTC": "RangeError: Instant nanoseconds are not within a valid epoch range.",
 		"+00": "RangeError: Not in a valid ISO day range.",
 	} {
-		tz, err := zs.TimeZoneFromString([]byte(zone))
+		tz, err := zs.TimeZoneFromString([]byte(zone), intl.Standard)
 		if err != nil {
 			t.Fatal(err)
 		}

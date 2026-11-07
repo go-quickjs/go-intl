@@ -115,7 +115,10 @@ Other URLs:
   newer: temporal_rs's types and operations, temporal_capi's conversions
   (built, as Node builds it, with `float64_representable_durations`),
   ixdtf's parser, zoneinfo64's reading of ICU's zone data, and
-  icu_locale_core's parsing of a calendar name. `temporalgen` reads
+  icu_locale_core's parsing of a calendar name. `ixdtf` 0.6.7's reading of
+  annotations and zone names, as Chromium vendors it at 158.0.8127.18
+  (`third_party/rust/chromium_crates_io/vendor/ixdtf-v0_6`), is the standard's
+  side of `AnnotationLookahead`, and 0.6.4's is Node's. `temporalgen` reads
   `icu_calendar`'s crate, after checking its checksum, for the four source
   files that are data: the Chinese, Korean and Qing years and the Umm
   al-Qura years. `tzidgen` reads `timezone_provider`'s the same way, for

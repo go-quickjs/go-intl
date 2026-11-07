@@ -498,8 +498,8 @@ type ParsedZonedDateTime struct {
 func (p ParsedZonedDateTime) Calendar() string { return p.date.cal }
 
 // ParseZonedDateTime is ParsedZonedDateTime::from_utf8_with_provider.
-func (zs *Zones) ParseZonedDateTime(s []byte) (ParsedZonedDateTime, error) {
-	r, err := parseZonedDateTimeString(s)
+func (zs *Zones) ParseZonedDateTime(s []byte, compat intl.Compat) (ParsedZonedDateTime, error) {
+	r, err := parseZonedDateTimeString(s, compat)
 	if err != nil {
 		return ParsedZonedDateTime{}, err
 	}

@@ -89,7 +89,7 @@ func (h *harness) toTimeZone(v any) (TimeZone, error) {
 	if !ok {
 		return TimeZone{}, typeErr("Time zone must be string or ZonedDateTime object.")
 	}
-	tz, err := h.zones.TimeZoneFromString([]byte(stdString(s)))
+	tz, err := h.zones.TimeZoneFromString([]byte(stdString(s)), h.compat)
 	return tz, rustErr(err)
 }
 
@@ -119,7 +119,7 @@ func (h *harness) toCalendar(v any) (*Calendar, error) {
 	if !ok {
 		return nil, typeErr("Calendar must be string or calendared Temporal object.")
 	}
-	id, ok := ParseCalendarString([]byte(stdString(s)))
+	id, ok := ParseCalendarString([]byte(stdString(s)), h.compat)
 	if !ok {
 		return nil, rangeErr("Invalid calendar string")
 	}
@@ -464,7 +464,7 @@ func (h *harness) toPlainTime(v any, opts any, method string) (PlainTime, error)
 		if err != nil {
 			return PlainTime{}, err
 		}
-		t, err := ParsePlainTime(b)
+		t, err := ParsePlainTime(b, h.compat)
 		if err != nil {
 			return PlainTime{}, rustErr(err)
 		}
@@ -528,7 +528,7 @@ func (h *harness) toPlainDate(v any, opts any, method string) (PlainDate, error)
 		if err != nil {
 			return PlainDate{}, err
 		}
-		p, err := ParseDate(b)
+		p, err := ParseDate(b, h.compat)
 		if err != nil {
 			return PlainDate{}, rustErr(err)
 		}
@@ -586,7 +586,7 @@ func (h *harness) toPlainDateTime(v any, opts any, method string) (PlainDateTime
 		if err != nil {
 			return PlainDateTime{}, err
 		}
-		p, err := ParseDateTime(b)
+		p, err := ParseDateTime(b, h.compat)
 		if err != nil {
 			return PlainDateTime{}, rustErr(err)
 		}
@@ -632,7 +632,7 @@ func (h *harness) toPlainYearMonth(v any, opts any, method string) (PlainYearMon
 		if err != nil {
 			return PlainYearMonth{}, err
 		}
-		p, err := ParseYearMonth(b)
+		p, err := ParseYearMonth(b, h.compat)
 		if err != nil {
 			return PlainYearMonth{}, rustErr(err)
 		}
@@ -674,7 +674,7 @@ func (h *harness) toPlainMonthDay(v any, opts any, method string) (PlainMonthDay
 		if err != nil {
 			return PlainMonthDay{}, err
 		}
-		p, err := ParseMonthDay(b)
+		p, err := ParseMonthDay(b, h.compat)
 		if err != nil {
 			return PlainMonthDay{}, rustErr(err)
 		}
@@ -724,7 +724,7 @@ func (h *harness) toInstant(v any) (Instant, error) {
 	if err != nil {
 		return Instant{}, err
 	}
-	i, err := ParseInstant(b)
+	i, err := ParseInstant(b, h.compat)
 	return i, rustErr(err)
 }
 
@@ -768,7 +768,7 @@ func (h *harness) toZonedDateTime(v any, opts any, method string, present bool) 
 		if err != nil {
 			return ZonedDateTime{}, err
 		}
-		p, err := h.zones.ParseZonedDateTime(b)
+		p, err := h.zones.ParseZonedDateTime(b, h.compat)
 		if err != nil {
 			return ZonedDateTime{}, rustErr(err)
 		}

@@ -184,6 +184,11 @@ const (
 	// WholeMinuteOffset has Date's getTimezoneOffset count whole minutes,
 	// truncated, as V8 before 15.6 does.
 	WholeMinuteOffset
+	// AnnotationLookahead reads an annotation and a zone's name in a
+	// Temporal string as ixdtf before 0.6.7 does: a character ahead, so
+	// that a key or a value of one character is refused, and a value's
+	// first character is not looked at.
+	AnnotationLookahead
 	// ThinSpace writes a plain space where ICU writes U+2009 in a date or a
 	// range of dates, as Chrome's V8 does and Node's does not.
 	ThinSpace
@@ -223,7 +228,8 @@ const (
 		RoundingWindow | RepeatedMidnight | PatternCalendar | PluralRulesDigits |
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
 		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity |
-		TrueKeywords | LeftToRightDirection | WeekYearOmitted | WholeMinuteOffset
+		TrueKeywords | LeftToRightDirection | WeekYearOmitted | WholeMinuteOffset |
+		AnnotationLookahead
 )
 
 // Has reports whether Node's, or the browser's, behavior is chosen for a
@@ -653,6 +659,20 @@ var divergences = []Divergence{
 		Standard: "ECMA-262's (t - LocalTime(t)) / msPerMinute, the minutes and their fraction: Abidjan's " +
 			"local mean time in 1900, 16 minutes and 8 seconds, is 16.133333333333333",
 		Node: "V8 before 15.6 keeps the offset in whole minutes (DateCache::TimezoneOffset), truncated: 16",
+	},
+	{
+		Name: "AnnotationLookahead", Flag: AnnotationLookahead,
+		Area: "Temporal",
+		What: "an annotation of a Temporal string, and a time zone's name, read character by character",
+		Standard: "ECMA-262's grammar, RFC 9557's: a key or a value of one character is one, " +
+			"2020-06-15T12:00Z[a=b] is an Instant and [u-ca=x] an unknown calendar; a value is " +
+			"alphanumeric components joined by hyphens, and a name's separator has a character after " +
+			"it, so [aa=-b] and [Asia/Calcutta/] are refused. Chrome answers so from 158",
+		Node: "ixdtf 0.6.4 looks a character ahead for each end, past the end of a part of one " +
+			"character, and skips what it looks past: [a=b] is \"Invalid annotation key character.\" " +
+			"and [u-ca=x] \"Invalid annotation value character.\", while a value's first character " +
+			"and the one after a hyphen are not looked at, so [aa=-b] is taken, as is a name's last " +
+			"character: [Asia/Calcutta/] and [UTC!]",
 	},
 	{
 		Name: "ThinSpace", Flag: ThinSpace,

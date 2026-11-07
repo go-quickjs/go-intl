@@ -147,6 +147,8 @@ var standardFrom = []struct {
 	{intl.WeekYearOmitted, 155},
 	// V8 15.6 keeps a date's offset in milliseconds.
 	{intl.WholeMinuteOffset, 156},
+	// ixdtf 0.6.7 reads annotations without looking ahead.
+	{intl.AnnotationLookahead, 158},
 }
 
 // browserFrom are Chrome's divergences that Node does not share, and the

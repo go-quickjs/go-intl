@@ -42,10 +42,10 @@ func (d *Data) Calendar(id string) (*Calendar, error) {
 
 // ParseRelativeTo is RelativeTo::try_from_str_with_provider: a PlainDate,
 // or a ZonedDateTime where the string has a zone annotation.
-func (d *Data) ParseRelativeTo(s []byte) (RelativeTo, error) {
-	r, err := parseDateTimeString(s)
+func (d *Data) ParseRelativeTo(s []byte, compat intl.Compat) (RelativeTo, error) {
+	r, err := parseDateTimeString(s, compat)
 	if err != nil {
-		if r, err = parseZonedDateTimeString(s); err != nil {
+		if r, err = parseZonedDateTimeString(s, compat); err != nil {
 			return RelativeTo{}, err
 		}
 	}
