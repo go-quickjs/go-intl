@@ -30,7 +30,7 @@
 // Chrome keeps what ICU loads for a locale until the process ends, which
 // is more than a page has room for when a script formats in every
 // locale. --shards N runs it in N Chromes one after another, each given
-// the next slice of the locales dataLocales lists, and joins what they
+// the next slice of the locales recordedLocales lists, and joins what they
 // write, the header once. It is for a script every line of whose
 // recording but the header comes of one of those locales.
 "use strict";
@@ -304,9 +304,9 @@ function pageProgram(source, env) {
   };
   // The shard's slice of the locales, where the script is run in shards.
   const shard = (exports) => {
-    if (!env.shard || typeof exports.dataLocales !== "function") return exports;
-    const all = exports.dataLocales;
-    return { ...exports, dataLocales: (...a) => {
+    if (!env.shard || typeof exports.recordedLocales !== "function") return exports;
+    const all = exports.recordedLocales;
+    return { ...exports, recordedLocales: (...a) => {
       const locales = all(...a);
       const size = Math.ceil(locales.length / env.shard.count);
       return locales.slice(env.shard.index * size, (env.shard.index + 1) * size);

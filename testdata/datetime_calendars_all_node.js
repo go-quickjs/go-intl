@@ -13,11 +13,10 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { recordedOwnLocales } = require("./datalocales.js");
 
 const here = __dirname;
-const locales = fs.readdirSync(path.join(here, "..", "data", "dates"))
-  .filter(f => f.endsWith(".bin") && f !== "same.bin")
-  .map(f => f.replace(/\.bin$/, "")).sort();
+const locales = recordedOwnLocales();
 const calendars = Intl.supportedValuesOf("calendar").filter(c => c !== "gregory");
 const configs = [
   { dateStyle: "full" }, { dateStyle: "short" },

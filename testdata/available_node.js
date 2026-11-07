@@ -1,7 +1,7 @@
 // Writes testdata/available_node.txt.gz: which locales each of Node's Intl
 // services is available in, among every name ICU has a bundle for, those
-// names without their scripts and cut short, and every locale go-intl
-// carries dates for.
+// names without their scripts and cut short, and every locale of
+// recorded_locales.txt.
 //
 //	node testdata/available_node.js <icu4c-78.3-data.zip>
 //
@@ -13,7 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
-const { dataLocales } = require("./datalocales.js");
+const { recordedLocales } = require("./datalocales.js");
 const { execFileSync } = require("child_process");
 
 const zip = process.argv[2];
@@ -28,7 +28,7 @@ for (const m of listing.matchAll(/data\/(?:locales|coll|lang|region|unit|curr|zo
 }
 const plurals = execFileSync("unzip", ["-p", zip, "data/misc/plurals.txt"], { maxBuffer: 1 << 26 }).toString();
 for (const m of plurals.matchAll(/^        ([a-z]{2,3}(?:_[A-Za-z0-9]+)*)\{"set/gm)) names.add(m[1]);
-for (const t of dataLocales(path.join(__dirname, "..", "data", "dates"))) names.add(t);
+for (const t of recordedLocales()) names.add(t);
 // CLDR's locales with a variant, whose dates go-intl writes as the locale
 // without it (internal/datawrite), and so has no file for.
 for (const t of ["be-tarask", "ca-ES-valencia", "el-polyton"]) names.add(t);

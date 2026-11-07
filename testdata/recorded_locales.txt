@@ -1,0 +1,763 @@
+aa
+aa-DJ same
+aa-ER same
+ab same
+af
+af-NA
+agq
+ak
+am
+an same
+ann same
+apc same
+ar
+ar-AE same
+ar-BH same
+ar-DJ same
+ar-DZ
+ar-EG same
+ar-EH same
+ar-ER same
+ar-IL
+ar-IQ
+ar-JO
+ar-KM
+ar-KW same
+ar-LB same
+ar-LY
+ar-MA
+ar-MR
+ar-OM same
+ar-PS same
+ar-QA same
+ar-SA same
+ar-SD same
+ar-SO same
+ar-SS same
+ar-SY same
+ar-TD same
+ar-TN same
+ar-YE same
+arn same
+as
+asa
+ast
+az
+az-Arab
+az-Arab-IQ same
+az-Arab-TR same
+az-Cyrl
+az-Latn same
+ba
+bal same
+bal-Arab same
+bal-Latn
+bas
+be
+bem
+bew same
+bez
+bg
+bgc
+bgn
+bgn-AE same
+bgn-AF same
+bgn-IR same
+bgn-OM same
+bho
+blo
+blt same
+bm
+bm-Nkoo same
+bn
+bn-IN
+bo
+bo-IN
+bqi same
+br
+brx
+bs
+bs-Cyrl
+bs-Latn same
+bss
+bua
+byn same
+ca
+ca-AD same
+ca-FR same
+ca-IT same
+cad
+cch same
+ccp
+ccp-IN same
+ce
+ceb
+cgg
+cho same
+chr
+cic
+ckb
+ckb-IR
+co same
+cop same
+cs
+csw
+cu same
+cv
+cy
+da
+da-GL same
+dav
+de
+de-AT
+de-BE same
+de-CH
+de-IT same
+de-LI same
+de-LU
+dje
+doi
+dsb
+dua
+dv same
+dyo
+dz
+ebu
+ee
+ee-TG
+el
+el-CY same
+en
+en-001 same
+en-150 same
+en-AE
+en-AG
+en-AI
+en-AS same
+en-AT same
+en-AU
+en-BB same
+en-BE
+en-BI
+en-BM same
+en-BS same
+en-BW
+en-BZ
+en-CA
+en-CC same
+en-CH
+en-CK same
+en-CM same
+en-CX same
+en-CY same
+en-CZ same
+en-DE same
+en-DG same
+en-DK
+en-DM same
+en-Dsrt
+en-EE same
+en-ER same
+en-ES same
+en-FI
+en-FJ same
+en-FK same
+en-FM same
+en-FR same
+en-GB
+en-GD same
+en-GE same
+en-GG same
+en-GH same
+en-GI same
+en-GM same
+en-GS same
+en-GU same
+en-GY same
+en-HK
+en-HU same
+en-ID
+en-IE
+en-IL
+en-IM same
+en-IN
+en-IO same
+en-IT same
+en-JE same
+en-JM same
+en-JP
+en-KE same
+en-KI same
+en-KN same
+en-KY same
+en-LC same
+en-LR same
+en-LS same
+en-LT same
+en-LV same
+en-MG same
+en-MH same
+en-MO same
+en-MP same
+en-MS same
+en-MT
+en-MU same
+en-MV
+en-MW same
+en-MY same
+en-NA same
+en-NF same
+en-NG same
+en-NL same
+en-NO same
+en-NR same
+en-NU same
+en-NZ
+en-PG same
+en-PH same
+en-PK
+en-PL same
+en-PN same
+en-PR same
+en-PT same
+en-PW same
+en-RO same
+en-RW same
+en-SB same
+en-SC same
+en-SD same
+en-SE
+en-SG
+en-SH same
+en-SI same
+en-SK same
+en-SL same
+en-SS same
+en-SX same
+en-SZ same
+en-Shaw
+en-TC same
+en-TK same
+en-TO same
+en-TT same
+en-TV same
+en-TZ same
+en-UA same
+en-UG same
+en-UM same
+en-VC same
+en-VG same
+en-VI same
+en-VU same
+en-WS same
+en-ZA
+en-ZM same
+en-ZW
+eo
+es
+es-419 same
+es-AR
+es-BO
+es-BR
+es-BZ same
+es-CL
+es-CO
+es-CR
+es-CU
+es-DO
+es-EA same
+es-EC same
+es-GQ same
+es-GT
+es-HN
+es-IC same
+es-MX
+es-NI
+es-PA
+es-PE
+es-PH
+es-PR
+es-PY
+es-SV same
+es-US
+es-UY
+es-VE
+et
+eu
+ewo
+fa
+fa-AF
+ff
+ff-Adlm
+ff-Adlm-BF same
+ff-Adlm-CM same
+ff-Adlm-GH
+ff-Adlm-GM same
+ff-Adlm-GW same
+ff-Adlm-LR same
+ff-Adlm-MR same
+ff-Adlm-NE same
+ff-Adlm-NG same
+ff-Adlm-SL same
+ff-Adlm-SN same
+ff-Latn same
+ff-Latn-BF same
+ff-Latn-CM same
+ff-Latn-GH
+ff-Latn-GM same
+ff-Latn-GN same
+ff-Latn-GW same
+ff-Latn-LR same
+ff-Latn-MR same
+ff-Latn-NE same
+ff-Latn-NG same
+ff-Latn-SL same
+fi
+fil
+fo
+fo-DK same
+fr
+fr-BE
+fr-BF same
+fr-BI same
+fr-BJ same
+fr-BL same
+fr-CA
+fr-CD
+fr-CF same
+fr-CG same
+fr-CH
+fr-CI same
+fr-CM
+fr-DJ
+fr-DZ same
+fr-GA same
+fr-GF same
+fr-GN same
+fr-GP same
+fr-GQ same
+fr-HT
+fr-KM same
+fr-LU same
+fr-MA
+fr-MC same
+fr-MF same
+fr-MG same
+fr-ML
+fr-MQ same
+fr-MR same
+fr-MU same
+fr-NC same
+fr-NE same
+fr-PF same
+fr-PM same
+fr-RE
+fr-RW same
+fr-SC same
+fr-SN same
+fr-SY same
+fr-TD same
+fr-TG same
+fr-TN same
+fr-VU same
+fr-WF same
+fr-YT same
+frr same
+fur
+fy
+ga
+ga-GB same
+gaa
+gd
+gez same
+gez-ER same
+gl
+gn
+gsw
+gsw-FR same
+gsw-LI same
+gu
+guz
+gv
+ha
+ha-Arab
+ha-Arab-SD same
+ha-GH
+ha-NE same
+haw
+he
+hi
+hi-Latn
+hnj
+hnj-Hmnp same
+hr
+hr-BA
+hsb
+ht
+hu
+hy
+ia
+id
+ie
+ig
+ii
+io same
+is
+it
+it-CH
+it-SM same
+it-VA same
+iu same
+iu-Latn same
+ja
+jbo same
+jgo
+jmc
+jv
+ka
+kaa
+kaa-Cyrl same
+kaa-Latn same
+kab
+kaj same
+kam
+kcg same
+kde
+kea
+kek
+ken same
+kgp
+khq
+ki
+kk
+kk-Arab
+kk-Cyrl same
+kk-KZ same
+kkj
+kl
+kln
+km
+kn
+ko
+ko-CN
+ko-KP same
+kok
+kok-Deva same
+kok-Latn
+kpe same
+kpe-GN same
+ks
+ks-Arab same
+ks-Deva
+ksb
+ksf
+ksh
+ku
+ku-Arab same
+ku-Arab-IR same
+ku-Latn same
+ku-Latn-IQ same
+ku-Latn-SY same
+ku-TR same
+kw
+kxv
+kxv-Deva
+kxv-Latn same
+kxv-Orya
+kxv-Telu
+ky
+la same
+lag
+lb
+lg
+lij
+lkt
+lld
+lmo
+ln
+ln-AO same
+ln-CF same
+ln-CG same
+lo
+lrc
+lrc-IQ
+lt
+ltg same
+lu
+luo
+luy
+lv
+lzz same
+mai
+mas
+mas-TZ same
+mdf same
+mer
+mfe
+mg
+mgh
+mgo
+mhn same
+mi
+mic same
+mk
+ml
+mn
+mn-Mong
+mn-Mong-MN
+mni
+mni-Beng same
+mni-Mtei
+moh same
+mr
+ms
+ms-Arab
+ms-Arab-BN same
+ms-BN
+ms-ID
+ms-SG same
+mt
+mua
+mus
+mww same
+mww-Hmnp same
+my
+myv same
+mzn
+naq
+nb
+nb-SJ same
+nd
+nds
+nds-NL same
+ne
+ne-IN
+nl
+nl-AW same
+nl-BE
+nl-BQ same
+nl-CW same
+nl-SR same
+nl-SX same
+nmg
+nn
+nnh
+no same
+nqo
+nr same
+nso
+nus
+nv same
+ny same
+nyn
+oc
+oc-ES
+oka same
+oka-US same
+om
+om-KE
+or
+os
+os-RU same
+osa
+pa
+pa-Arab
+pa-Guru same
+pap
+pap-AW same
+pcm
+pi same
+pi-Latn same
+pis
+pl
+pms
+prg
+ps
+ps-PK
+pt
+pt-AO
+pt-CH same
+pt-CV same
+pt-GQ same
+pt-GW same
+pt-LU same
+pt-MO
+pt-MZ same
+pt-PT same
+pt-ST same
+pt-TL same
+qu
+qu-BO same
+qu-EC same
+quc same
+raj
+rhg
+rhg-Rohg same
+rhg-Rohg-BD same
+rif same
+rm
+rn
+ro
+ro-MD
+rof
+ru
+ru-BY same
+ru-KG same
+ru-KZ same
+ru-MD same
+ru-UA
+rw
+rwk same
+sa
+sah
+saq
+sat
+sat-Deva same
+sat-Olck same
+sbp
+sc
+scn
+sd
+sd-Arab same
+sd-Deva
+sdh same
+sdh-IQ same
+se
+se-FI
+se-SE same
+seh
+ses
+sg
+sgs same
+shi
+shi-Latn
+shi-Tfng same
+shn
+shn-TH same
+si
+sid same
+sk
+skr same
+sl
+sma same
+sma-NO same
+smj same
+smj-NO same
+smn
+sms same
+sn
+so
+so-DJ same
+so-ET same
+so-KE
+sq
+sq-MK
+sq-XK same
+sr
+sr-Cyrl same
+sr-Cyrl-BA
+sr-Cyrl-ME
+sr-Cyrl-XK
+sr-Latn
+sr-Latn-BA
+sr-Latn-ME
+sr-Latn-XK
+ss same
+ss-SZ same
+ssy same
+st
+st-LS
+su
+su-Latn same
+suz same
+suz-Deva same
+suz-Sunu same
+sv
+sv-AX
+sv-FI
+sw
+sw-CD
+sw-KE
+sw-UG same
+syr
+syr-SY same
+szl
+ta
+ta-LK
+ta-MY same
+ta-SG same
+te
+teo
+teo-KE same
+tg
+th
+ti
+ti-ER
+tig same
+tk
+tn
+tn-BW same
+to
+tok
+tpi
+tr
+tr-CY
+trv same
+trw same
+ts
+tt
+twq
+tyv
+tzm
+ug
+uk
+und
+ur
+ur-IN
+uz
+uz-Arab
+uz-Cyrl
+uz-Latn same
+vai
+vai-Latn
+vai-Vaii same
+ve same
+vec
+vi
+vmw
+vo same
+vun same
+wa same
+wae
+wal same
+wbp same
+wo
+xh
+xnr
+xog
+yav
+yi
+yo
+yo-BJ
+yrl
+yrl-CO
+yrl-VE same
+yue
+yue-Hans
+yue-Hant same
+yue-Hant-CN
+yue-Hant-MO same
+za
+zgh
+zh
+zh-Hans same
+zh-Hans-HK
+zh-Hans-MO
+zh-Hans-MY
+zh-Hans-SG
+zh-Hant
+zh-Hant-HK
+zh-Hant-MO same
+zh-Hant-MY
+zh-Latn
+zu

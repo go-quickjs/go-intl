@@ -12,10 +12,10 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
-const { dataLocales } = require("./datalocales.js");
+const { recordedLocales } = require("./datalocales.js");
 
 const here = __dirname;
-const locales = dataLocales(path.join(here, "..", "data", "dates"));
+const locales = recordedLocales();
 
 const configs = [
   {}, { dateStyle: "full" }, { dateStyle: "long" }, { dateStyle: "medium" }, { dateStyle: "short" },

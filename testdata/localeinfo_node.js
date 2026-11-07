@@ -13,10 +13,10 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
-const { dataLocales } = require("./datalocales.js");
+const { recordedLocales } = require("./datalocales.js");
 
 const tags = new Set();
-const all = dataLocales(path.join(__dirname, "..", "data", "dates"));
+const all = recordedLocales();
 for (const t of Intl.DateTimeFormat.supportedLocalesOf(all)) {
   tags.add(t);
   tags.add(t.split("-")[0]);

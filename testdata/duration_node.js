@@ -11,7 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
-const { dataLocales } = require("./datalocales.js");
+const { recordedLocales } = require("./datalocales.js");
 
 const some = ["en", "fr", "de", "da", "fi", "ja", "zh", "zh-Hant", "ko", "ar", "fa", "he", "hi", "bn",
   "mr", "ne", "my", "th", "ru", "uk", "pl", "cs", "es", "pt", "it", "sv", "nb", "tr", "id", "vi",
@@ -60,7 +60,7 @@ function record(locale, options, list) {
 for (const locale of some) {
   for (const c of configs) record(locale, c, durations);
 }
-const all = dataLocales(path.join(__dirname, "..", "data", "dates"));
+const all = recordedLocales();
 for (const locale of Intl.DurationFormat.supportedLocalesOf(all)) {
   if (some.includes(locale)) continue;
   for (const c of everywhere) record(locale, c, everyDuration);
