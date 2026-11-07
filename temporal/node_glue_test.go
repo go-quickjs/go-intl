@@ -4,6 +4,8 @@ import (
 	"math"
 	"strings"
 	"unicode/utf8"
+
+	intl "github.com/go-quickjs/go-intl"
 )
 
 // V8's reading of property bags, as js-temporal-objects.cc has it.
@@ -299,6 +301,14 @@ func (h *harness) prepareFields(cal *Calendar, v any, which fieldFlags, req requ
 
 // clampInt is ClampIntegralDoubleToRange: the value within the type.
 func clampInt(f, lo, hi float64) float64 { return math.Max(lo, math.Min(hi, f)) }
+
+// monthDayYear reads the year of a PlainMonthDay's fields (MonthDayYear).
+func (r *combinedRecord) monthDayYear(cal *Calendar, compat intl.Compat) {
+	if r.year != nil {
+		y := MonthDayYear(*r.year, cal, compat)
+		r.year = &y
+	}
+}
 
 // regulateDate is DateRecord::Regulate, and temporal_capi's conversion
 // of the result.
@@ -699,6 +709,7 @@ func (h *harness) toPlainMonthDay(v any, opts any, method string) (PlainMonthDay
 	if err != nil {
 		return PlainMonthDay{}, err
 	}
+	r.monthDayYear(cal, h.compat)
 	f, err := r.regulateDate(overflow)
 	if err != nil {
 		return PlainMonthDay{}, err

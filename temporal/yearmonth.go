@@ -1,5 +1,11 @@
 package temporal
 
+import (
+	"math"
+
+	intl "github.com/go-quickjs/go-intl"
+)
+
 // A PlainYearMonth is Temporal.PlainYearMonth's value: an ISO date, the
 // month's reference day, and a calendar.
 type PlainYearMonth struct {
@@ -239,6 +245,18 @@ func (c *Calendar) monthDayFromFields(f CalendarFields, overflow Overflow) (Plai
 		return PlainMonthDay{}, err
 	}
 	return PlainMonthDay{iso, c}, nil
+}
+
+// MonthDayYear is the year to read a PlainMonthDay's fields with, given
+// what JavaScript passed, before a host clamps it to an int32 as V8 does
+// any date's. The ISO calendar uses it only to apply overflow, whatever its
+// size, so past an int32 it is brought to the same place in the 400 years
+// that repeat, unless intl.MonthDayYearClamp keeps V8's clamp.
+func MonthDayYear(year float64, cal *Calendar, compat intl.Compat) float64 {
+	if cal.id != "iso8601" || compat.Has(intl.MonthDayYearClamp) || year >= math.MinInt32 && year <= math.MaxInt32 {
+		return year
+	}
+	return math.Mod(year, 400)
 }
 
 // PlainMonthDayFromFields is PlainMonthDay::from_partial.

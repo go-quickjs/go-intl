@@ -1089,6 +1089,7 @@ func (h *harness) yearMonthOps(m map[string]opFunc) {
 		if err != nil {
 			return nil, err
 		}
+		r.monthDayYear(md.Calendar(), h.compat)
 		f, err := r.regulateDate(ov)
 		if err != nil {
 			return nil, err

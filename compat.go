@@ -189,6 +189,10 @@ const (
 	// that a key or a value of one character is refused, and a value's
 	// first character is not looked at.
 	AnnotationLookahead
+	// MonthDayYearClamp clamps the year of a PlainMonthDay of the ISO
+	// calendar to an int32 as it does any other date's, where it only says
+	// whether February has a 29th, and so loses that for a year past one.
+	MonthDayYearClamp
 	// ThinSpace writes a plain space where ICU writes U+2009 in a date or a
 	// range of dates, as Chrome's V8 does and Node's does not.
 	ThinSpace
@@ -229,7 +233,7 @@ const (
 		UnknownSubtags | AccountingNever | RelativeEpsilon | ApproximateIncrement | CurrencyFormats |
 		EmptyListItems | HourCycleStyles | IdenticalPrefix | HostAbbreviations | DoubleRangeIdentity |
 		TrueKeywords | LeftToRightDirection | WeekYearOmitted | WholeMinuteOffset |
-		AnnotationLookahead
+		AnnotationLookahead | MonthDayYearClamp
 )
 
 // Has reports whether Node's, or the browser's, behavior is chosen for a
@@ -673,6 +677,17 @@ var divergences = []Divergence{
 			"and [u-ca=x] \"Invalid annotation value character.\", while a value's first character " +
 			"and the one after a hyphen are not looked at, so [aa=-b] is taken, as is a name's last " +
 			"character: [Asia/Calcutta/] and [UTC!]",
+	},
+	{
+		Name: "MonthDayYearClamp", Flag: MonthDayYearClamp,
+		Area: "Temporal",
+		What: "the year given to PlainMonthDay's from and with in the ISO calendar, past an int32",
+		Standard: "ECMA-262's CalendarMonthDayFromFields uses the year only to apply overflow, and " +
+			"checks no range: {year: 1000000000000004, monthCode: \"M02\", day: 29} is 02-29, a leap " +
+			"year's (test262's iso-year-used-only-for-overflow)",
+		Node: "V8 clamps every date's year to an int32, 2147483647, which is not a leap year, so it " +
+			"constrains to 02-28; with overflow \"reject\" a year past an int32 is \"Integer out of " +
+			"range.\". Chrome answers so too",
 	},
 	{
 		Name: "ThinSpace", Flag: ThinSpace,

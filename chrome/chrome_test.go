@@ -55,7 +55,7 @@ func TestCompat(t *testing.T) {
 		{"156", intl.ThinSpace, intl.WholeMinuteOffset},
 		{"153", intl.WeekYearOmitted, 0},
 		{"157", intl.AnnotationLookahead, 0},
-		{"158", 0, intl.AnnotationLookahead},
+		{"158", intl.MonthDayYearClamp, intl.AnnotationLookahead},
 	} {
 		p, err := chrome.ForVersion(c.version)
 		if err != nil {
