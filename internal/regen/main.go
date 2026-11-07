@@ -24,7 +24,7 @@
 //	-j n         how many generators run at once (default: the CPUs)
 //	-chrome      whether to rebuild the chrome package's data too (default:
 //	             true); -chrome=false rebuilds the intl package's alone, in
-//	             seconds rather than the minutes Chrome's eleven ICUs take
+//	             seconds rather than the minutes Chrome's twelve ICUs take
 //
 // The generators that read nothing but what is vendored beside them
 // (localegen, normgen) run too, so the whole of data/ is

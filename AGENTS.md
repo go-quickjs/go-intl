@@ -50,7 +50,7 @@ go run ./internal/regen   # or: go generate
 `go generate` takes no flags, so set the variable to reuse a cache), checks their
 checksums, runs every generator in parallel (`-j`), zonegen after dategen,
 repacks, rebuilds the chrome package's overlays with chromegen, and reports
-whether the result is byte for byte what git holds. Chrome's eleven ICUs take
+whether the result is byte for byte what git holds. Chrome's twelve ICUs take
 about three minutes once their sources are cached. `-chrome=false` rebuilds
 the intl package's data alone, in seconds; but an overlay is what differs
 from that data, so a change to it is not done until the full run reproduces

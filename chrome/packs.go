@@ -7,37 +7,41 @@ import _ "embed"
 //go:embed data/versions.txt
 var versions string
 
-//go:embed data/91d5cbe76c-b6f0c94f40.pack
+//go:embed data/3aaa753c43-b6f0c94f40.pack
 var pack0 string
 
-//go:embed data/6248bff262-b6f0c94f40.pack
+//go:embed data/91d5cbe76c-b6f0c94f40.pack
 var pack1 string
 
-//go:embed data/7fe978dedd-b6f0c94f40.pack
+//go:embed data/6248bff262-b6f0c94f40.pack
 var pack2 string
 
-//go:embed data/9b610e09bf-b6f0c94f40.pack
+//go:embed data/7fe978dedd-b6f0c94f40.pack
 var pack3 string
 
-//go:embed data/9b610e09bf-221f4503cc.pack
+//go:embed data/9b610e09bf-b6f0c94f40.pack
 var pack4 string
 
-//go:embed data/e3b4825a51-221f4503cc.pack
+//go:embed data/9b610e09bf-221f4503cc.pack
 var pack5 string
 
-//go:embed data/1cafa35ac4-221f4503cc.pack
+//go:embed data/e3b4825a51-221f4503cc.pack
 var pack6 string
 
-//go:embed data/88a8bd9e35-221f4503cc.pack
+//go:embed data/1cafa35ac4-221f4503cc.pack
 var pack7 string
 
-//go:embed data/1e3a73ec7a-221f4503cc.pack
+//go:embed data/88a8bd9e35-221f4503cc.pack
 var pack8 string
+
+//go:embed data/1e3a73ec7a-221f4503cc.pack
+var pack9 string
 
 // chain is the overlays' names, newest first: each is an overlay of the
 // data the ones before it make of the intl package's.
 func chain() []string {
 	return []string{
+		"3aaa753c43-b6f0c94f40",
 		"91d5cbe76c-b6f0c94f40",
 		"6248bff262-b6f0c94f40",
 		"7fe978dedd-b6f0c94f40",
@@ -53,24 +57,26 @@ func chain() []string {
 // packOf is the overlay of that name.
 func packOf(name string) (string, bool) {
 	switch name {
-	case "91d5cbe76c-b6f0c94f40":
+	case "3aaa753c43-b6f0c94f40":
 		return pack0, true
-	case "6248bff262-b6f0c94f40":
+	case "91d5cbe76c-b6f0c94f40":
 		return pack1, true
-	case "7fe978dedd-b6f0c94f40":
+	case "6248bff262-b6f0c94f40":
 		return pack2, true
-	case "9b610e09bf-b6f0c94f40":
+	case "7fe978dedd-b6f0c94f40":
 		return pack3, true
-	case "9b610e09bf-221f4503cc":
+	case "9b610e09bf-b6f0c94f40":
 		return pack4, true
-	case "e3b4825a51-221f4503cc":
+	case "9b610e09bf-221f4503cc":
 		return pack5, true
-	case "1cafa35ac4-221f4503cc":
+	case "e3b4825a51-221f4503cc":
 		return pack6, true
-	case "88a8bd9e35-221f4503cc":
+	case "1cafa35ac4-221f4503cc":
 		return pack7, true
-	case "1e3a73ec7a-221f4503cc":
+	case "88a8bd9e35-221f4503cc":
 		return pack8, true
+	case "1e3a73ec7a-221f4503cc":
+		return pack9, true
 	}
 	return "", false
 }

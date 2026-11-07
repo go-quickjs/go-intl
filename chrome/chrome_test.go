@@ -2,6 +2,7 @@ package chrome_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 	"unicode/utf16"
@@ -18,6 +19,10 @@ func TestForVersion(t *testing.T) {
 		{"148.0.7778", "148.0.7778.218"},
 		{"148.0.7778.169", "148.0.7778.169"},
 		{"140", "140.0.7339.210"},
+		// A milestone can span two pins, its later versions on the newer.
+		{"157", "157.0.8103.39"},
+		{"157.0.8103.15", "157.0.8103.15"},
+		{"156", "156.0.8078.82"},
 	} {
 		p, err := chrome.ForVersion(c.asked)
 		if err != nil {
@@ -56,6 +61,36 @@ func TestCompat(t *testing.T) {
 		}
 		if p.Compat&c.has != c.has || p.Compat&c.not != 0 {
 			t.Errorf("Chrome %s answers in %v", c.version, p.Compat)
+		}
+	}
+}
+
+// Chromium's ICU maps Windows's Alberta zone from 2a51536dfb, which 156 and
+// 157 took part way through and 158 began on: the versions before it do not
+// know it.
+func TestWindowsZones(t *testing.T) {
+	const alberta = "Alberta Standard Time\t001\tAmerica/Edmonton\n"
+	for _, c := range []struct {
+		version string
+		want    bool
+	}{
+		{"155", false},
+		{"156.0.8078.49", false},
+		{"156.0.8078.73", true},
+		{"157.0.8103.15", false},
+		{"157.0.8103.26", true},
+		{"158", true},
+	} {
+		p, err := chrome.ForVersion(c.version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := p.Source.Open(intl.MarkerWindowsZones, intl.DataLocale{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(b), alberta); got != c.want {
+			t.Errorf("Chrome %s maps Alberta Standard Time: %v, want %v", c.version, got, c.want)
 		}
 	}
 }
